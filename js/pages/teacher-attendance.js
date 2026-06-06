@@ -255,11 +255,14 @@ Router.register('teacher-attendance', async (container) => {
                 }
             }
 
+            const classId = document.getElementById('ci-class').value;
+            const classConf = mySalaryConfig[classId] || {};
             let salary = 0;
-            if (shift === 'morning') salary = mySalaryConfig.morning || 0;
-            else if (shift === 'afternoon') salary = mySalaryConfig.afternoon || 0;
-            else if (shift === 'evening') salary = mySalaryConfig.evening || 0;
-            else if (shift === 'custom') salary = (mySalaryConfig.hourly || 0) * hours;
+            if (shift === 'custom') {
+                salary = (classConf.perHour || 0) * hours;
+            } else {
+                salary = classConf.perShift || 0;
+            }
 
             try {
                 await DB.addTeacherAttendanceRecord({
