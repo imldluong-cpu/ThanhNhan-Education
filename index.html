@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Thành Nhân Education - Hệ thống quản lý trung tâm dạy thêm chuyên nghiệp">
+    <title>Thành Nhân Education - Quản Lý Trung Tâm</title>
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- App Styles -->
+    <link rel="stylesheet" href="css/globals.css">
+    <link rel="stylesheet" href="css/login.css">
+    <link rel="stylesheet" href="css/sidebar.css">
+    <link rel="stylesheet" href="css/pages.css">
+</head>
+<body>
+    <!-- Loading Screen -->
+    <div id="loading-screen" class="loading-screen">
+        <div class="loading-content">
+            <div class="loading-logo">
+                <div class="logo-icon">
+                    <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+                        <rect width="48" height="48" rx="12" fill="url(#logoGrad)"/>
+                        <path d="M14 34V18L24 12L34 18V34" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M20 34V26H28V34" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+                        <circle cx="24" cy="21" r="3" stroke="white" stroke-width="2"/>
+                        <defs>
+                            <linearGradient id="logoGrad" x1="0" y1="0" x2="48" y2="48">
+                                <stop stop-color="#6366f1"/>
+                                <stop offset="1" stop-color="#8b5cf6"/>
+                            </linearGradient>
+                        </defs>
+                    </svg>
+                </div>
+                <h2>Thành Nhân Education</h2>
+            </div>
+            <div class="loading-spinner">
+                <div class="spinner"></div>
+            </div>
+            <p>Đang tải hệ thống...</p>
+        </div>
+    </div>
+
+    <!-- Login Page -->
+    <div id="login-page" class="login-page" style="display:none;"></div>
+
+    <!-- Main App Shell -->
+    <div id="app-shell" class="app-shell" style="display:none;">
+        <aside id="sidebar" class="sidebar"></aside>
+        <main class="main-content">
+            <header id="header" class="header"></header>
+            <div id="page-content" class="page-content"></div>
+        </main>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <!-- Firebase SDKs (v9 compat) -->
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@0.344.0/dist/umd/lucide.min.js"></script>
+
+    <!-- App Scripts -->
+    <script src="js/firebase-config.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/firestore.js"></script>
+    <script src="js/router.js"></script>
+    <script src="js/components/sidebar.js"></script>
+    <script src="js/components/header.js"></script>
+    <script src="js/components/modal.js"></script>
+    <script src="js/components/toast.js"></script>
+    <script src="js/pages/dashboard.js"></script>
+    <script src="js/pages/students.js"></script>
+    <script src="js/pages/classes.js"></script>
+    <script src="js/pages/schedule.js"></script>
+    <script src="js/pages/attendance.js"></script>
+    <script src="js/pages/grades.js"></script>
+    <script src="js/pages/tuition.js"></script>
+    <script src="js/pages/teacher-attendance.js"></script>
+    <script src="js/pages/finance.js"></script>
+    <script src="js/pages/users.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>

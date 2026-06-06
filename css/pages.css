@@ -1,0 +1,255 @@
+/* ============================================
+   PAGE-SPECIFIC STYLES
+   ============================================ */
+
+/* === Dashboard specific === */
+.dashboard-grid {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: var(--space-6);
+    margin-top: var(--space-6);
+}
+
+.dashboard-welcome {
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(139, 92, 246, 0.1));
+    border: 1px solid rgba(99, 102, 241, 0.2);
+    border-radius: var(--radius-xl);
+    padding: var(--space-8);
+    margin-bottom: var(--space-8);
+    position: relative;
+    overflow: hidden;
+}
+.dashboard-welcome::after {
+    content: '';
+    position: absolute;
+    right: -20px;
+    bottom: -20px;
+    width: 200px;
+    height: 200px;
+    background: radial-gradient(circle, rgba(99, 102, 241, 0.15), transparent 70%);
+    border-radius: 50%;
+}
+.dashboard-welcome h2 {
+    font-size: var(--font-size-2xl);
+    font-weight: 700;
+    margin-bottom: var(--space-2);
+}
+.dashboard-welcome p {
+    color: var(--text-secondary);
+    font-size: var(--font-size-base);
+}
+
+.recent-list {
+    display: flex;
+    flex-direction: column;
+}
+.recent-item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-3) 0;
+    border-bottom: 1px solid var(--border-color);
+    font-size: var(--font-size-sm);
+}
+.recent-item:last-child {
+    border-bottom: none;
+}
+.recent-item-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: var(--radius-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+.recent-item-content {
+    flex: 1;
+    min-width: 0;
+}
+.recent-item-title {
+    font-weight: 500;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.recent-item-sub {
+    font-size: var(--font-size-xs);
+    color: var(--text-tertiary);
+}
+
+/* === Tuition Reminder === */
+.reminder-card {
+    background: rgba(245, 158, 11, 0.05);
+    border: 1px solid rgba(245, 158, 11, 0.15);
+    border-radius: var(--radius-lg);
+    padding: var(--space-4);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    margin-bottom: var(--space-3);
+    transition: all var(--transition-fast);
+}
+.reminder-card:hover {
+    border-color: rgba(245, 158, 11, 0.3);
+}
+.reminder-info {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+}
+.reminder-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: var(--radius-full);
+    background: rgba(245, 158, 11, 0.15);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--warning-400);
+    font-weight: 700;
+    font-size: var(--font-size-sm);
+}
+.reminder-details h4 {
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    color: var(--text-primary);
+}
+.reminder-details p {
+    font-size: var(--font-size-xs);
+    color: var(--text-secondary);
+}
+
+/* === Finance Charts === */
+.finance-summary {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--space-6);
+    margin-bottom: var(--space-6);
+}
+.finance-summary-item {
+    text-align: center;
+    padding: var(--space-6);
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+}
+.finance-summary-item .amount {
+    font-size: var(--font-size-3xl);
+    font-weight: 800;
+    margin-bottom: var(--space-1);
+}
+.finance-summary-item .label {
+    font-size: var(--font-size-sm);
+    color: var(--text-secondary);
+}
+.finance-summary-item.revenue .amount { color: var(--success-400); }
+.finance-summary-item.expense .amount { color: var(--danger-400); }
+.finance-summary-item.profit .amount { color: var(--primary-400); }
+
+/* === Teacher Attendance (Chấm công) === */
+.timesheet-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: var(--space-4);
+}
+.timesheet-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: var(--space-5);
+    transition: all var(--transition-fast);
+}
+.timesheet-card:hover {
+    border-color: var(--border-color-hover);
+}
+.timesheet-header {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    margin-bottom: var(--space-4);
+}
+.timesheet-avatar {
+    width: 44px;
+    height: 44px;
+    border-radius: var(--radius-full);
+    object-fit: cover;
+}
+.timesheet-name {
+    font-weight: 600;
+    font-size: var(--font-size-base);
+}
+.timesheet-subject {
+    font-size: var(--font-size-xs);
+    color: var(--text-secondary);
+}
+.timesheet-details {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-3);
+    margin-bottom: var(--space-4);
+}
+.timesheet-detail {
+    text-align: center;
+    padding: var(--space-2);
+    background: var(--bg-glass);
+    border-radius: var(--radius-sm);
+}
+.timesheet-detail-value {
+    font-size: var(--font-size-lg);
+    font-weight: 700;
+    color: var(--text-primary);
+}
+.timesheet-detail-label {
+    font-size: 10px;
+    color: var(--text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+/* === Grades Table === */
+.grade-input {
+    width: 60px;
+    padding: 4px 8px;
+    text-align: center;
+    background: var(--bg-input);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    font-family: var(--font-family);
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+}
+.grade-input:focus {
+    border-color: var(--primary-500);
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.15);
+}
+.grade-high { color: var(--success-400); }
+.grade-mid { color: var(--warning-400); }
+.grade-low { color: var(--danger-400); }
+
+/* === Responsive Overrides === */
+@media (max-width: 1024px) {
+    .dashboard-grid {
+        grid-template-columns: 1fr;
+    }
+    .finance-summary {
+        grid-template-columns: 1fr;
+    }
+    .schedule-grid {
+        font-size: var(--font-size-xs);
+        overflow-x: auto;
+    }
+}
+
+@media (max-width: 640px) {
+    .timesheet-grid {
+        grid-template-columns: 1fr;
+    }
+    .attendance-grid {
+        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    }
+}

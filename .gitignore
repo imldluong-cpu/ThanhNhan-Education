@@ -1,0 +1,11 @@
+# System files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor
+.vscode/
+.idea/
+
+# Server script (local only)
+start-server.ps1
