@@ -39,10 +39,11 @@ Router.register('teacher-attendance', async (container) => {
 
     function getClassesForDate(dateStr) {
         if (!dateStr) return [];
-        // JS getDay(): 0=Sun, 1=Mon...
-        // Firestore schedule dayOfWeek: 2=Mon, ..., 8=Sun
-        const d = new Date(dateStr).getDay();
-        const firestoreDay = d === 0 ? 8 : d + 1;
+        // Parse date locally to avoid UTC timezone offset issues
+        const [y, m, d] = dateStr.split('-');
+        const dateObj = new Date(y, m - 1, d);
+        const day = dateObj.getDay();
+        const firestoreDay = day === 0 ? 8 : day + 1;
         
         const scheduledClassIds = new Set(schedules.filter(s => s.dayOfWeek === firestoreDay).map(s => s.classId));
         return classes.filter(c => scheduledClassIds.has(c.id));
@@ -99,11 +100,11 @@ Router.register('teacher-attendance', async (container) => {
 
         // Records table
         html += `<div class="card"><div class="table-container"><table>
-            <thead><tr>${isOwner ? '<th>Giáo viên</th>' : ''}<th>Ngày</th><th>Ca/Giờ</th><th>Lớp</th><th>Số giờ</th><th>Lương</th><th>Ghi chú</th>${isOwner ? '<th>Thao tác</th>' : ''}</tr></thead>
+            <thead><tr>${isOwner ? '<th>Giáo viên</th>' : ''}<th>Ngày</th><th>Ca/Giờ</th><th>Lớp</th><th>Số giờ</th><th>Lương</th><th>Ghi chú</th><th>Thao tác</th></tr></thead>
             <tbody>`;
 
         if (myRecords.length === 0) {
-            html += `<tr><td colspan="${isOwner ? 8 : 6}"><div class="empty-state"><p>Chưa có dữ liệu chấm công tháng này</p></div></td></tr>`;
+            html += `<tr><td colspan="${isOwner ? 8 : 7}"><div class="empty-state"><p>Chưa có dữ liệu chấm công tháng này</p></div></td></tr>`;
         } else {
             html += myRecords.sort((a, b) => (b.date || '').localeCompare(a.date || '')).map(r => `<tr>
                 ${isOwner ? `<td>${getTeacherName(r.teacherId)}</td>` : ''}
@@ -113,7 +114,7 @@ Router.register('teacher-attendance', async (container) => {
                 <td><strong>${r.hours || 0}h</strong></td>
                 <td style="color:var(--success-500);font-weight:600;">${DB.formatCurrency(r.salary || 0)}</td>
                 <td class="text-sm">${r.note || ''}</td>
-                ${isOwner ? `<td><button class="btn-icon" onclick="TAPage.removeRecord('${r.id}')"><i data-lucide="trash-2"></i></button></td>` : ''}
+                <td><button class="btn-icon" onclick="TAPage.removeRecord('${r.id}')"><i data-lucide="trash-2"></i></button></td>
             </tr>`).join('');
         }
 

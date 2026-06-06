@@ -15,8 +15,10 @@ Router.register('attendance', async (container) => {
 
     function getValidClassesForDate(dateStr) {
         if (!dateStr) return [];
-        const d = new Date(dateStr).getDay();
-        const firestoreDay = d === 0 ? 8 : d + 1; // 2=Mon, 8=Sun
+        const [y, m, d] = dateStr.split('-');
+        const dateObj = new Date(y, m - 1, d);
+        const day = dateObj.getDay();
+        const firestoreDay = day === 0 ? 8 : day + 1; // 2=Mon, 8=Sun
         
         const scheduledClassIds = new Set(schedules.filter(s => s.dayOfWeek === firestoreDay).map(s => s.classId));
         return classes.filter(c => scheduledClassIds.has(c.id));
