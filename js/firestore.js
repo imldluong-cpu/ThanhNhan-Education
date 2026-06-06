@@ -5,13 +5,13 @@
 const DB = {
     // === STUDENTS ===
     async getStudents() {
-        const snap = await window.db.collection('students').orderBy('name').get();
-        return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        const snap = await window.db.collection('students').get();
+        return snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
     },
 
     async getStudentsByClass(classId) {
-        const snap = await window.db.collection('students').where('classIds', 'array-contains', classId).orderBy('name').get();
-        return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        const snap = await window.db.collection('students').where('classIds', 'array-contains', classId).get();
+        return snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
     },
 
     async addStudent(data) {
@@ -19,6 +19,18 @@ const DB = {
         data.status = data.status || 'active';
         data.classIds = data.classIds || [];
         return await window.db.collection('students').add(data);
+    },
+
+    async addStudentsBatch(studentsArray) {
+        const batch = window.db.batch();
+        studentsArray.forEach(data => {
+            data.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+            data.status = data.status || 'active';
+            data.classIds = data.classIds || [];
+            const ref = window.db.collection('students').doc();
+            batch.set(ref, data);
+        });
+        return await batch.commit();
     },
 
     async updateStudent(id, data) {
@@ -31,20 +43,21 @@ const DB = {
 
     // === CLASSES ===
     async getClasses() {
-        const snap = await window.db.collection('classes').orderBy('name').get();
-        return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        const snap = await window.db.collection('classes').get();
+        return snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
     },
 
     async getClassesByTeacher(teacherId) {
         const snap = await window.db.collection('classes').where('teacherIds', 'array-contains', teacherId).get();
-        return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        return snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
     },
 
     async addClass(data) {
         data.createdAt = firebase.firestore.FieldValue.serverTimestamp();
         data.status = data.status || 'active';
         data.teacherIds = data.teacherIds || [];
-        return await window.db.collection('classes').add(data);
+        const ref = await window.db.collection('classes').add(data);
+        return { id: ref.id, ...data };
     },
 
     async updateClass(id, data) {
@@ -69,13 +82,11 @@ const DB = {
             .where('classId', '==', classId)
             .where('date', '>=', startDate)
             .where('date', '<=', endDate)
-            .orderBy('date', 'desc')
             .get();
-        return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        return snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (b.date || '').localeCompare(a.date || ''));
     },
 
     async saveAttendance(data) {
-        // Check if attendance already exists for this class/date
         const existing = await this.getAttendance(data.classId, data.date);
         if (existing.length > 0) {
             return await window.db.collection('attendance').doc(existing[0].id).update({
@@ -92,17 +103,8 @@ const DB = {
     async getGrades(classId) {
         const snap = await window.db.collection('grades')
             .where('classId', '==', classId)
-            .orderBy('date', 'desc')
             .get();
-        return snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    },
-
-    async getGradesByStudent(studentId) {
-        const snap = await window.db.collection('grades')
-            .where('studentId', '==', studentId)
-            .orderBy('date', 'desc')
-            .get();
-        return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        return snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (b.date || '').localeCompare(a.date || ''));
     },
 
     async addGrade(data) {
@@ -120,24 +122,15 @@ const DB = {
 
     // === TUITION ===
     async getTuitions() {
-        const snap = await window.db.collection('tuition').orderBy('dueDate', 'desc').get();
-        return snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    },
-
-    async getTuitionsByStudent(studentId) {
-        const snap = await window.db.collection('tuition')
-            .where('studentId', '==', studentId)
-            .orderBy('dueDate', 'desc')
-            .get();
-        return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        const snap = await window.db.collection('tuition').get();
+        return snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (b.dueDate || '').localeCompare(a.dueDate || ''));
     },
 
     async getTuitionsPending() {
         const snap = await window.db.collection('tuition')
             .where('status', 'in', ['pending', 'overdue'])
-            .orderBy('dueDate')
             .get();
-        return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        return snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (a.dueDate || '').localeCompare(b.dueDate || ''));
     },
 
     async addTuition(data) {
@@ -154,18 +147,9 @@ const DB = {
         return await window.db.collection('tuition').doc(id).delete();
     },
 
-    // === TEACHER ATTENDANCE (Chấm công) ===
+    // === TEACHER ATTENDANCE ===
     async getTeacherAttendance(month) {
-        // month format: 'YYYY-MM'
         const snap = await window.db.collection('teacherAttendance')
-            .where('month', '==', month)
-            .get();
-        return snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    },
-
-    async getTeacherAttendanceByTeacher(teacherId, month) {
-        const snap = await window.db.collection('teacherAttendance')
-            .where('teacherId', '==', teacherId)
             .where('month', '==', month)
             .get();
         return snap.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -186,19 +170,19 @@ const DB = {
 
     // === FINANCE ===
     async getFinanceRecords(month) {
-        let q = window.db.collection('finance').orderBy('date', 'desc');
+        let snap;
         if (month) {
-            // month format: 'YYYY-MM'
             const start = month + '-01';
             const endDate = new Date(parseInt(month.split('-')[0]), parseInt(month.split('-')[1]), 0);
             const end = month + '-' + String(endDate.getDate()).padStart(2, '0');
-            q = window.db.collection('finance')
+            snap = await window.db.collection('finance')
                 .where('date', '>=', start)
                 .where('date', '<=', end)
-                .orderBy('date', 'desc');
+                .get();
+        } else {
+            snap = await window.db.collection('finance').get();
         }
-        const snap = await q.get();
-        return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        return snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (b.date || '').localeCompare(a.date || ''));
     },
 
     async addFinanceRecord(data) {
@@ -219,27 +203,19 @@ const DB = {
         for (let m = 1; m <= 12; m++) {
             const month = `${year}-${String(m).padStart(2, '0')}`;
             const records = await this.getFinanceRecords(month);
-            
             let revenue = 0, expense = 0;
             records.forEach(r => {
                 if (r.type === 'revenue') revenue += (r.amount || 0);
                 else if (r.type === 'expense') expense += (r.amount || 0);
             });
-            
-            results.push({
-                month: m,
-                monthName: `T${m}`,
-                revenue,
-                expense,
-                profit: revenue - expense
-            });
+            results.push({ month: m, monthName: `T${m}`, revenue, expense, profit: revenue - expense });
         }
         return results;
     },
 
     // === USERS ===
     async getUsers() {
-        const snap = await window.db.collection('users').orderBy('createdAt', 'desc').get();
+        const snap = await window.db.collection('users').get();
         return snap.docs.map(d => ({ id: d.id, ...d.data() }));
     },
 
@@ -267,6 +243,16 @@ const DB = {
         return await window.db.collection('schedules').add(data);
     },
 
+    async addSchedulesBatch(schedulesArray) {
+        const batch = window.db.batch();
+        schedulesArray.forEach(data => {
+            data.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+            const ref = window.db.collection('schedules').doc();
+            batch.set(ref, data);
+        });
+        return await batch.commit();
+    },
+
     async updateSchedule(id, data) {
         return await window.db.collection('schedules').doc(id).update(data);
     },
@@ -275,12 +261,19 @@ const DB = {
         return await window.db.collection('schedules').doc(id).delete();
     },
 
+    // === SETTINGS ===
+    async getSettings() {
+        const doc = await window.db.collection('settings').doc('general').get();
+        return doc.exists ? doc.data() : {};
+    },
+
+    async updateSettings(data) {
+        return await window.db.collection('settings').doc('general').set(data, { merge: true });
+    },
+
     // === UTILITY ===
     formatCurrency(amount) {
-        return new Intl.NumberFormat('vi-VN', {
-            style: 'currency',
-            currency: 'VND'
-        }).format(amount);
+        return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount || 0);
     },
 
     formatDate(dateStr) {
@@ -292,24 +285,18 @@ const DB = {
     formatDateTime(timestamp) {
         if (!timestamp) return '';
         const d = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
-        return d.toLocaleDateString('vi-VN', { 
+        return d.toLocaleDateString('vi-VN', {
             day: '2-digit', month: '2-digit', year: 'numeric',
             hour: '2-digit', minute: '2-digit'
         });
     },
 
-    today() {
-        return new Date().toISOString().split('T')[0];
-    },
-
+    today() { return new Date().toISOString().split('T')[0]; },
     currentMonth() {
         const d = new Date();
         return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
     },
-
-    currentYear() {
-        return new Date().getFullYear();
-    }
+    currentYear() { return new Date().getFullYear(); }
 };
 
 window.DB = DB;

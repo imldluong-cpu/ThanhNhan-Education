@@ -1,229 +1,144 @@
 // ============================================
-// ATTENDANCE PAGE
+// ATTENDANCE PAGE - Fixed student display
 // ============================================
 
 Router.register('attendance', async (container) => {
     const canEdit = Auth.hasAnyRole('owner', 'teacher');
-    const isTeacher = Auth.isTeacher();
-    const isStaff = Auth.isStaff();
     let classes = [];
-
     try {
-        classes = isTeacher ? await DB.getClassesByTeacher(window.currentUser.id) : await DB.getClasses();
+        classes = Auth.isTeacher() ? await DB.getClassesByTeacher(window.currentUser.id) : await DB.getClasses();
     } catch(e) { console.warn(e); }
 
-    let selectedClass = '';
-    let selectedDate = DB.today();
-    let students = [];
-    let attendanceData = {};
-    let activeTab = 'mark';
+    let selectedClassId = '', selectedDate = DB.today();
+    let students = [], attendance = [];
 
-    async function loadAttendance() {
-        if (!selectedClass) return;
-        students = await DB.getStudentsByClass(selectedClass);
-        const existing = await DB.getAttendance(selectedClass, selectedDate);
-        attendanceData = {};
-        if (existing.length > 0 && existing[0].records) {
-            existing[0].records.forEach(r => {
-                attendanceData[r.studentId] = r.status;
-            });
-        }
-        renderContent();
+    async function loadData() {
+        if (!selectedClassId) { students = []; attendance = []; return; }
+        try {
+            students = await DB.getStudentsByClass(selectedClassId);
+            const att = await DB.getAttendance(selectedClassId, selectedDate);
+            attendance = att.length > 0 ? att[0].records || [] : [];
+        } catch(e) { console.warn('Load attendance error:', e); }
     }
 
-    function renderContent() {
-        const content = document.getElementById('attendance-content');
-        if (!content) return;
-
-        if (activeTab === 'mark') {
-            renderMarkTab(content);
-        } else {
-            renderHistoryTab(content);
-        }
+    function getStatus(studentId) {
+        const record = attendance.find(r => r.studentId === studentId);
+        return record ? record.status : '';
     }
 
-    function renderMarkTab(content) {
-        if (!selectedClass) {
-            content.innerHTML = '<div class="empty-state"><i data-lucide="clipboard-check"></i><h3>Chọn lớp để điểm danh</h3><p>Vui lòng chọn lớp và ngày từ bộ lọc phía trên</p></div>';
-            if (window.lucide) lucide.createIcons();
+    function render() {
+        const area = document.getElementById('att-area');
+        if (!area) return;
+
+        if (!selectedClassId) {
+            area.innerHTML = '<div class="card"><div class="card-body"><div class="empty-state"><p>Vui lòng chọn lớp</p></div></div></div>';
             return;
         }
 
         if (students.length === 0) {
-            content.innerHTML = '<div class="empty-state"><i data-lucide="users"></i><h3>Lớp chưa có học viên</h3></div>';
-            if (window.lucide) lucide.createIcons();
+            area.innerHTML = '<div class="card"><div class="card-body"><div class="empty-state"><h3>Lớp chưa có học viên</h3><p>Vào mục Học viên để thêm học viên vào lớp này</p></div></div></div>';
             return;
         }
 
-        // Summary
-        const present = Object.values(attendanceData).filter(v => v === 'present').length;
-        const absent = Object.values(attendanceData).filter(v => v === 'absent').length;
-        const late = Object.values(attendanceData).filter(v => v === 'late').length;
-
-        content.innerHTML = `
-            ${isStaff ? '<div style="padding:12px;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.2);border-radius:var(--radius-md);margin-bottom:var(--space-4);font-size:var(--font-size-sm);color:var(--warning-400);">⚠️ Bạn chỉ có quyền xem, không thể chỉnh sửa điểm danh</div>' : ''}
-            <div class="stats-grid" style="margin-bottom:var(--space-6);">
-                <div class="stat-card" style="padding:var(--space-4);">
-                    <div class="stat-value" style="font-size:var(--font-size-xl);color:var(--success-400);">${present}</div>
-                    <div class="stat-label">Có mặt</div>
-                </div>
-                <div class="stat-card" style="padding:var(--space-4);">
-                    <div class="stat-value" style="font-size:var(--font-size-xl);color:var(--danger-400);">${absent}</div>
-                    <div class="stat-label">Vắng</div>
-                </div>
-                <div class="stat-card" style="padding:var(--space-4);">
-                    <div class="stat-value" style="font-size:var(--font-size-xl);color:var(--warning-400);">${late}</div>
-                    <div class="stat-label">Trễ</div>
-                </div>
-            </div>
-
-            <div class="attendance-grid">
-                ${students.map(s => {
-                    const status = attendanceData[s.id] || '';
-                    return `
-                        <div class="attendance-item ${status}" id="att-${s.id}">
-                            <div class="student-name">${s.name}</div>
-                            <div class="status-select">
-                                <button class="status-btn ${status === 'present' ? 'active-present' : ''}" 
-                                    onclick="AttendancePage.setStatus('${s.id}', 'present')" title="Có mặt" ${!canEdit ? 'disabled' : ''}>✓</button>
-                                <button class="status-btn ${status === 'absent' ? 'active-absent' : ''}" 
-                                    onclick="AttendancePage.setStatus('${s.id}', 'absent')" title="Vắng" ${!canEdit ? 'disabled' : ''}>✗</button>
-                                <button class="status-btn ${status === 'late' ? 'active-late' : ''}" 
-                                    onclick="AttendancePage.setStatus('${s.id}', 'late')" title="Trễ" ${!canEdit ? 'disabled' : ''}>⏰</button>
-                            </div>
+        area.innerHTML = `
+            <div class="card">
+                <div class="card-body">
+                    <div class="attendance-grid">
+                        ${students.map(s => {
+                            const status = getStatus(s.id);
+                            return `<div class="attendance-item">
+                                <div class="att-student-name">${s.name}</div>
+                                <div class="att-buttons">
+                                    <button class="status-btn ${status === 'present' ? 'active-present' : ''}" onclick="AttendancePage.setStatus('${s.id}', 'present')" title="Có mặt">✓</button>
+                                    <button class="status-btn ${status === 'absent' ? 'active-absent' : ''}" onclick="AttendancePage.setStatus('${s.id}', 'absent')" title="Vắng">✗</button>
+                                    <button class="status-btn ${status === 'late' ? 'active-late' : ''}" onclick="AttendancePage.setStatus('${s.id}', 'late')" title="Trễ">⏰</button>
+                                </div>
+                            </div>`;
+                        }).join('')}
+                    </div>
+                    ${canEdit ? `
+                        <div style="margin-top:var(--space-6);display:flex;justify-content:center;">
+                            <button class="btn btn-primary btn-lg" onclick="AttendancePage.save()"><i data-lucide="save"></i> Lưu điểm danh</button>
                         </div>
-                    `;
-                }).join('')}
+                    ` : ''}
+                </div>
             </div>
-
-            ${canEdit ? `
-            <div style="margin-top:var(--space-6);display:flex;gap:var(--space-3);justify-content:flex-end;">
-                <button class="btn btn-secondary" onclick="AttendancePage.markAll('present')">✓ Tất cả có mặt</button>
-                <button class="btn btn-primary" onclick="AttendancePage.save()"><i data-lucide="save"></i> Lưu điểm danh</button>
-            </div>` : ''}
         `;
         if (window.lucide) lucide.createIcons();
     }
 
-    async function renderHistoryTab(content) {
-        if (!selectedClass) {
-            content.innerHTML = '<div class="empty-state"><p>Chọn lớp để xem lịch sử</p></div>';
-            return;
-        }
-
-        // Get last 30 days
-        const endDate = DB.today();
-        const startDate = new Date();
-        startDate.setDate(startDate.getDate() - 30);
-        const startStr = startDate.toISOString().split('T')[0];
-
-        let history = [];
-        try {
-            history = await DB.getAttendanceByDateRange(selectedClass, startStr, endDate);
-        } catch(e) { console.warn(e); }
-
-        if (history.length === 0) {
-            content.innerHTML = '<div class="empty-state"><p>Chưa có dữ liệu điểm danh</p></div>';
-            return;
-        }
-
-        content.innerHTML = `
-            <div class="table-container">
-                <table>
-                    <thead><tr><th>Ngày</th><th>Có mặt</th><th>Vắng</th><th>Trễ</th><th>Tổng</th></tr></thead>
-                    <tbody>
-                        ${history.map(h => {
-                            const records = h.records || [];
-                            const p = records.filter(r => r.status === 'present').length;
-                            const a = records.filter(r => r.status === 'absent').length;
-                            const l = records.filter(r => r.status === 'late').length;
-                            return `<tr>
-                                <td>${DB.formatDate(h.date)}</td>
-                                <td><span class="text-success font-bold">${p}</span></td>
-                                <td><span class="text-danger font-bold">${a}</span></td>
-                                <td><span class="text-warning font-bold">${l}</span></td>
-                                <td>${records.length}</td>
-                            </tr>`;
-                        }).join('')}
-                    </tbody>
-                </table>
-            </div>
-        `;
-    }
-
     container.innerHTML = `
         <div class="page-header">
-            <div>
-                <h1 class="page-title"><i data-lucide="clipboard-check"></i> Điểm danh Học viên</h1>
-            </div>
+            <div><h1 class="page-title"><i data-lucide="check-square"></i> Điểm danh học viên</h1></div>
         </div>
-
-        <div class="tabs">
-            <button class="tab-item active" onclick="AttendancePage.switchTab('mark', this)">Điểm danh</button>
-            <button class="tab-item" onclick="AttendancePage.switchTab('history', this)">Lịch sử</button>
-        </div>
-
         <div class="filter-bar">
-            <select class="select" id="att-class" style="max-width:220px;" onchange="AttendancePage.selectClass(this.value)">
+            <select class="select" style="max-width:250px;" onchange="AttendancePage.selectClass(this.value)">
                 <option value="">Chọn lớp</option>
                 ${classes.map(c => `<option value="${c.id}">${c.name}</option>`).join('')}
             </select>
-            <input type="date" class="input" id="att-date" value="${selectedDate}" style="max-width:180px;" onchange="AttendancePage.selectDate(this.value)">
+            <input type="date" class="input" style="max-width:180px;" value="${selectedDate}" onchange="AttendancePage.selectDate(this.value)">
         </div>
-
-        <div id="attendance-content"></div>
+        <div id="att-area"></div>
     `;
+    render();
 
-    renderContent();
+    // Local state for attendance records being edited
+    let localRecords = {};
 
     window.AttendancePage = {
-        selectClass(val) {
-            selectedClass = val;
-            loadAttendance();
+        async selectClass(id) {
+            selectedClassId = id;
+            await loadData();
+            // Initialize local records from loaded attendance
+            localRecords = {};
+            attendance.forEach(r => { localRecords[r.studentId] = r.status; });
+            render();
         },
-        selectDate(val) {
-            selectedDate = val;
-            loadAttendance();
+
+        async selectDate(date) {
+            selectedDate = date;
+            await loadData();
+            localRecords = {};
+            attendance.forEach(r => { localRecords[r.studentId] = r.status; });
+            render();
         },
+
         setStatus(studentId, status) {
-            if (attendanceData[studentId] === status) {
-                delete attendanceData[studentId];
+            // Toggle off if clicking same status
+            if (localRecords[studentId] === status) {
+                delete localRecords[studentId];
             } else {
-                attendanceData[studentId] = status;
+                localRecords[studentId] = status;
             }
-            renderContent();
+            // Update buttons visually without re-rendering everything
+            const items = document.querySelectorAll('.attendance-item');
+            items.forEach(item => {
+                const btns = item.querySelectorAll('.status-btn');
+                const name = item.querySelector('.att-student-name').textContent;
+                const student = students.find(s => s.name === name);
+                if (student && student.id === studentId) {
+                    btns.forEach(btn => {
+                        btn.classList.remove('active-present', 'active-absent', 'active-late');
+                    });
+                    const st = localRecords[studentId];
+                    if (st === 'present') btns[0].classList.add('active-present');
+                    else if (st === 'absent') btns[1].classList.add('active-absent');
+                    else if (st === 'late') btns[2].classList.add('active-late');
+                }
+            });
         },
-        markAll(status) {
-            students.forEach(s => { attendanceData[s.id] = status; });
-            renderContent();
-        },
+
         async save() {
-            if (!selectedClass) { Toast.warning('Chọn lớp', 'Vui lòng chọn lớp trước'); return; }
-
-            const records = students.map(s => ({
-                studentId: s.id,
-                status: attendanceData[s.id] || 'present'
-            }));
-
+            if (!selectedClassId) return;
+            const records = Object.entries(localRecords).map(([studentId, status]) => ({ studentId, status }));
+            if (records.length === 0) { Toast.warning('Chưa điểm danh ai'); return; }
             try {
-                await DB.saveAttendance({
-                    classId: selectedClass,
-                    date: selectedDate,
-                    records
-                });
-                const p = records.filter(r => r.status === 'present').length;
-                const a = records.filter(r => r.status === 'absent').length;
-                const l = records.filter(r => r.status === 'late').length;
-                Toast.success('Đã lưu', `Có mặt: ${p}, Vắng: ${a}, Trễ: ${l}`);
-            } catch(e) {
-                Toast.error('Lỗi', e.message);
-            }
-        },
-        switchTab(tab, el) {
-            activeTab = tab;
-            document.querySelectorAll('.tab-item').forEach(t => t.classList.remove('active'));
-            el.classList.add('active');
-            renderContent();
+                await DB.saveAttendance({ classId: selectedClassId, date: selectedDate, records });
+                const present = records.filter(r => r.status === 'present').length;
+                const absent = records.filter(r => r.status === 'absent').length;
+                const late = records.filter(r => r.status === 'late').length;
+                Toast.success('Đã lưu điểm danh', `✓ ${present} có mặt, ✗ ${absent} vắng, ⏰ ${late} trễ`);
+            } catch(e) { Toast.error('Lỗi lưu', e.message); }
         }
     };
 });
