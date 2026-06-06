@@ -182,10 +182,11 @@ const App = {
         const btn = document.getElementById('google-login-btn');
         if (btn) {
             btn.disabled = true;
-            btn.innerHTML = '<div class="spinner" style="width:20px;height:20px;border-width:2px;"></div> Đang đăng nhập...';
+            btn.innerHTML = '<div class="spinner" style="width:20px;height:20px;border-width:2px;"></div> Đang chuyển hướng...';
         }
         try {
             await Auth.signInWithGoogle();
+            // Page will redirect to Google sign-in
         } catch (error) {
             if (btn) {
                 btn.disabled = false;
@@ -199,9 +200,7 @@ const App = {
                     Đăng nhập bằng Google
                 `;
             }
-            if (error.code !== 'auth/popup-closed-by-user') {
-                Toast.error('Lỗi đăng nhập', error.message);
-            }
+            Toast.error('Lỗi đăng nhập', error.message);
         }
     },
 

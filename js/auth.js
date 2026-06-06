@@ -56,15 +56,15 @@ const Auth = {
         }
     },
 
-    // Sign in with Google
+    // Sign in with Google (redirect method - works on GitHub Pages)
     async signInWithGoogle() {
         try {
             const provider = new firebase.auth.GoogleAuthProvider();
             provider.setCustomParameters({
                 prompt: 'select_account'
             });
-            const result = await window.auth.signInWithPopup(provider);
-            return result.user;
+            // Use redirect instead of popup to avoid COOP issues
+            await window.auth.signInWithRedirect(provider);
         } catch (error) {
             console.error('Login error:', error);
             throw error;
