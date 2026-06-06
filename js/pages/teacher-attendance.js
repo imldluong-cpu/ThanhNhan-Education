@@ -383,11 +383,13 @@ Router.register('teacher-attendance', async (container) => {
 
             const t = teachers.find(x => x.id === teacherId);
             const salaryConfig = t ? (t.salaryConfig || {}) : {};
+            const classConf = salaryConfig[document.getElementById('ta-class').value] || {};
             let salary = 0;
-            if (shift === 'morning') salary = salaryConfig.morning || 0;
-            else if (shift === 'afternoon') salary = salaryConfig.afternoon || 0;
-            else if (shift === 'evening') salary = salaryConfig.evening || 0;
-            else if (shift === 'custom') salary = (salaryConfig.hourly || 0) * hours;
+            if (shift === 'custom') {
+                salary = (classConf.perHour || 0) * hours;
+            } else {
+                salary = classConf.perShift || 0;
+            }
 
             try {
                 await DB.addTeacherAttendanceRecord({

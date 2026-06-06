@@ -86,27 +86,48 @@ Router.register('users', async (container) => {
             } catch(e) { Toast.error('Lỗi', e.message); }
         },
 
-        editSalary(id) {
+        async editSalary(id) {
             const u = users.find(x => x.id === id);
             if (!u) return;
             const s = u.salaryConfig || {};
+
+            let teacherClasses = [];
+            try {
+                teacherClasses = await DB.getClassesByTeacher(id);
+            } catch(e) { console.warn(e); }
+
+            if (teacherClasses.length === 0) {
+                Toast.warning('Giáo viên này chưa được phân công lớp nào. Hãy phân lớp trước.');
+                return;
+            }
+
+            let classesHtml = teacherClasses.map(c => {
+                const classConf = s[c.id] || {};
+                return `
+                    <div style="margin-bottom:16px;padding:12px;background:var(--bg-glass);border:1px solid var(--border-color);border-radius:8px;">
+                        <h4 style="margin-bottom:8px;color:var(--primary-500);font-size:14px;">${c.name}</h4>
+                        <div class="form-row">
+                            <div class="form-group"><label class="form-label">Lương theo ca (VNĐ/ca)</label><input type="number" class="input sal-shift" data-cid="${c.id}" value="${classConf.perShift || 0}"></div>
+                            <div class="form-group"><label class="form-label">Lương theo giờ (VNĐ/h)</label><input type="number" class="input sal-hourly" data-cid="${c.id}" value="${classConf.perHour || 0}"></div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
             Modal.show({
                 title: 'Cài đặt mức lương: ' + (u.displayName || u.email),
+                size: 'lg',
                 content: `
-                    <div class="form-row">
-                        <div class="form-group"><label class="form-label">Lương Ca Sáng (VNĐ)</label><input type="number" class="input" id="sal-morning" value="${s.morning || 0}"></div>
-                        <div class="form-group"><label class="form-label">Lương Ca Chiều (VNĐ)</label><input type="number" class="input" id="sal-afternoon" value="${s.afternoon || 0}"></div>
-                    </div>
-                    <div class="form-row">
-                        <div class="form-group"><label class="form-label">Lương Ca Tối (VNĐ)</label><input type="number" class="input" id="sal-evening" value="${s.evening || 0}"></div>
-                        <div class="form-group"><label class="form-label">Lương Theo Giờ (VNĐ/h)</label><input type="number" class="input" id="sal-hourly" value="${s.hourly || 0}"></div>
-                    </div>
-                    <div class="form-group" style="margin-top:16px;">
-                        <label class="checkbox-label" style="background:var(--warning-100);border-color:var(--warning-200);color:var(--warning-800);">
-                            <input type="checkbox" id="sal-apply-past"> 
-                            <strong>Áp dụng mức lương mới cho các buổi đã dạy trong tháng này</strong>
-                        </label>
-                        <p style="font-size:12px;color:var(--text-muted);margin-top:4px;">Nếu không chọn, mức lương mới chỉ áp dụng cho các buổi chấm công từ bây giờ trở đi.</p>
+                    <div style="max-height:60vh;overflow-y:auto;padding-right:8px;">
+                        <p style="font-size:13px;color:var(--text-secondary);margin-bottom:16px;">Cài đặt mức lương cho từng lớp mà giáo viên này phụ trách.</p>
+                        ${classesHtml}
+                        <div class="form-group" style="margin-top:16px;">
+                            <label class="checkbox-label" style="background:var(--warning-100);border-color:var(--warning-200);color:var(--warning-800);">
+                                <input type="checkbox" id="sal-apply-past"> 
+                                <strong>Áp dụng mức lương mới cho các buổi đã dạy trong tháng này</strong>
+                            </label>
+                            <p style="font-size:12px;color:var(--text-muted);margin-top:4px;">Nếu không chọn, mức lương mới chỉ áp dụng cho các buổi chấm công từ bây giờ trở đi.</p>
+                        </div>
                     </div>
                 `,
                 footer: `<button class="btn btn-secondary" onclick="Modal.close()">Hủy</button><button class="btn btn-primary" onclick="UsersPage.saveSalary('${id}')">Lưu mức lương</button>`
@@ -114,12 +135,21 @@ Router.register('users', async (container) => {
         },
 
         async saveSalary(id) {
-            const salaryConfig = {
-                morning: parseInt(document.getElementById('sal-morning').value) || 0,
-                afternoon: parseInt(document.getElementById('sal-afternoon').value) || 0,
-                evening: parseInt(document.getElementById('sal-evening').value) || 0,
-                hourly: parseInt(document.getElementById('sal-hourly').value) || 0
-            };
+            const salaryConfig = {};
+            const shiftInputs = document.querySelectorAll('.sal-shift');
+            const hourlyInputs = document.querySelectorAll('.sal-hourly');
+
+            shiftInputs.forEach(inp => {
+                const cid = inp.dataset.cid;
+                if (!salaryConfig[cid]) salaryConfig[cid] = {};
+                salaryConfig[cid].perShift = parseInt(inp.value) || 0;
+            });
+            hourlyInputs.forEach(inp => {
+                const cid = inp.dataset.cid;
+                if (!salaryConfig[cid]) salaryConfig[cid] = {};
+                salaryConfig[cid].perHour = parseInt(inp.value) || 0;
+            });
+
             const applyPast = document.getElementById('sal-apply-past').checked;
 
             try {

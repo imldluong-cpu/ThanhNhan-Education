@@ -245,11 +245,13 @@ const DB = {
         const batch = window.db.batch();
         snap.docs.forEach(doc => {
             const data = doc.data();
+            const classConf = salaryConfig[data.classId] || {};
             let salary = 0;
-            if (data.shift === 'morning') salary = salaryConfig.morning || 0;
-            else if (data.shift === 'afternoon') salary = salaryConfig.afternoon || 0;
-            else if (data.shift === 'evening') salary = salaryConfig.evening || 0;
-            else if (data.shift === 'custom') salary = (salaryConfig.hourly || 0) * (data.hours || 0);
+            if (data.shift === 'custom') {
+                salary = (classConf.perHour || 0) * (data.hours || 0);
+            } else {
+                salary = classConf.perShift || 0;
+            }
             
             batch.update(doc.ref, { salary });
         });
