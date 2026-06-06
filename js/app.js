@@ -36,12 +36,33 @@ const App = {
             loginPage.style.display = '';
             appShell.style.display = 'none';
             this.renderLogin();
-        } else if (userDoc && userDoc.role === 'pending') {
+        } else if (!userDoc) {
+            // User logged in but no Firestore doc yet - retry
+            loginPage.style.display = 'none';
+            appShell.style.display = 'none';
+            loading.classList.remove('hidden');
+            loading.innerHTML = `
+                <div class="loading-content">
+                    <div class="loading-logo">
+                        <h2 style="color:var(--warning-400);">Đang kết nối dữ liệu...</h2>
+                    </div>
+                    <p style="color:var(--text-secondary);max-width:400px;text-align:center;">
+                        Không thể kết nối Firestore. Vui lòng thử lại.
+                    </p>
+                    <button class="btn btn-primary" style="margin-top:var(--space-6);" onclick="location.reload()">
+                        Tải lại trang
+                    </button>
+                    <button class="btn btn-secondary" style="margin-top:var(--space-3);" onclick="App.logout()">
+                        Đăng xuất
+                    </button>
+                </div>
+            `;
+        } else if (userDoc.role === 'pending') {
             // Pending approval
             loginPage.style.display = '';
             appShell.style.display = 'none';
             this.renderPending();
-        } else if (userDoc && userDoc.status === 'inactive') {
+        } else if (userDoc.status === 'inactive') {
             // Account disabled
             loginPage.style.display = '';
             appShell.style.display = 'none';
