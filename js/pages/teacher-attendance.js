@@ -45,7 +45,7 @@ Router.register('teacher-attendance', async (container) => {
         const day = dateObj.getDay();
         const firestoreDay = day === 0 ? 8 : day + 1;
         
-        const scheduledClassIds = new Set(schedules.filter(s => s.dayOfWeek === firestoreDay).map(s => s.classId));
+        const scheduledClassIds = new Set(schedules.filter(s => Number(s.dayOfWeek) === firestoreDay).map(s => s.classId));
         return classes.filter(c => scheduledClassIds.has(c.id));
     }
 
