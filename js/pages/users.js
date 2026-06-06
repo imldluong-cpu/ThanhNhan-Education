@@ -1,150 +1,67 @@
 // ============================================
-// USERS PAGE (Owner only)
+// USERS PAGE - Fixed Salary Config
 // ============================================
 
 Router.register('users', async (container) => {
-    if (!Auth.isOwner()) {
-        container.innerHTML = '<div class="empty-state"><i data-lucide="lock"></i><h3>Không có quyền truy cập</h3><p>Chỉ Chủ trung tâm mới quản lý người dùng</p></div>';
-        if (window.lucide) lucide.createIcons();
-        return;
-    }
-
     let users = [];
-    try { users = await DB.getUsers(); } catch(e) { console.warn(e); }
+    try {
+        users = await DB.getUsers();
+    } catch(e) { console.warn(e); }
 
-    const pendingCount = users.filter(u => u.role === 'pending').length;
+    function render() {
+        const area = document.getElementById('users-area');
+        if (!area) return;
 
-    function getRoleBadge(role) {
-        const map = {
-            owner: { label: 'Chủ TT', class: 'primary' },
-            teacher: { label: 'Giáo viên', class: 'info' },
-            staff: { label: 'Học vụ', class: 'success' },
-            pending: { label: 'Chờ duyệt', class: 'warning' }
-        };
-        return map[role] || { label: role, class: 'neutral' };
-    }
-
-    function renderTable() {
-        const tbody = document.getElementById('users-tbody');
-        if (!tbody) return;
-
-        tbody.innerHTML = users.map(u => {
-            const role = getRoleBadge(u.role);
-            const isCurrentUser = u.id === window.currentUser.id;
-            const isOwnerEmail = u.email?.toLowerCase() === window.OWNER_EMAIL.toLowerCase();
-            const avatar = u.photoURL
-                ? `<img src="${u.photoURL}" class="avatar avatar-sm" referrerpolicy="no-referrer">`
-                : `<div class="avatar avatar-sm" style="background:var(--primary-600);display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:11px;">${(u.displayName || u.email || '?').charAt(0).toUpperCase()}</div>`;
-
-            return `<tr style="${u.role === 'pending' ? 'background:rgba(245,158,11,0.05);' : ''}">
-                <td>${avatar}</td>
-                <td><strong>${u.displayName || '—'}</strong></td>
-                <td class="text-sm">${u.email || '—'}</td>
-                <td><span class="badge badge-${role.class}">${role.label}</span></td>
-                <td><span class="badge badge-${u.status === 'active' ? 'success' : 'danger'}">${u.status === 'active' ? 'Hoạt động' : 'Đã khóa'}</span></td>
-                <td class="text-sm text-muted">${u.lastLogin ? DB.formatDateTime(u.lastLogin) : '—'}</td>
-                <td>
-                    <div class="table-actions">
-                        ${u.role === 'pending' ? `<button class="btn btn-primary btn-sm" onclick="UsersPage.approve('${u.id}', '${(u.displayName||u.email||'').replace(/'/g,"\\'")}')">Duyệt</button>` : ''}
-                        ${!isOwnerEmail && !isCurrentUser ? `
-                            <button class="btn-icon" title="Đổi vai trò" onclick="UsersPage.changeRole('${u.id}', '${u.role}', '${(u.displayName||'').replace(/'/g,"\\'")}')"><i data-lucide="shield"></i></button>
-                            <button class="btn-icon" title="${u.status === 'active' ? 'Khóa' : 'Mở khóa'}" onclick="UsersPage.toggleStatus('${u.id}', '${u.status}')">
-                                <i data-lucide="${u.status === 'active' ? 'lock' : 'unlock'}"></i>
-                            </button>
-                        ` : ''}
-                    </div>
-                </td>
-            </tr>`;
-        }).join('');
-        if (window.lucide) lucide.createIcons();
+        area.innerHTML = `<div class="card"><div class="table-container"><table>
+            <thead><tr><th>Avatar</th><th>Họ tên</th><th>Email</th><th>Vai trò</th><th>Trạng thái</th><th>Thao tác</th></tr></thead>
+            <tbody>${users.map(u => {
+                const initial = u.displayName ? u.displayName.charAt(0) : u.email.charAt(0).toUpperCase();
+                const isOwner = u.role === 'owner';
+                const isMe = u.id === window.currentUser.id;
+                
+                return `<tr>
+                    <td><div style="width:36px;height:36px;border-radius:50%;background:var(--primary-100);color:var(--primary-600);display:flex;align-items:center;justify-content:center;font-weight:bold;">${initial}</div></td>
+                    <td><strong>${u.displayName || '—'}</strong></td>
+                    <td>${u.email}</td>
+                    <td><span class="badge badge-${u.role === 'owner' ? 'primary' : u.role === 'teacher' ? 'info' : u.role === 'staff' ? 'success' : 'warning'}">${Auth.getRoleDisplay(u.role)}</span></td>
+                    <td><span class="badge badge-${u.status === 'active' ? 'success' : 'danger'}">${u.status === 'active' ? 'Hoạt động' : 'Đã khóa'}</span></td>
+                    <td><div class="table-actions">
+                        ${!isOwner && !isMe ? `
+                            <button class="btn btn-secondary btn-sm" onclick="UsersPage.editRole('${u.id}')">Phân quyền</button>
+                            <button class="btn btn-${u.status === 'active' ? 'danger' : 'success'} btn-sm" onclick="UsersPage.toggleStatus('${u.id}', '${u.status}')">${u.status === 'active' ? 'Khóa' : 'Mở khóa'}</button>
+                            ${u.role === 'teacher' ? `<button class="btn btn-info btn-sm" onclick="UsersPage.editSalary('${u.id}')">💰 Cài lương</button>` : ''}
+                        ` : (isOwner && !isMe ? `<span class="text-sm text-muted">Không thể sửa Chủ TT</span>` : '')}
+                    </div></td>
+                </tr>`;
+            }).join('')}</tbody>
+        </table></div></div>`;
     }
 
     container.innerHTML = `
         <div class="page-header">
-            <div>
-                <h1 class="page-title"><i data-lucide="shield-check"></i> Quản lý Người dùng</h1>
-                <p class="page-subtitle">${users.length} tài khoản${pendingCount > 0 ? ` — <span style="color:var(--warning-400);">${pendingCount} chờ duyệt</span>` : ''}</p>
-            </div>
+            <div><h1 class="page-title"><i data-lucide="shield"></i> Quản lý Người dùng & Phân quyền</h1></div>
         </div>
-
-        ${pendingCount > 0 ? `
-        <div style="padding:12px 16px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);border-radius:var(--radius-md);margin-bottom:var(--space-6);display:flex;align-items:center;gap:12px;">
-            <i data-lucide="alert-circle" style="color:var(--warning-400);width:20px;height:20px;flex-shrink:0;"></i>
-            <span style="font-size:var(--font-size-sm);color:var(--warning-400);">Có <strong>${pendingCount}</strong> tài khoản đang chờ duyệt. Vui lòng gán vai trò để họ có thể sử dụng hệ thống.</span>
-        </div>` : ''}
-
-        <div class="card">
-            <div class="table-container">
-                <table>
-                    <thead>
-                        <tr>
-                            <th style="width:50px;"></th>
-                            <th>Họ tên</th>
-                            <th>Email</th>
-                            <th>Vai trò</th>
-                            <th>Trạng thái</th>
-                            <th>Đăng nhập cuối</th>
-                            <th>Thao tác</th>
-                        </tr>
-                    </thead>
-                    <tbody id="users-tbody"></tbody>
-                </table>
-            </div>
-        </div>
+        <div id="users-area"></div>
     `;
-
-    renderTable();
+    render();
 
     window.UsersPage = {
-        approve(id, name) {
+        editRole(id) {
+            const u = users.find(x => x.id === id);
+            if (!u) return;
             Modal.show({
-                title: 'Duyệt tài khoản',
+                title: 'Phân quyền: ' + (u.displayName || u.email),
                 content: `
-                    <p class="text-sm text-muted mb-4">Gán vai trò cho <strong>${name}</strong></p>
-                    <div class="form-group">
-                        <label class="form-label">Vai trò *</label>
+                    <div class="form-group"><label class="form-label">Vai trò</label>
                         <select class="select" id="u-role">
-                            <option value="teacher">Giáo viên</option>
-                            <option value="staff">Học vụ</option>
+                            <option value="pending" ${u.role === 'pending' ? 'selected' : ''}>Chờ duyệt (Không có quyền)</option>
+                            <option value="teacher" ${u.role === 'teacher' ? 'selected' : ''}>Giáo viên</option>
+                            <option value="staff" ${u.role === 'staff' ? 'selected' : ''}>Học vụ</option>
+                            <option value="owner" ${u.role === 'owner' ? 'selected' : ''}>Chủ trung tâm</option>
                         </select>
                     </div>
                 `,
-                footer: `
-                    <button class="btn btn-secondary" onclick="Modal.close()">Hủy</button>
-                    <button class="btn btn-primary" onclick="UsersPage.saveApprove('${id}')">Duyệt</button>
-                `
-            });
-        },
-
-        async saveApprove(id) {
-            const role = document.getElementById('u-role').value;
-            try {
-                await DB.updateUserRole(id, role);
-                Modal.close();
-                Toast.success('Đã duyệt', `Đã gán vai trò ${Auth.getRoleDisplay(role)}`);
-                users = await DB.getUsers();
-                renderTable();
-            } catch(e) { Toast.error('Lỗi', e.message); }
-        },
-
-        changeRole(id, currentRole, name) {
-            Modal.show({
-                title: 'Đổi vai trò',
-                content: `
-                    <p class="text-sm text-muted mb-4">Đổi vai trò cho <strong>${name}</strong></p>
-                    <div class="form-group">
-                        <label class="form-label">Vai trò mới</label>
-                        <select class="select" id="u-role">
-                            <option value="teacher" ${currentRole === 'teacher' ? 'selected' : ''}>Giáo viên</option>
-                            <option value="staff" ${currentRole === 'staff' ? 'selected' : ''}>Học vụ</option>
-                            <option value="owner" ${currentRole === 'owner' ? 'selected' : ''}>Chủ trung tâm</option>
-                        </select>
-                    </div>
-                `,
-                footer: `
-                    <button class="btn btn-secondary" onclick="Modal.close()">Hủy</button>
-                    <button class="btn btn-primary" onclick="UsersPage.saveRole('${id}')">Cập nhật</button>
-                `
+                footer: `<button class="btn btn-secondary" onclick="Modal.close()">Hủy</button><button class="btn btn-primary" onclick="UsersPage.saveRole('${id}')">Cập nhật</button>`
             });
         },
 
@@ -153,28 +70,68 @@ Router.register('users', async (container) => {
             try {
                 await DB.updateUserRole(id, role);
                 Modal.close();
-                Toast.success('Đã cập nhật', `Vai trò: ${Auth.getRoleDisplay(role)}`);
+                Toast.success('Đã cập nhật vai trò');
                 users = await DB.getUsers();
-                renderTable();
+                render();
             } catch(e) { Toast.error('Lỗi', e.message); }
         },
 
         async toggleStatus(id, currentStatus) {
             const newStatus = currentStatus === 'active' ? 'inactive' : 'active';
-            const action = newStatus === 'inactive' ? 'khóa' : 'mở khóa';
-
-            Modal.confirm({
-                title: `${newStatus === 'inactive' ? 'Khóa' : 'Mở khóa'} tài khoản`,
-                message: `Bạn có chắc muốn ${action} tài khoản này?`,
-                confirmText: newStatus === 'inactive' ? 'Khóa' : 'Mở khóa',
-                danger: newStatus === 'inactive'
-            });
-            Modal.bindConfirm(async () => {
+            try {
                 await DB.updateUserStatus(id, newStatus);
-                Toast.success('Đã ' + action);
+                Toast.success('Đã cập nhật trạng thái');
                 users = await DB.getUsers();
-                renderTable();
+                render();
+            } catch(e) { Toast.error('Lỗi', e.message); }
+        },
+
+        editSalary(id) {
+            const u = users.find(x => x.id === id);
+            if (!u) return;
+            const s = u.salaryConfig || {};
+            Modal.show({
+                title: 'Cài đặt mức lương: ' + (u.displayName || u.email),
+                content: `
+                    <div class="form-row">
+                        <div class="form-group"><label class="form-label">Lương Ca Sáng (VNĐ)</label><input type="number" class="input" id="sal-morning" value="${s.morning || 0}"></div>
+                        <div class="form-group"><label class="form-label">Lương Ca Chiều (VNĐ)</label><input type="number" class="input" id="sal-afternoon" value="${s.afternoon || 0}"></div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group"><label class="form-label">Lương Ca Tối (VNĐ)</label><input type="number" class="input" id="sal-evening" value="${s.evening || 0}"></div>
+                        <div class="form-group"><label class="form-label">Lương Theo Giờ (VNĐ/h)</label><input type="number" class="input" id="sal-hourly" value="${s.hourly || 0}"></div>
+                    </div>
+                    <div class="form-group" style="margin-top:16px;">
+                        <label class="checkbox-label" style="background:var(--warning-100);border-color:var(--warning-200);color:var(--warning-800);">
+                            <input type="checkbox" id="sal-apply-past"> 
+                            <strong>Áp dụng mức lương mới cho các buổi đã dạy trong tháng này</strong>
+                        </label>
+                        <p style="font-size:12px;color:var(--text-muted);margin-top:4px;">Nếu không chọn, mức lương mới chỉ áp dụng cho các buổi chấm công từ bây giờ trở đi.</p>
+                    </div>
+                `,
+                footer: `<button class="btn btn-secondary" onclick="Modal.close()">Hủy</button><button class="btn btn-primary" onclick="UsersPage.saveSalary('${id}')">Lưu mức lương</button>`
             });
+        },
+
+        async saveSalary(id) {
+            const salaryConfig = {
+                morning: parseInt(document.getElementById('sal-morning').value) || 0,
+                afternoon: parseInt(document.getElementById('sal-afternoon').value) || 0,
+                evening: parseInt(document.getElementById('sal-evening').value) || 0,
+                hourly: parseInt(document.getElementById('sal-hourly').value) || 0
+            };
+            const applyPast = document.getElementById('sal-apply-past').checked;
+
+            try {
+                await DB.updateUserSalary(id, salaryConfig);
+                if (applyPast) {
+                    await DB.updateTeacherAttendanceSalaries(id, DB.currentMonth(), salaryConfig);
+                }
+                Modal.close();
+                Toast.success('Đã lưu mức lương');
+                users = await DB.getUsers();
+                render();
+            } catch(e) { Toast.error('Lỗi', e.message); }
         }
     };
 });

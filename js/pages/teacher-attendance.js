@@ -1,19 +1,27 @@
 // ============================================
-// TEACHER ATTENDANCE - GPS-based check-in
+// TEACHER ATTENDANCE - GPS, Salary, Schedule Filter
 // ============================================
 
 Router.register('teacher-attendance', async (container) => {
     const isOwner = Auth.isOwner();
     const isTeacher = Auth.isTeacher();
-    let records = [], teachers = [], classes = [], settings = {};
+    let records = [], teachers = [], classes = [], settings = {}, schedules = [];
     const currentMonth = DB.currentMonth();
     let selectedMonth = currentMonth;
+    let mySalaryConfig = {};
 
     try {
         settings = await DB.getSettings();
         records = await DB.getTeacherAttendance(selectedMonth);
+        schedules = await DB.getSchedules();
         if (isOwner) teachers = await DB.getTeachers();
-        classes = isTeacher ? await DB.getClassesByTeacher(window.currentUser.id) : await DB.getClasses();
+        if (isTeacher) {
+            classes = await DB.getClassesByTeacher(window.currentUser.id);
+            const myDoc = await window.db.collection('users').doc(window.currentUser.id).get();
+            mySalaryConfig = myDoc.exists ? (myDoc.data().salaryConfig || {}) : {};
+        } else {
+            classes = await DB.getClasses();
+        }
     } catch(e) { console.warn(e); }
 
     function getTeacherName(id) {
@@ -21,11 +29,23 @@ Router.register('teacher-attendance', async (container) => {
         const t = teachers.find(x => x.id === id);
         return t ? t.displayName : '—';
     }
+    
     function getClassName(id) { return (classes.find(c => c.id === id) || {}).name || '—'; }
 
     function getMyRecords() {
         if (isTeacher) return records.filter(r => r.teacherId === window.currentUser.id);
         return records;
+    }
+
+    function getClassesForDate(dateStr) {
+        if (!dateStr) return [];
+        // JS getDay(): 0=Sun, 1=Mon...
+        // Firestore schedule dayOfWeek: 2=Mon, ..., 8=Sun
+        const d = new Date(dateStr).getDay();
+        const firestoreDay = d === 0 ? 8 : d + 1;
+        
+        const scheduledClassIds = new Set(schedules.filter(s => s.dayOfWeek === firestoreDay).map(s => s.classId));
+        return classes.filter(c => scheduledClassIds.has(c.id));
     }
 
     const shiftNames = { morning: 'Ca sáng', afternoon: 'Ca chiều', evening: 'Ca tối', custom: 'Tùy chỉnh' };
@@ -37,15 +57,17 @@ Router.register('teacher-attendance', async (container) => {
 
         // Summary
         const teacherSummary = {};
+        let totalSalaryAll = 0;
         myRecords.forEach(r => {
-            if (!teacherSummary[r.teacherId]) teacherSummary[r.teacherId] = { total: 0, hours: 0 };
+            if (!teacherSummary[r.teacherId]) teacherSummary[r.teacherId] = { total: 0, hours: 0, salary: 0 };
             teacherSummary[r.teacherId].total++;
             teacherSummary[r.teacherId].hours += (r.hours || 0);
+            teacherSummary[r.teacherId].salary += (r.salary || 0);
+            totalSalaryAll += (r.salary || 0);
         });
 
         let html = '';
 
-        // GPS settings for owner
         if (isOwner) {
             const hasLocation = settings.centerLat && settings.centerLng;
             html += `
@@ -63,7 +85,6 @@ Router.register('teacher-attendance', async (container) => {
             `;
         }
 
-        // Teacher check-in button
         if (isTeacher) {
             html += `
                 <div class="card mb-4" style="text-align:center;padding:24px;">
@@ -71,18 +92,18 @@ Router.register('teacher-attendance', async (container) => {
                     <button class="btn btn-primary btn-lg" onclick="TAPage.checkIn()" id="checkin-btn" style="font-size:16px;padding:12px 32px;">
                         📍 Chấm công
                     </button>
-                    <p style="font-size:12px;color:var(--text-muted);margin-top:8px;">Bạn cần ở tại trung tâm để chấm công</p>
+                    <p style="font-size:12px;color:var(--text-muted);margin-top:8px;">Bạn cần ở tại trung tâm để chấm công. Chỉ hiển thị lớp có lịch hôm nay.</p>
                 </div>
             `;
         }
 
         // Records table
         html += `<div class="card"><div class="table-container"><table>
-            <thead><tr>${isOwner ? '<th>Giáo viên</th>' : ''}<th>Ngày</th><th>Ca/Giờ</th><th>Lớp</th><th>Số giờ</th><th>Ghi chú</th>${isOwner ? '<th>Thao tác</th>' : ''}</tr></thead>
+            <thead><tr>${isOwner ? '<th>Giáo viên</th>' : ''}<th>Ngày</th><th>Ca/Giờ</th><th>Lớp</th><th>Số giờ</th><th>Lương</th><th>Ghi chú</th>${isOwner ? '<th>Thao tác</th>' : ''}</tr></thead>
             <tbody>`;
 
         if (myRecords.length === 0) {
-            html += `<tr><td colspan="${isOwner ? 7 : 5}"><div class="empty-state"><p>Chưa có dữ liệu chấm công tháng này</p></div></td></tr>`;
+            html += `<tr><td colspan="${isOwner ? 8 : 6}"><div class="empty-state"><p>Chưa có dữ liệu chấm công tháng này</p></div></td></tr>`;
         } else {
             html += myRecords.sort((a, b) => (b.date || '').localeCompare(a.date || '')).map(r => `<tr>
                 ${isOwner ? `<td>${getTeacherName(r.teacherId)}</td>` : ''}
@@ -90,6 +111,7 @@ Router.register('teacher-attendance', async (container) => {
                 <td>${r.shift !== 'custom' ? shiftNames[r.shift] || r.shift : `${r.startTime || ''}-${r.endTime || ''}`}</td>
                 <td>${getClassName(r.classId)}</td>
                 <td><strong>${r.hours || 0}h</strong></td>
+                <td style="color:var(--success-500);font-weight:600;">${DB.formatCurrency(r.salary || 0)}</td>
                 <td class="text-sm">${r.note || ''}</td>
                 ${isOwner ? `<td><button class="btn-icon" onclick="TAPage.removeRecord('${r.id}')"><i data-lucide="trash-2"></i></button></td>` : ''}
             </tr>`).join('');
@@ -99,11 +121,12 @@ Router.register('teacher-attendance', async (container) => {
 
         // Summary cards
         if (Object.keys(teacherSummary).length > 0) {
-            html += '<div class="stats-grid mt-4">';
+            html += `<h3 style="margin-top:24px;margin-bottom:16px;">Tổng hợp lương tháng ${selectedMonth} ${isOwner ? `(Tổng: ${DB.formatCurrency(totalSalaryAll)})` : ''}</h3>`;
+            html += '<div class="stats-grid">';
             Object.entries(teacherSummary).forEach(([tid, s]) => {
-                html += `<div class="stat-card" style="padding:12px;">
-                    <div class="stat-value">${s.total} buổi</div>
-                    <div class="stat-label">${getTeacherName(tid)} — ${s.hours}h</div>
+                html += `<div class="stat-card" style="padding:16px;">
+                    <div class="stat-value" style="color:var(--success-500);">${DB.formatCurrency(s.salary)}</div>
+                    <div class="stat-label">${getTeacherName(tid)} — ${s.total} buổi (${s.hours}h)</div>
                 </div>`;
             });
             html += '</div>';
@@ -115,7 +138,7 @@ Router.register('teacher-attendance', async (container) => {
 
     container.innerHTML = `
         <div class="page-header">
-            <div><h1 class="page-title"><i data-lucide="clock"></i> Chấm công Giáo viên</h1></div>
+            <div><h1 class="page-title"><i data-lucide="clock"></i> Chấm công & Lương</h1></div>
             <div class="page-actions">
                 ${isOwner ? `<button class="btn btn-primary" onclick="TAPage.showAddRecord()"><i data-lucide="plus"></i> Thêm chấm công</button>` : ''}
             </div>
@@ -166,7 +189,6 @@ Router.register('teacher-attendance', async (container) => {
                         return;
                     }
 
-                    // Show shift selection
                     this._showCheckInForm();
                     btn.disabled = false;
                     btn.innerHTML = '📍 Chấm công';
@@ -180,8 +202,10 @@ Router.register('teacher-attendance', async (container) => {
         },
 
         _showCheckInForm() {
+            const validClasses = getClassesForDate(DB.today());
+            
             Modal.show({
-                title: '✅ Xác nhận chấm công',
+                title: '✅ Xác nhận chấm công hôm nay',
                 content: `
                     <p style="color:var(--success-400);margin-bottom:12px;">📍 Vị trí hợp lệ — Bạn đang ở trung tâm</p>
                     <div class="form-group"><label class="form-label">Ca</label>
@@ -197,8 +221,13 @@ Router.register('teacher-attendance', async (container) => {
                             <div class="form-group"><label class="form-label">Ra</label><input type="time" class="input" id="ci-end"></div>
                         </div>
                     </div>
-                    <div class="form-group"><label class="form-label">Lớp dạy</label>
-                        <select class="select" id="ci-class"><option value="">Chọn</option>${classes.map(c => `<option value="${c.id}">${c.name}</option>`).join('')}</select></div>
+                    <div class="form-group"><label class="form-label">Lớp dạy (Chỉ hiện lớp có lịch hôm nay)</label>
+                        <select class="select" id="ci-class">
+                            <option value="">Chọn</option>
+                            ${validClasses.map(c => `<option value="${c.id}">${c.name}</option>`).join('')}
+                        </select>
+                        ${validClasses.length === 0 ? '<p style="color:var(--danger-400);font-size:12px;margin-top:4px;">Bạn không có lớp nào xếp lịch vào hôm nay.</p>' : ''}
+                    </div>
                     <div class="form-group"><label class="form-label">Ghi chú</label><input type="text" class="input" id="ci-note"></div>
                 `,
                 footer: `<button class="btn btn-secondary" onclick="Modal.close()">Hủy</button><button class="btn btn-success" onclick="TAPage.confirmCheckIn()">✓ Xác nhận</button>`
@@ -225,11 +254,17 @@ Router.register('teacher-attendance', async (container) => {
                 }
             }
 
+            let salary = 0;
+            if (shift === 'morning') salary = mySalaryConfig.morning || 0;
+            else if (shift === 'afternoon') salary = mySalaryConfig.afternoon || 0;
+            else if (shift === 'evening') salary = mySalaryConfig.evening || 0;
+            else if (shift === 'custom') salary = (mySalaryConfig.hourly || 0) * hours;
+
             try {
                 await DB.addTeacherAttendanceRecord({
                     teacherId: window.currentUser.id,
                     date: DB.today(),
-                    shift, startTime, endTime, hours,
+                    shift, startTime, endTime, hours, salary,
                     classId: document.getElementById('ci-class').value,
                     note: document.getElementById('ci-note').value,
                     month: DB.currentMonth()
@@ -299,13 +334,16 @@ Router.register('teacher-attendance', async (container) => {
 
         // === OWNER: ADD RECORD MANUALLY ===
         showAddRecord() {
+            const initialDate = DB.today();
+            const validClasses = getClassesForDate(initialDate);
+            
             Modal.show({
                 title: 'Thêm chấm công',
                 content: `
                     <div class="form-group"><label class="form-label">Giáo viên *</label>
                         <select class="select" id="ta-teacher"><option value="">Chọn</option>${teachers.map(t => `<option value="${t.id}">${t.displayName || t.email}</option>`).join('')}</select></div>
                     <div class="form-row">
-                        <div class="form-group"><label class="form-label">Ngày</label><input type="date" class="input" id="ta-date" value="${DB.today()}"></div>
+                        <div class="form-group"><label class="form-label">Ngày</label><input type="date" class="input" id="ta-date" value="${initialDate}" onchange="TAPage.updateAddClasses(this.value)"></div>
                         <div class="form-group"><label class="form-label">Ca</label>
                             <select class="select" id="ta-shift"><option value="morning">Sáng</option><option value="afternoon">Chiều</option><option value="evening">Tối</option><option value="custom">Tùy chỉnh</option></select></div>
                     </div>
@@ -313,12 +351,19 @@ Router.register('teacher-attendance', async (container) => {
                         <div class="form-group"><label class="form-label">Giờ vào</label><input type="time" class="input" id="ta-start"></div>
                         <div class="form-group"><label class="form-label">Giờ ra</label><input type="time" class="input" id="ta-end"></div>
                     </div>
-                    <div class="form-group"><label class="form-label">Lớp</label>
-                        <select class="select" id="ta-class"><option value="">Chọn</option>${classes.map(c => `<option value="${c.id}">${c.name}</option>`).join('')}</select></div>
+                    <div class="form-group"><label class="form-label">Lớp (Chỉ hiện lớp có lịch trong ngày)</label>
+                        <select class="select" id="ta-class"><option value="">Chọn</option>${validClasses.map(c => `<option value="${c.id}">${c.name}</option>`).join('')}</select></div>
                     <div class="form-group"><label class="form-label">Ghi chú</label><input type="text" class="input" id="ta-note"></div>
                 `,
                 footer: `<button class="btn btn-secondary" onclick="Modal.close()">Hủy</button><button class="btn btn-primary" onclick="TAPage.saveRecord()">Lưu</button>`
             });
+        },
+
+        updateAddClasses(dateStr) {
+            const classSelect = document.getElementById('ta-class');
+            if (!classSelect) return;
+            const validClasses = getClassesForDate(dateStr);
+            classSelect.innerHTML = `<option value="">Chọn</option>${validClasses.map(c => `<option value="${c.id}">${c.name}</option>`).join('')}`;
         },
 
         async saveRecord() {
@@ -336,9 +381,17 @@ Router.register('teacher-attendance', async (container) => {
             } else if (shift === 'morning' || shift === 'afternoon') hours = 4.5;
             else if (shift === 'evening') hours = 3;
 
+            const t = teachers.find(x => x.id === teacherId);
+            const salaryConfig = t ? (t.salaryConfig || {}) : {};
+            let salary = 0;
+            if (shift === 'morning') salary = salaryConfig.morning || 0;
+            else if (shift === 'afternoon') salary = salaryConfig.afternoon || 0;
+            else if (shift === 'evening') salary = salaryConfig.evening || 0;
+            else if (shift === 'custom') salary = (salaryConfig.hourly || 0) * hours;
+
             try {
                 await DB.addTeacherAttendanceRecord({
-                    teacherId, date, shift, startTime, endTime, hours,
+                    teacherId, date, shift, startTime, endTime, hours, salary,
                     classId: document.getElementById('ta-class').value,
                     note: document.getElementById('ta-note').value,
                     month: date.substring(0, 7)

@@ -1,16 +1,26 @@
 // ============================================
-// ATTENDANCE PAGE - Fixed student display
+// ATTENDANCE PAGE - Filter classes by schedule
 // ============================================
 
 Router.register('attendance', async (container) => {
     const canEdit = Auth.hasAnyRole('owner', 'teacher');
-    let classes = [];
+    let classes = [], schedules = [];
     try {
         classes = Auth.isTeacher() ? await DB.getClassesByTeacher(window.currentUser.id) : await DB.getClasses();
+        schedules = await DB.getSchedules();
     } catch(e) { console.warn(e); }
 
     let selectedClassId = '', selectedDate = DB.today();
     let students = [], attendance = [];
+
+    function getValidClassesForDate(dateStr) {
+        if (!dateStr) return [];
+        const d = new Date(dateStr).getDay();
+        const firestoreDay = d === 0 ? 8 : d + 1; // 2=Mon, 8=Sun
+        
+        const scheduledClassIds = new Set(schedules.filter(s => s.dayOfWeek === firestoreDay).map(s => s.classId));
+        return classes.filter(c => scheduledClassIds.has(c.id));
+    }
 
     async function loadData() {
         if (!selectedClassId) { students = []; attendance = []; return; }
@@ -30,8 +40,22 @@ Router.register('attendance', async (container) => {
         const area = document.getElementById('att-area');
         if (!area) return;
 
+        const validClasses = getValidClassesForDate(selectedDate);
+        
+        // Update the class select dropdown dynamically based on date
+        const classSelect = document.getElementById('att-class-select');
+        if (classSelect) {
+            const currentVal = classSelect.value;
+            classSelect.innerHTML = `<option value="">Chọn lớp</option>${validClasses.map(c => `<option value="${c.id}" ${c.id === currentVal ? 'selected' : ''}>${c.name}</option>`).join('')}`;
+            // If the selected class is no longer valid for this date, deselect it
+            if (currentVal && !validClasses.find(c => c.id === currentVal)) {
+                selectedClassId = '';
+                classSelect.value = '';
+            }
+        }
+
         if (!selectedClassId) {
-            area.innerHTML = '<div class="card"><div class="card-body"><div class="empty-state"><p>Vui lòng chọn lớp</p></div></div></div>';
+            area.innerHTML = '<div class="card"><div class="card-body"><div class="empty-state"><p>Vui lòng chọn lớp có lịch học trong ngày</p></div></div></div>';
             return;
         }
 
@@ -72,24 +96,22 @@ Router.register('attendance', async (container) => {
             <div><h1 class="page-title"><i data-lucide="check-square"></i> Điểm danh học viên</h1></div>
         </div>
         <div class="filter-bar">
-            <select class="select" style="max-width:250px;" onchange="AttendancePage.selectClass(this.value)">
-                <option value="">Chọn lớp</option>
-                ${classes.map(c => `<option value="${c.id}">${c.name}</option>`).join('')}
-            </select>
             <input type="date" class="input" style="max-width:180px;" value="${selectedDate}" onchange="AttendancePage.selectDate(this.value)">
+            <select class="select" id="att-class-select" style="max-width:250px;" onchange="AttendancePage.selectClass(this.value)">
+                <option value="">Chọn lớp</option>
+                ${getValidClassesForDate(selectedDate).map(c => `<option value="${c.id}">${c.name}</option>`).join('')}
+            </select>
         </div>
         <div id="att-area"></div>
     `;
     render();
 
-    // Local state for attendance records being edited
     let localRecords = {};
 
     window.AttendancePage = {
         async selectClass(id) {
             selectedClassId = id;
             await loadData();
-            // Initialize local records from loaded attendance
             localRecords = {};
             attendance.forEach(r => { localRecords[r.studentId] = r.status; });
             render();
@@ -97,6 +119,13 @@ Router.register('attendance', async (container) => {
 
         async selectDate(date) {
             selectedDate = date;
+            
+            // Re-evaluate valid classes for the new date
+            const validClasses = getValidClassesForDate(selectedDate);
+            if (selectedClassId && !validClasses.find(c => c.id === selectedClassId)) {
+                selectedClassId = ''; // Reset if class doesn't study on this day
+            }
+            
             await loadData();
             localRecords = {};
             attendance.forEach(r => { localRecords[r.studentId] = r.status; });
@@ -104,13 +133,11 @@ Router.register('attendance', async (container) => {
         },
 
         setStatus(studentId, status) {
-            // Toggle off if clicking same status
             if (localRecords[studentId] === status) {
                 delete localRecords[studentId];
             } else {
                 localRecords[studentId] = status;
             }
-            // Update buttons visually without re-rendering everything
             const items = document.querySelectorAll('.attendance-item');
             items.forEach(item => {
                 const btns = item.querySelectorAll('.status-btn');

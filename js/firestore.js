@@ -232,6 +232,30 @@ const DB = {
         return await window.db.collection('users').doc(userId).update({ status });
     },
 
+    async updateUserSalary(userId, salaryConfig) {
+        return await window.db.collection('users').doc(userId).update({ salaryConfig });
+    },
+
+    async updateTeacherAttendanceSalaries(teacherId, month, salaryConfig) {
+        const snap = await window.db.collection('teacherAttendance')
+            .where('teacherId', '==', teacherId)
+            .where('month', '==', month)
+            .get();
+        
+        const batch = window.db.batch();
+        snap.docs.forEach(doc => {
+            const data = doc.data();
+            let salary = 0;
+            if (data.shift === 'morning') salary = salaryConfig.morning || 0;
+            else if (data.shift === 'afternoon') salary = salaryConfig.afternoon || 0;
+            else if (data.shift === 'evening') salary = salaryConfig.evening || 0;
+            else if (data.shift === 'custom') salary = (salaryConfig.hourly || 0) * (data.hours || 0);
+            
+            batch.update(doc.ref, { salary });
+        });
+        return await batch.commit();
+    },
+
     // === SCHEDULE ===
     async getSchedules() {
         const snap = await window.db.collection('schedules').get();

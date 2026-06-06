@@ -1,5 +1,5 @@
 // ============================================
-// GRADES PAGE - Fixed score input
+// GRADES PAGE - With Comments
 // ============================================
 
 Router.register('grades', async (container) => {
@@ -92,7 +92,7 @@ Router.register('grades', async (container) => {
             const examName = document.getElementById('g-exam').value.trim();
             if (!examName) { Toast.warning('Nhập tên bài kiểm tra'); return; }
             try {
-                await DB.addGrade({ classId: selectedClassId, examName, date: document.getElementById('g-date').value || DB.today(), maxScore: parseInt(document.getElementById('g-max').value) || 10, scores: {} });
+                await DB.addGrade({ classId: selectedClassId, examName, date: document.getElementById('g-date').value || DB.today(), maxScore: parseInt(document.getElementById('g-max').value) || 10, scores: {}, comments: {} });
                 Modal.close();
                 Toast.success('Đã thêm bài KT');
                 await loadGrades();
@@ -104,23 +104,25 @@ Router.register('grades', async (container) => {
             const grade = grades.find(g => g.id === gradeId);
             if (!grade) return;
             const scores = grade.scores || {};
+            const comments = grade.comments || {};
             const maxScore = grade.maxScore || 10;
 
             Modal.show({
                 title: `Nhập điểm: ${grade.examName}`,
                 size: 'lg',
                 content: `
-                    <p style="font-size:13px;color:var(--text-secondary);margin-bottom:12px;">Điểm tối đa: <strong>${maxScore}</strong></p>
-                    <div class="table-container" style="max-height:400px;overflow-y:auto;">
+                    <p style="font-size:13px;color:var(--text-secondary);margin-bottom:12px;">Điểm tối đa: <strong>${maxScore}</strong>. Bắt buộc nhận xét nếu có nhập điểm.</p>
+                    <div class="table-container" style="max-height:50vh;overflow-y:auto;">
                         <table>
-                            <thead><tr><th>STT</th><th>Họ tên</th><th style="width:100px;">Điểm</th></tr></thead>
-                            <tbody>${students.map((s, i) => {
+                            <thead><tr><th>Họ tên</th><th style="width:90px;">Điểm</th><th>Nhận xét</th></tr></thead>
+                            <tbody>${students.map((s) => {
                                 const score = scores[s.id] !== undefined ? scores[s.id] : '';
-                                const colorClass = score !== '' ? (score >= 8 ? 'grade-high' : score >= 5 ? 'grade-mid' : 'grade-low') : '';
+                                const comment = comments[s.id] || '';
+                                const colorClass = score !== '' ? (score >= maxScore * 0.8 ? 'grade-high' : score >= maxScore * 0.5 ? 'grade-mid' : 'grade-low') : '';
                                 return `<tr>
-                                    <td>${i + 1}</td>
                                     <td>${s.name}</td>
-                                    <td><input type="number" class="input grade-input ${colorClass}" data-sid="${s.id}" value="${score}" min="0" max="${maxScore}" step="0.5" style="width:80px;padding:6px 8px;text-align:center;font-weight:600;" oninput="GradesPage.colorScore(this, ${maxScore})"></td>
+                                    <td><input type="number" class="input grade-input ${colorClass}" data-sid="${s.id}" data-type="score" value="${score}" min="0" max="${maxScore}" step="0.5" oninput="GradesPage.colorScore(this, ${maxScore})"></td>
+                                    <td><input type="text" class="input" data-sid="${s.id}" data-type="comment" value="${comment}" placeholder="Nhận xét (Bắt buộc)"></td>
                                 </tr>`;
                             }).join('')}</tbody>
                         </table>
@@ -140,14 +142,38 @@ Router.register('grades', async (container) => {
         },
 
         async saveScores(gradeId) {
-            const inputs = document.querySelectorAll('.grade-input');
+            const scoreInputs = document.querySelectorAll('.grade-input[data-type="score"]');
             const scores = {};
-            inputs.forEach(inp => {
-                const val = inp.value.trim();
-                if (val !== '') scores[inp.dataset.sid] = parseFloat(val);
+            const comments = {};
+            let hasError = false;
+
+            scoreInputs.forEach(inp => {
+                const sid = inp.dataset.sid;
+                const scoreVal = inp.value.trim();
+                const commentInput = document.querySelector(`input[data-type="comment"][data-sid="${sid}"]`);
+                const commentVal = commentInput ? commentInput.value.trim() : '';
+
+                if (scoreVal !== '') {
+                    if (commentVal === '') {
+                        commentInput.style.borderColor = 'var(--danger-500)';
+                        hasError = true;
+                    } else {
+                        if(commentInput) commentInput.style.borderColor = '';
+                        scores[sid] = parseFloat(scoreVal);
+                        comments[sid] = commentVal;
+                    }
+                } else {
+                    if(commentInput) commentInput.style.borderColor = '';
+                }
             });
+
+            if (hasError) {
+                Toast.error('Lỗi nhập liệu', 'Vui lòng điền nhận xét cho những học viên có điểm.');
+                return;
+            }
+
             try {
-                await DB.updateGrade(gradeId, { scores });
+                await DB.updateGrade(gradeId, { scores, comments });
                 Modal.close();
                 Toast.success('Đã lưu điểm');
                 await loadGrades();
