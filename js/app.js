@@ -203,12 +203,12 @@ const App = {
         const btn = document.getElementById('google-login-btn');
         if (btn) {
             btn.disabled = true;
-            btn.innerHTML = '<div class="spinner" style="width:20px;height:20px;border-width:2px;"></div> Đang chuyển hướng...';
+            btn.innerHTML = '<div class="spinner" style="width:20px;height:20px;border-width:2px;"></div> Đang đăng nhập...';
         }
         try {
             await Auth.signInWithGoogle();
-            // Page will redirect to Google sign-in
         } catch (error) {
+            console.error('Login error:', error);
             if (btn) {
                 btn.disabled = false;
                 btn.innerHTML = `
