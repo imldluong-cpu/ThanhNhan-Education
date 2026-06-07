@@ -74,8 +74,8 @@ const Sidebar = {
 
         sidebar.innerHTML = `
             <div class="sidebar-brand">
-                <div class="sidebar-brand-icon" style="background: white; padding: 4px;">
-                    <img src="assets/images/logo.png" alt="Logo" style="width: 100%; height: 100%; object-fit: contain;">
+                <div class="sidebar-brand-icon" style="background: white; padding: 4px; width: 36px; height: 36px; border-radius: 6px; display: flex; justify-content: center; align-items: center;">
+                    <img src="assets/images/logo.png" alt="Logo" style="max-width: 100%; max-height: 100%; object-fit: contain;">
                 </div>
                 <div class="sidebar-brand-text">
                     <h2>Thành Nhân</h2>

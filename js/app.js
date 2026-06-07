@@ -81,7 +81,7 @@ const App = {
             <div class="login-container">
                 <div class="login-card">
                     <div class="login-logo">
-                        <div class="login-logo-icon" style="background: white; padding: 4px;">
+                        <div class="login-logo-icon" style="background: white; padding: 4px; width: 64px; height: 64px; border-radius: 8px; margin: 0 auto 16px auto;">
                             <img src="assets/images/logo.png" alt="Logo" style="width: 100%; height: 100%; object-fit: contain;">
                         </div>
                         <h1>Thành Nhân Education</h1>
