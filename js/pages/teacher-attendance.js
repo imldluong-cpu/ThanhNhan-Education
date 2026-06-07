@@ -122,7 +122,10 @@ Router.register('teacher-attendance', async (container) => {
 
         // Summary cards
         if (Object.keys(teacherSummary).length > 0) {
-            html += `<h3 style="margin-top:24px;margin-bottom:16px;">Tổng hợp lương tháng ${selectedMonth} ${isOwner ? `(Tổng: ${DB.formatCurrency(totalSalaryAll)})` : ''}</h3>`;
+            html += `<div style="display:flex;align-items:center;justify-content:space-between;margin-top:24px;margin-bottom:16px;">
+                <h3 style="margin:0;">Tổng hợp lương tháng ${selectedMonth} ${isOwner ? `(Tổng: ${DB.formatCurrency(totalSalaryAll)})` : ''}</h3>
+                ${isOwner ? `<button class="btn btn-primary" onclick="TAPage.finalizeSalary()"><i data-lucide="check-circle"></i> Chốt lương & Chi trả</button>` : ''}
+            </div>`;
             html += '<div class="stats-grid">';
             Object.entries(teacherSummary).forEach(([tid, s]) => {
                 html += `<div class="stat-card" style="padding:16px;">
@@ -156,6 +159,45 @@ Router.register('teacher-attendance', async (container) => {
             selectedMonth = m;
             records = await DB.getTeacherAttendance(m);
             render();
+        },
+
+        async finalizeSalary() {
+            if (!Auth.isOwner()) return;
+            const myRecords = getMyRecords();
+            const summary = {};
+            myRecords.forEach(r => {
+                if (!summary[r.teacherId]) summary[r.teacherId] = { salary: 0 };
+                summary[r.teacherId].salary += (r.salary || 0);
+            });
+            if (Object.keys(summary).length === 0) return Toast.warning('Chưa có dữ liệu', 'Không có dữ liệu lương để chốt');
+            
+            try {
+                const existingFinance = await DB.getFinanceRecords(selectedMonth);
+                const alreadyPaid = existingFinance.some(r => r.category === 'Lương GV' && (r.description || '').includes('Lương tháng ' + selectedMonth));
+                if (alreadyPaid) {
+                    if (!confirm('CẢNH BÁO: Bạn đã từng chốt lương tháng ' + selectedMonth + ' rồi. Nếu tiếp tục sẽ bị Ghi nhận trùng lặp vào chi phí. Bạn vẫn muốn tiếp tục?')) return;
+                } else {
+                    if (!confirm('Chốt lương tháng ' + selectedMonth + ' và ghi nhận vào danh sách Chi phí Tài chính?')) return;
+                }
+
+                const promises = [];
+                for (const [tid, s] of Object.entries(summary)) {
+                    if (s.salary > 0) {
+                        promises.push(DB.addFinanceRecord({
+                            type: 'expense',
+                            category: 'Lương GV',
+                            date: DB.today(),
+                            amount: s.salary,
+                            description: 'Lương tháng ' + selectedMonth + ' - ' + getTeacherName(tid),
+                            month: selectedMonth
+                        }));
+                    }
+                }
+                await Promise.all(promises);
+                Toast.success('Thành công', 'Đã chuyển dữ liệu trả lương vào sổ Tài chính');
+            } catch(e) {
+                Toast.error('Lỗi', e.message);
+            }
         },
 
         // === GPS CHECK-IN ===
