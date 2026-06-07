@@ -105,6 +105,7 @@ Router.register('schedule', async (container) => {
         window.calendar = new FullCalendar.Calendar(grid, {
             initialView: 'timeGridWeek',
             initialDate: '2024-01-01',
+            firstDay: 1, // Start on Monday
             headerToolbar: false,
             allDaySlot: false,
             slotMinTime: '07:00:00',
