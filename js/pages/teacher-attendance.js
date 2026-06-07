@@ -598,6 +598,8 @@ Router.register('teacher-attendance', async (container) => {
         },
 
         showAdjustment(teacherId) {
+            const teacherClasses = classes.filter(c => (c.teacherIds || []).includes(teacherId));
+            
             Modal.show({
                 title: '🎁 Thêm Thưởng / Phạt',
                 content: `
@@ -612,6 +614,13 @@ Router.register('teacher-attendance', async (container) => {
                         </select>
                     </div>
                     <div class="form-row">
+                        <div class="form-group" id="adj-class-group" style="display:none;">
+                            <label class="form-label">Chọn lớp áp dụng</label>
+                            <select class="select" id="adj-class" onchange="TAPage.onAdjClassChange()">
+                                <option value="">-- Chọn lớp --</option>
+                                ${teacherClasses.map(c => `<option value="${c.fee || 0}" data-name="${c.name}">${c.name} (${DB.formatCurrency(c.fee || 0)})</option>`).join('')}
+                            </select>
+                        </div>
                         <div class="form-group" id="adj-calc-group" style="display:none;">
                             <label class="form-label">Học phí / Doanh thu (VNĐ)</label>
                             <input type="number" class="input" id="adj-base" placeholder="Nhập vào để máy tự tính thưởng" oninput="TAPage.onAdjInput()">
@@ -633,20 +642,41 @@ Router.register('teacher-attendance', async (container) => {
         onAdjChange() {
             const val = document.getElementById('adj-select').value;
             const calcGrp = document.getElementById('adj-calc-group');
+            const classGrp = document.getElementById('adj-class-group');
             const rsn = document.getElementById('adj-reason');
             const amt = document.getElementById('adj-amount');
             
             if (val === 'upsell_gv' || val === 'upsell_cf' || val === 'retention') {
                 calcGrp.style.display = 'block';
+                classGrp.style.display = 'block';
                 if (val === 'upsell_gv') rsn.value = 'Thưởng Upsell (GV)';
                 if (val === 'upsell_cf') rsn.value = 'Thưởng Upsell (Cofounder)';
                 if (val === 'retention') rsn.value = 'Thưởng giữ sĩ số lớp';
             } else {
                 calcGrp.style.display = 'none';
+                classGrp.style.display = 'none';
                 if (val !== 'custom') rsn.value = '';
             }
             amt.value = '';
             document.getElementById('adj-base').value = '';
+            document.getElementById('adj-class').value = '';
+        },
+
+        onAdjClassChange() {
+            const select = document.getElementById('adj-class');
+            const fee = select.value;
+            const opt = select.options[select.selectedIndex];
+            if (!fee || fee === '0') return;
+            
+            document.getElementById('adj-base').value = fee;
+            TAPage.onAdjInput();
+            
+            const rsn = document.getElementById('adj-reason');
+            const val = document.getElementById('adj-select').value;
+            const className = opt.getAttribute('data-name') || '';
+            if (val === 'upsell_gv') rsn.value = 'Thưởng Upsell (GV) - Lớp ' + className;
+            if (val === 'upsell_cf') rsn.value = 'Thưởng Upsell (Cofounder) - Lớp ' + className;
+            if (val === 'retention') rsn.value = 'Thưởng giữ sĩ số - Lớp ' + className;
         },
 
         onAdjInput() {
