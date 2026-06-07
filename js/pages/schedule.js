@@ -56,81 +56,126 @@ Router.register('schedule', async (container) => {
         return classColors[idx % classColors.length];
     }
 
+    // Anchor week: 2024-01-01 (Monday) to 2024-01-07 (Sunday)
+    function getAnchorDate(dayOfWeek) {
+        const dayMap = {
+            2: '2024-01-01',
+            3: '2024-01-02',
+            4: '2024-01-03',
+            5: '2024-01-04',
+            6: '2024-01-05',
+            7: '2024-01-06',
+            8: '2024-01-07'
+        };
+        return dayMap[dayOfWeek] || '2024-01-01';
+    }
+
     function render() {
         const grid = document.getElementById('schedule-grid');
         if (!grid) return;
 
-        // Track which slots are "occupied" by multi-row events
-        const occupied = {}; // "day-slotIdx" => true
+        grid.style.height = 'calc(100vh - 200px)';
+        grid.style.minHeight = '600px';
+        grid.style.background = 'var(--bg-card)';
+        grid.style.borderRadius = 'var(--radius-lg)';
+        grid.style.padding = 'var(--space-4)';
+        grid.style.boxShadow = 'var(--shadow-sm)';
 
-        const rooms = ['Trệt', 'P.T1', 'P.T2', 'P.ST'];
-
-        let html = `<div class="sched-table">
-            <div class="sched-row sched-header">
-                <div class="sched-cell sched-time-header">Thời gian</div>
-                ${dayNames.map((d, i) => `
-                    <div class="sched-cell sched-day-header" style="grid-column: span 4; padding:0;">
-                        <div style="border-bottom:1px solid var(--border-color); padding:8px; text-align:center;">${d}</div>
-                        <div style="display:flex;">
-                            ${rooms.map(r => `<div style="flex:1; padding:4px; font-size:11px; text-align:center; border-right:1px solid var(--border-color);">${r}</div>`).join('')}
-                        </div>
-                    </div>`).join('')}
-            </div>`;
-
-        timeSlots.forEach((time, slotIdx) => {
-            html += `<div class="sched-row">
-                <div class="sched-cell sched-time">${getSlotLabel(slotIdx)}</div>`;
-
-            for (let dayIdx = 0; dayIdx < 7; dayIdx++) {
-                const day = dayIdx + 2; // 2=Mon, 8=Sun
-
-                rooms.forEach((room) => {
-                    const key = `${day}-${room}-${slotIdx}`;
-
-                    if (occupied[key]) {
-                        return; // Skip if occupied
-                    }
-
-                    // Get schedule for this day, time, and room
-                    const events = schedules.filter(s => {
-                        if (filterClassId && s.classId !== filterClassId) return false;
-                        if (s.dayOfWeek !== day) return false;
-                        if (s.startTime !== time) return false;
-                        if ((s.room || 'Trệt') !== room) return false; // Default to 'Trệt' if missing
-                        return true;
-                    });
-
-                    if (events.length > 0) {
-                        const ev = events[0];
-                        const span = getScheduleSpan(ev);
-                        for (let s = 1; s < span; s++) {
-                            occupied[`${day}-${room}-${slotIdx + s}`] = true;
-                        }
-                        const color = getClassColor(ev.classId);
-                        html += `<div class="sched-cell sched-event" style="grid-row: span ${span};background:${color}22;border-left:3px solid ${color};" 
-                            draggable="${canEdit}" 
-                            data-schedule-id="${ev.id}"
-                            ondragstart="SchedulePage.dragStart(event, '${ev.id}')"
-                            ondblclick="SchedulePage.editSchedule('${ev.id}')">
-                            <div class="sched-event-name" style="color:${color};">${getClassName(ev.classId)}</div>
-                            <div class="sched-event-detail">${ev.startTime}-${ev.endTime}</div>
-                            ${canEdit ? `<button class="sched-del-btn" onclick="event.stopPropagation();SchedulePage.removeSchedule('${ev.id}')" title="Xóa">×</button>` : ''}
-                        </div>`;
-                    } else {
-                        html += `<div class="sched-cell sched-empty" 
-                            data-day="${day}" data-time="${time}" data-room="${room}"
-                            ondragover="event.preventDefault();this.classList.add('sched-drop-hover')" 
-                            ondragleave="this.classList.remove('sched-drop-hover')"
-                            ondrop="SchedulePage.drop(event, ${day}, '${time}', '${room}')">
-                        </div>`;
-                    }
-                });
-            }
-            html += '</div>';
+        const events = schedules.filter(s => {
+            if (filterClassId && s.classId !== filterClassId) return false;
+            return true;
+        }).map(s => {
+            const date = getAnchorDate(s.dayOfWeek);
+            const color = getClassColor(s.classId);
+            return {
+                id: s.id,
+                title: getClassName(s.classId) + (s.room ? ` (📍 ${s.room})` : ''),
+                start: `${date}T${s.startTime}:00`,
+                end: `${date}T${s.endTime}:00`,
+                backgroundColor: color,
+                borderColor: color,
+                extendedProps: { ...s }
+            };
         });
 
-        html += '</div>';
-        grid.innerHTML = html;
+        if (window.calendar) {
+            window.calendar.destroy();
+        }
+
+        window.calendar = new FullCalendar.Calendar(grid, {
+            initialView: 'timeGridWeek',
+            initialDate: '2024-01-01',
+            headerToolbar: false,
+            allDaySlot: false,
+            slotMinTime: '07:00:00',
+            slotMaxTime: '21:30:00',
+            dayHeaderFormat: { weekday: 'long' },
+            locale: 'vi',
+            editable: canEdit,
+            eventOverlap: true,
+            slotEventOverlap: false,
+            events: events,
+            eventDrop: async function(info) {
+                if (!canEdit) { info.revert(); return; }
+                const newStart = info.event.start;
+                const newEnd = info.event.end || new Date(newStart.getTime() + 90 * 60000);
+                
+                let dayOfWeek = newStart.getDay() + 1;
+                if (dayOfWeek === 1) dayOfWeek = 8;
+                
+                const startTime = newStart.toTimeString().substring(0, 5);
+                const endTime = newEnd.toTimeString().substring(0, 5);
+                
+                try {
+                    await DB.updateSchedule(info.event.id, {
+                        dayOfWeek: dayOfWeek,
+                        startTime: startTime,
+                        endTime: endTime
+                    });
+                    
+                    const sch = schedules.find(s => s.id === info.event.id);
+                    if (sch) {
+                        sch.dayOfWeek = dayOfWeek;
+                        sch.startTime = startTime;
+                        sch.endTime = endTime;
+                    }
+                    Toast.success('Đã dời lịch');
+                } catch(e) {
+                    info.revert();
+                    Toast.error('Lỗi', e.message);
+                }
+            },
+            eventResize: async function(info) {
+                if (!canEdit) { info.revert(); return; }
+                const newStart = info.event.start;
+                const newEnd = info.event.end;
+                
+                const startTime = newStart.toTimeString().substring(0, 5);
+                const endTime = newEnd.toTimeString().substring(0, 5);
+                
+                try {
+                    await DB.updateSchedule(info.event.id, {
+                        startTime: startTime,
+                        endTime: endTime
+                    });
+                    
+                    const sch = schedules.find(s => s.id === info.event.id);
+                    if (sch) {
+                        sch.startTime = startTime;
+                        sch.endTime = endTime;
+                    }
+                    Toast.success('Đã cập nhật giờ học');
+                } catch(e) {
+                    info.revert();
+                    Toast.error('Lỗi', e.message);
+                }
+            },
+            eventClick: function(info) {
+                if(canEdit) SchedulePage.editSchedule(info.event.id);
+            }
+        });
+
+        window.calendar.render();
     }
 
     container.innerHTML = `
@@ -151,8 +196,6 @@ Router.register('schedule', async (container) => {
     `;
     render();
 
-    let draggedId = null;
-
     window.SchedulePage = {
         filterClass(id) { filterClassId = id; render(); },
 
@@ -165,41 +208,6 @@ Router.register('schedule', async (container) => {
                 let endIdx = idx + 3; // +1.5 hours
                 endSelect.value = endIdx >= timeSlots.length ? "21:00" : timeSlots[endIdx];
             }
-        },
-
-        // === DRAG & DROP ===
-        dragStart(e, id) { draggedId = id; e.dataTransfer.effectAllowed = 'move'; },
-
-        async drop(e, day, time, room) {
-            e.preventDefault();
-            e.target.classList.remove('sched-drop-hover');
-            if (!draggedId) return;
-            const sch = schedules.find(s => s.id === draggedId);
-            if (!sch) return;
-
-            // Calculate duration
-            const startIdx = timeToSlot(sch.startTime);
-            const endIdx = timeToSlot(sch.endTime);
-            const duration = endIdx - startIdx;
-            const newStartIdx = timeToSlot(time);
-            const newEndIdx = Math.min(newStartIdx + duration, timeSlots.length - 1);
-
-            try {
-                await DB.updateSchedule(draggedId, {
-                    dayOfWeek: day,
-                    startTime: time,
-                    endTime: timeSlots[newEndIdx] || '21:00',
-                    room: room
-                });
-                // Update local
-                sch.dayOfWeek = day;
-                sch.startTime = time;
-                sch.endTime = timeSlots[newEndIdx] || '21:00';
-                sch.room = room;
-                Toast.success('Đã dời lịch');
-                render();
-            } catch(err) { Toast.error('Lỗi', err.message); }
-            draggedId = null;
         },
 
         // === ADD SCHEDULE (multi-row) ===
