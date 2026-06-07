@@ -68,7 +68,7 @@ Router.register('classes', async (container) => {
                 <p class="page-subtitle">${classes.length} lớp trong hệ thống</p>
             </div>
             <div class="page-actions">
-                ${Auth.isOwner() ? '<button class="btn btn-secondary" onclick="window.open(\'assets/docs/quy_dinh_tai_chinh.pdf\', \'_blank\')"><i data-lucide="file-text"></i> Xem quy định</button>' : ''}
+                ${Auth.isOwner() ? '<button class="btn btn-secondary" onclick="window.open(\'assets/docs/QuyDinhTaiChinh_ThanhNhanEducation.docx\', \'_blank\')"><i data-lucide="file-text"></i> Xem quy định</button>' : ''}
                 ${canEdit ? '<button class="btn btn-primary" onclick="ClassesPage.showAdd()"><i data-lucide="plus"></i> Thêm lớp</button>' : ''}
             </div>
         </div>
