@@ -81,41 +81,67 @@ Router.register('schedule', async (container) => {
         grid.style.padding = 'var(--space-4)';
         grid.style.boxShadow = 'var(--shadow-sm)';
 
-        const events = schedules.filter(s => {
-            if (filterClassId && s.classId !== filterClassId) return false;
-            return true;
-        }).map(s => {
-            const date = getAnchorDate(s.dayOfWeek);
-            const color = getClassColor(s.classId);
-            return {
-                id: s.id,
-                title: getClassName(s.classId) + (s.room ? ` (📍 ${s.room})` : ''),
-                start: `${date}T${s.startTime}:00`,
-                end: `${date}T${s.endTime}:00`,
-                backgroundColor: color,
-                borderColor: color,
-                extendedProps: { ...s }
-            };
-        });
-
         if (window.calendar) {
             window.calendar.destroy();
         }
 
         window.calendar = new FullCalendar.Calendar(grid, {
             initialView: 'timeGridWeek',
-            initialDate: '2024-01-01',
+            initialDate: new Date(), // Current date
             firstDay: 1, // Start on Monday
-            headerToolbar: false,
+            headerToolbar: {
+                left: 'prev,next today',
+                center: 'title',
+                right: 'dayGridMonth,timeGridWeek'
+            },
+            buttonText: {
+                today: 'Hôm nay',
+                month: 'Tháng',
+                week: 'Tuần'
+            },
             allDaySlot: false,
             slotMinTime: '07:00:00',
             slotMaxTime: '21:30:00',
-            dayHeaderFormat: { weekday: 'long' },
             locale: 'vi',
             editable: canEdit,
             eventOverlap: true,
             slotEventOverlap: false,
-            events: events,
+            events: function(info, successCallback, failureCallback) {
+                const start = info.start;
+                const end = info.end;
+                
+                let expandedEvents = [];
+                const filtered = schedules.filter(s => {
+                    if (filterClassId && s.classId !== filterClassId) return false;
+                    return true;
+                });
+
+                // Convert to start/end dates handling timezone offset
+                for (let d = new Date(start.getTime()); d < end; d.setDate(d.getDate() + 1)) {
+                    let dbDay = d.getDay() + 1;
+                    if (dbDay === 1) dbDay = 8; // Sunday
+
+                    const dayEvents = filtered.filter(s => s.dayOfWeek === dbDay);
+                    
+                    dayEvents.forEach(s => {
+                        const dateStr = d.toISOString().split('T')[0];
+                        const color = getClassColor(s.classId);
+                        
+                        expandedEvents.push({
+                            id: s.id + '_' + dateStr,
+                            groupId: s.id,
+                            title: getClassName(s.classId) + (s.room ? ` (📍 ${s.room})` : ''),
+                            start: `${dateStr}T${s.startTime}:00`,
+                            end: `${dateStr}T${s.endTime}:00`,
+                            backgroundColor: color,
+                            borderColor: color,
+                            extendedProps: { ...s, occurrenceDate: dateStr }
+                        });
+                    });
+                }
+                
+                successCallback(expandedEvents);
+            },
             eventDrop: async function(info) {
                 if (!canEdit) { info.revert(); return; }
                 const newStart = info.event.start;
@@ -128,13 +154,13 @@ Router.register('schedule', async (container) => {
                 const endTime = newEnd.toTimeString().substring(0, 5);
                 
                 try {
-                    await DB.updateSchedule(info.event.id, {
+                    await DB.updateSchedule(info.event.groupId, {
                         dayOfWeek: dayOfWeek,
                         startTime: startTime,
                         endTime: endTime
                     });
                     
-                    const sch = schedules.find(s => s.id === info.event.id);
+                    const sch = schedules.find(s => s.id === info.event.groupId);
                     if (sch) {
                         sch.dayOfWeek = dayOfWeek;
                         sch.startTime = startTime;
@@ -155,12 +181,12 @@ Router.register('schedule', async (container) => {
                 const endTime = newEnd.toTimeString().substring(0, 5);
                 
                 try {
-                    await DB.updateSchedule(info.event.id, {
+                    await DB.updateSchedule(info.event.groupId, {
                         startTime: startTime,
                         endTime: endTime
                     });
                     
-                    const sch = schedules.find(s => s.id === info.event.id);
+                    const sch = schedules.find(s => s.id === info.event.groupId);
                     if (sch) {
                         sch.startTime = startTime;
                         sch.endTime = endTime;
@@ -172,7 +198,7 @@ Router.register('schedule', async (container) => {
                 }
             },
             eventClick: function(info) {
-                if(canEdit) SchedulePage.editSchedule(info.event.id);
+                if(canEdit) SchedulePage.editSchedule(info.event.groupId);
             }
         });
 
