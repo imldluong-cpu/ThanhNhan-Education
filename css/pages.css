@@ -269,11 +269,11 @@
 .schedule-wrapper { overflow-x: auto; }
 .sched-table {
     display: grid;
-    grid-template-columns: 110px repeat(7, 1fr);
+    grid-template-columns: 110px repeat(28, 1fr);
     border: 1px solid var(--border-color);
     border-radius: var(--radius-lg);
     overflow: hidden;
-    min-width: 800px;
+    min-width: 1800px;
 }
 .sched-row {
     display: contents;

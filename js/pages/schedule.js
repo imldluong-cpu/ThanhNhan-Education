@@ -63,10 +63,18 @@ Router.register('schedule', async (container) => {
         // Track which slots are "occupied" by multi-row events
         const occupied = {}; // "day-slotIdx" => true
 
+        const rooms = ['Trệt', 'P.T1', 'P.T2', 'P.ST'];
+
         let html = `<div class="sched-table">
             <div class="sched-row sched-header">
                 <div class="sched-cell sched-time-header">Thời gian</div>
-                ${dayNames.map((d, i) => `<div class="sched-cell sched-day-header">${d}</div>`).join('')}
+                ${dayNames.map((d, i) => `
+                    <div class="sched-cell sched-day-header" style="grid-column: span 4; padding:0;">
+                        <div style="border-bottom:1px solid var(--border-color); padding:8px; text-align:center;">${d}</div>
+                        <div style="display:flex;">
+                            ${rooms.map(r => `<div style="flex:1; padding:4px; font-size:11px; text-align:center; border-right:1px solid var(--border-color);">${r}</div>`).join('')}
+                        </div>
+                    </div>`).join('')}
             </div>`;
 
         timeSlots.forEach((time, slotIdx) => {
@@ -75,40 +83,48 @@ Router.register('schedule', async (container) => {
 
             for (let dayIdx = 0; dayIdx < 7; dayIdx++) {
                 const day = dayIdx + 2; // 2=Mon, 8=Sun
-                const key = `${day}-${slotIdx}`;
 
-                if (occupied[key]) {
-                    // Skip - occupied by a multi-row event
-                    continue;
-                }
+                rooms.forEach((room) => {
+                    const key = `${day}-${room}-${slotIdx}`;
 
-                const events = getScheduleAtSlot(day, time);
-                if (events.length > 0) {
-                    const ev = events[0];
-                    const span = getScheduleSpan(ev);
-                    // Mark subsequent slots as occupied
-                    for (let s = 1; s < span; s++) {
-                        occupied[`${day}-${slotIdx + s}`] = true;
+                    if (occupied[key]) {
+                        return; // Skip if occupied
                     }
-                    const color = getClassColor(ev.classId);
-                    html += `<div class="sched-cell sched-event" style="grid-row: span ${span};background:${color}22;border-left:3px solid ${color};" 
-                        draggable="${canEdit}" 
-                        data-schedule-id="${ev.id}"
-                        ondragstart="SchedulePage.dragStart(event, '${ev.id}')"
-                        ondblclick="SchedulePage.editSchedule('${ev.id}')">
-                        <div class="sched-event-name" style="color:${color};">${getClassName(ev.classId)}</div>
-                        <div class="sched-event-detail">${ev.startTime}-${ev.endTime}</div>
-                        ${ev.room ? `<div class="sched-event-detail">📍 ${ev.room}</div>` : ''}
-                        ${canEdit ? `<button class="sched-del-btn" onclick="event.stopPropagation();SchedulePage.removeSchedule('${ev.id}')" title="Xóa">×</button>` : ''}
-                    </div>`;
-                } else {
-                    html += `<div class="sched-cell sched-empty" 
-                        data-day="${day}" data-time="${time}"
-                        ondragover="event.preventDefault();this.classList.add('sched-drop-hover')" 
-                        ondragleave="this.classList.remove('sched-drop-hover')"
-                        ondrop="SchedulePage.drop(event, ${day}, '${time}')">
-                    </div>`;
-                }
+
+                    // Get schedule for this day, time, and room
+                    const events = schedules.filter(s => {
+                        if (filterClassId && s.classId !== filterClassId) return false;
+                        if (s.dayOfWeek !== day) return false;
+                        if (s.startTime !== time) return false;
+                        if ((s.room || 'Trệt') !== room) return false; // Default to 'Trệt' if missing
+                        return true;
+                    });
+
+                    if (events.length > 0) {
+                        const ev = events[0];
+                        const span = getScheduleSpan(ev);
+                        for (let s = 1; s < span; s++) {
+                            occupied[`${day}-${room}-${slotIdx + s}`] = true;
+                        }
+                        const color = getClassColor(ev.classId);
+                        html += `<div class="sched-cell sched-event" style="grid-row: span ${span};background:${color}22;border-left:3px solid ${color};" 
+                            draggable="${canEdit}" 
+                            data-schedule-id="${ev.id}"
+                            ondragstart="SchedulePage.dragStart(event, '${ev.id}')"
+                            ondblclick="SchedulePage.editSchedule('${ev.id}')">
+                            <div class="sched-event-name" style="color:${color};">${getClassName(ev.classId)}</div>
+                            <div class="sched-event-detail">${ev.startTime}-${ev.endTime}</div>
+                            ${canEdit ? `<button class="sched-del-btn" onclick="event.stopPropagation();SchedulePage.removeSchedule('${ev.id}')" title="Xóa">×</button>` : ''}
+                        </div>`;
+                    } else {
+                        html += `<div class="sched-cell sched-empty" 
+                            data-day="${day}" data-time="${time}" data-room="${room}"
+                            ondragover="event.preventDefault();this.classList.add('sched-drop-hover')" 
+                            ondragleave="this.classList.remove('sched-drop-hover')"
+                            ondrop="SchedulePage.drop(event, ${day}, '${time}', '${room}')">
+                        </div>`;
+                    }
+                });
             }
             html += '</div>';
         });
@@ -140,10 +156,21 @@ Router.register('schedule', async (container) => {
     window.SchedulePage = {
         filterClass(id) { filterClassId = id; render(); },
 
+        autoSetEnd(rowIdx) {
+            const startSelect = document.getElementById(`sa-start-${rowIdx}`);
+            const endSelect = document.getElementById(`sa-end-${rowIdx}`);
+            if (!startSelect || !endSelect) return;
+            const idx = timeSlots.indexOf(startSelect.value);
+            if (idx !== -1) {
+                let endIdx = idx + 3; // +1.5 hours
+                endSelect.value = endIdx >= timeSlots.length ? "21:00" : timeSlots[endIdx];
+            }
+        },
+
         // === DRAG & DROP ===
         dragStart(e, id) { draggedId = id; e.dataTransfer.effectAllowed = 'move'; },
 
-        async drop(e, day, time) {
+        async drop(e, day, time, room) {
             e.preventDefault();
             e.target.classList.remove('sched-drop-hover');
             if (!draggedId) return;
@@ -161,12 +188,14 @@ Router.register('schedule', async (container) => {
                 await DB.updateSchedule(draggedId, {
                     dayOfWeek: day,
                     startTime: time,
-                    endTime: timeSlots[newEndIdx] || '21:00'
+                    endTime: timeSlots[newEndIdx] || '21:00',
+                    room: room
                 });
                 // Update local
                 sch.dayOfWeek = day;
                 sch.startTime = time;
                 sch.endTime = timeSlots[newEndIdx] || '21:00';
+                sch.room = room;
                 Toast.success('Đã dời lịch');
                 render();
             } catch(err) { Toast.error('Lỗi', err.message); }
@@ -194,7 +223,7 @@ Router.register('schedule', async (container) => {
                         <select class="select" id="sa-day-${i}" style="width:100px;">
                             ${dayNames.map((d, j) => `<option value="${j + 2}">${d}</option>`).join('')}
                         </select>
-                        <select class="select" id="sa-start-${i}" style="width:90px;">
+                        <select class="select" id="sa-start-${i}" style="width:90px;" onchange="SchedulePage.autoSetEnd(${i})">
                             ${timeSlots.map(t => `<option value="${t}">${t}</option>`).join('')}
                         </select>
                         <span style="color:var(--text-muted);">→</span>
@@ -239,7 +268,7 @@ Router.register('schedule', async (container) => {
                 <select class="select" id="sa-day-${i}" style="width:100px;">
                     ${dayNames.map((d, j) => `<option value="${j + 2}">${d}</option>`).join('')}
                 </select>
-                <select class="select" id="sa-start-${i}" style="width:90px;">
+                <select class="select" id="sa-start-${i}" style="width:90px;" onchange="SchedulePage.autoSetEnd(${i})">
                     ${timeSlots.map(t => `<option value="${t}">${t}</option>`).join('')}
                 </select>
                 <span style="color:var(--text-muted);">→</span>
