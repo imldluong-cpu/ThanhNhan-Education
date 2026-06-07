@@ -49,12 +49,13 @@ Router.register('students', async (container) => {
         if (!tbody) return;
 
         if (filtered.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state"><h3>Chưa có học viên</h3><p>Nhấn "Thêm học viên" để bắt đầu</p></div></td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state"><h3>Chưa có học viên</h3><p>Nhấn "Thêm học viên" để bắt đầu</p></div></td></tr>`;
         } else {
             tbody.innerHTML = filtered.map((s, i) => `<tr>
                 <td>${i + 1}</td>
                 <td><strong>${s.name || ''}</strong></td>
-                <td>${s.dateOfBirth || '—'}</td>
+                <td>${s.grade || '—'}</td>
+                <td>${s.school || '—'}</td>
                 <td>${s.parentPhone || '—'}</td>
                 <td>${getClassNames(s.classIds)}</td>
                 <td><span class="badge badge-${s.status === 'active' ? 'success' : 'danger'}">${s.status === 'active' ? 'Đang học' : 'Nghỉ học'}</span></td>
@@ -99,7 +100,7 @@ Router.register('students', async (container) => {
         <div class="card">
             <div class="table-container">
                 <table>
-                    <thead><tr><th>STT</th><th>Họ tên</th><th>Ngày sinh</th><th>SĐT Phụ huynh</th><th>Lớp</th><th>Trạng thái</th><th>Thao tác</th></tr></thead>
+                    <thead><tr><th>STT</th><th>Họ tên</th><th>Khối</th><th>Trường</th><th>SĐT Phụ huynh</th><th>Lớp</th><th>Trạng thái</th><th>Thao tác</th></tr></thead>
                     <tbody id="students-tbody"></tbody>
                 </table>
             </div>
@@ -156,38 +157,165 @@ Router.register('students', async (container) => {
 
         // === ADD STUDENT ===
         showAdd() {
+            const predefSubjects = ['Toán', 'Văn', 'Anh Văn', 'Hóa', 'Lý', 'Sử', 'Địa', 'KHTN', 'KHXH', 'AV giao tiếp', 'IELTS'];
+            
             Modal.show({
                 title: 'Thêm học viên mới',
+                size: 'lg',
                 content: `
                     <div class="form-row">
                         <div class="form-group"><label class="form-label">Họ tên *</label><input type="text" class="input" id="s-name" required></div>
-                        <div class="form-group"><label class="form-label">Ngày sinh</label><input type="date" class="input" id="s-dob"></div>
+                        <div class="form-group"><label class="form-label">SĐT Phụ huynh</label><input type="tel" class="input" id="s-phone"></div>
                     </div>
                     <div class="form-row">
-                        <div class="form-group"><label class="form-label">SĐT Phụ huynh</label><input type="tel" class="input" id="s-phone"></div>
-                        <div class="form-group"><label class="form-label">Trạng thái</label>
-                            <select class="select" id="s-status"><option value="active">Đang học</option><option value="inactive">Nghỉ học</option></select>
+                        <div class="form-group"><label class="form-label">Khối / Lớp</label><input type="text" class="input" id="s-grade" placeholder="VD: Lớp 12, Tiền tiểu học"></div>
+                        <div class="form-group"><label class="form-label">Trường</label><input type="text" class="input" id="s-school"></div>
+                    </div>
+                    <hr style="margin:16px 0;border:none;border-top:1px solid var(--border-color);">
+                    <div class="form-group">
+                        <label class="form-label" style="display:flex;justify-content:space-between;">
+                            <span>Môn học đăng ký</span>
+                            <button class="btn btn-ghost btn-sm" onclick="StudentsPage.addCustomSubject()"><i data-lucide="plus"></i> Thêm môn</button>
+                        </label>
+                        <div id="s-subjects-container" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:8px;">
+                            ${predefSubjects.map((sub, i) => `
+                                <div style="display:flex;align-items:center;gap:8px;background:var(--bg-glass);padding:8px;border-radius:6px;border:1px solid var(--border-color);">
+                                    <label class="checkbox-label" style="margin:0;min-width:100px;">
+                                        <input type="checkbox" class="subj-cb" value="${sub}" onchange="StudentsPage.toggleSubject(this, 'fee-${i}')"> ${sub}
+                                    </label>
+                                    <input type="number" class="input subj-fee" id="fee-${i}" placeholder="Học phí gốc" style="display:none;flex:1;padding:4px 8px;font-size:13px;" oninput="StudentsPage.calcTuition()">
+                                </div>
+                            `).join('')}
                         </div>
                     </div>
-                    <div class="form-group">
-                        <label class="form-label">Lớp học</label>
-                        ${renderClassCheckboxes([])}
+                    <div class="form-row" style="margin-top:16px;background:var(--primary-50);padding:12px;border-radius:8px;">
+                        <div class="form-group">
+                            <label class="form-label">Ưu đãi học phí</label>
+                            <select class="select" id="s-discount" onchange="StudentsPage.calcTuition()">
+                                <option value="0">Không có ưu đãi</option>
+                                <option value="0.05">Ưu đãi HP 5% khi đăng ký 2 môn</option>
+                                <option value="0.10">Ưu đãi HP 10% khi đăng ký từ 3 môn</option>
+                                <option value="0.05">Ưu đãi nhóm 5% khi đăng ký từ 3 HS</option>
+                                <option value="0.20">Ưu đãi nhóm 20% khi đăng ký từ 5 HS</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Thành tiền cần thu (VNĐ)</label>
+                            <input type="text" class="input" id="s-total" readonly style="background:var(--bg-color);font-weight:bold;color:var(--primary-600);">
+                        </div>
                     </div>
-                    <div class="form-group"><label class="form-label">Ghi chú</label><textarea class="textarea" id="s-notes" rows="2"></textarea></div>
+                    <div class="form-group" style="margin-top:16px;"><label class="form-label">Ghi chú</label><textarea class="textarea" id="s-notes" rows="2"></textarea></div>
                 `,
-                footer: `<button class="btn btn-secondary" onclick="Modal.close()">Hủy</button><button class="btn btn-primary" onclick="StudentsPage.saveNew()">Lưu</button>`
+                footer: `<button class="btn btn-secondary" onclick="Modal.close()">Hủy</button><button class="btn btn-primary" onclick="StudentsPage.saveNew()">Lưu học viên</button>`
             });
             if (window.lucide) lucide.createIcons();
+        },
+
+        addCustomSubject() {
+            const container = document.getElementById('s-subjects-container');
+            const name = prompt('Nhập tên môn học mới:');
+            if (!name) return;
+            const idx = Date.now();
+            const div = document.createElement('div');
+            div.style.cssText = 'display:flex;align-items:center;gap:8px;background:var(--bg-glass);padding:8px;border-radius:6px;border:1px solid var(--border-color);';
+            div.innerHTML = `
+                <label class="checkbox-label" style="margin:0;min-width:100px;">
+                    <input type="checkbox" class="subj-cb" value="${name}" checked onchange="StudentsPage.toggleSubject(this, 'fee-${idx}')"> ${name}
+                </label>
+                <input type="number" class="input subj-fee" id="fee-${idx}" placeholder="Học phí gốc" style="flex:1;padding:4px 8px;font-size:13px;" oninput="StudentsPage.calcTuition()">
+            `;
+            container.appendChild(div);
+        },
+
+        toggleSubject(cb, feeId) {
+            const input = document.getElementById(feeId);
+            if (input) {
+                input.style.display = cb.checked ? 'block' : 'none';
+                if (!cb.checked) input.value = '';
+                this.calcTuition();
+            }
+        },
+
+        calcTuition() {
+            let total = 0;
+            document.querySelectorAll('.subj-fee').forEach(inp => {
+                if (inp.style.display !== 'none' && inp.value) {
+                    total += parseInt(inp.value) || 0;
+                }
+            });
+            const discountRate = parseFloat(document.getElementById('s-discount').value) || 0;
+            const finalAmount = Math.round(total * (1 - discountRate));
+            document.getElementById('s-total').value = DB.formatCurrency(finalAmount);
+            document.getElementById('s-total').dataset.val = finalAmount;
         },
 
         async saveNew() {
             const name = document.getElementById('s-name').value.trim();
             if (!name) { Toast.warning('Vui lòng nhập họ tên'); return; }
-            const classIds = Array.from(document.querySelectorAll('#s-classes input:checked')).map(cb => cb.value);
+            
+            const gradeText = document.getElementById('s-grade').value.trim();
+            if (!gradeText) { Toast.warning('Vui lòng nhập Khối/Lớp'); return; }
+            
+            const grade = gradeText.replace(/lớp/i, '').trim();
+
+            const selectedSubjects = [];
+            document.querySelectorAll('.subj-cb:checked').forEach(cb => {
+                const feeInput = cb.parentElement.nextElementSibling;
+                selectedSubjects.push({
+                    name: cb.value,
+                    fee: parseInt(feeInput.value) || 0
+                });
+            });
+
+            if (selectedSubjects.length === 0) {
+                Toast.warning('Vui lòng chọn ít nhất 1 môn học'); return;
+            }
+
             try {
-                await DB.addStudent({ name, dateOfBirth: document.getElementById('s-dob').value || '', parentPhone: document.getElementById('s-phone').value || '', status: document.getElementById('s-status').value, classIds, notes: document.getElementById('s-notes').value || '' });
+                // Create classes if missing
+                const classIds = [];
+                const classNames = [];
+                for (const subj of selectedSubjects) {
+                    const className = `${subj.name} ${grade}`.trim();
+                    let cls = classes.find(c => c.name.toLowerCase() === className.toLowerCase());
+                    if (!cls) {
+                        const newCls = await DB.addClass({ name: className, subject: subj.name, fee: 0, room: '', notes: '', status: 'active', teacherIds: [] });
+                        cls = { id: newCls.id, name: className };
+                        classes.push(cls);
+                    }
+                    classIds.push(cls.id);
+                    classNames.push(className);
+                }
+
+                // Add student
+                const student = await DB.addStudent({
+                    name, 
+                    school: document.getElementById('s-school').value.trim(),
+                    grade: gradeText,
+                    parentPhone: document.getElementById('s-phone').value || '', 
+                    status: 'active', 
+                    classIds, 
+                    notes: document.getElementById('s-notes').value || '' 
+                });
+
+                // Add tuition
+                const finalAmount = parseInt(document.getElementById('s-total').dataset.val) || 0;
+                if (finalAmount > 0) {
+                    const discountText = document.getElementById('s-discount').options[document.getElementById('s-discount').selectedIndex].text;
+                    const discountNote = discountText !== 'Không có ưu đãi' ? ` (${discountText})` : '';
+                    await DB.addTuition({
+                        studentId: student.id, // wait, addStudent doesn't return id? Let's check firestore.js
+                        studentName: name,
+                        classId: 'Nhiều môn',
+                        amount: finalAmount,
+                        dueDate: DB.today(), // Default due today
+                        status: 'pending',
+                        note: `ĐK môn: ${classNames.join(', ')}${discountNote}`
+                    });
+                }
+
                 Modal.close();
-                Toast.success('Đã thêm học viên ' + name);
+                Toast.success('Đã thêm học viên', name);
                 students = await DB.getStudents();
                 renderTable();
             } catch(e) { Toast.error('Lỗi', e.message); }
@@ -202,10 +330,13 @@ Router.register('students', async (container) => {
                 content: `
                     <div class="form-row">
                         <div class="form-group"><label class="form-label">Họ tên *</label><input type="text" class="input" id="s-name" value="${s.name || ''}"></div>
-                        <div class="form-group"><label class="form-label">Ngày sinh</label><input type="date" class="input" id="s-dob" value="${s.dateOfBirth || ''}"></div>
+                        <div class="form-group"><label class="form-label">SĐT Phụ huynh</label><input type="tel" class="input" id="s-phone" value="${s.parentPhone || ''}"></div>
                     </div>
                     <div class="form-row">
-                        <div class="form-group"><label class="form-label">SĐT Phụ huynh</label><input type="tel" class="input" id="s-phone" value="${s.parentPhone || ''}"></div>
+                        <div class="form-group"><label class="form-label">Khối / Lớp</label><input type="text" class="input" id="s-grade" value="${s.grade || ''}" placeholder="VD: Lớp 12, Tiền tiểu học"></div>
+                        <div class="form-group"><label class="form-label">Trường</label><input type="text" class="input" id="s-school" value="${s.school || ''}"></div>
+                    </div>
+                    <div class="form-row">
                         <div class="form-group"><label class="form-label">Trạng thái</label>
                             <select class="select" id="s-status"><option value="active" ${s.status === 'active' ? 'selected' : ''}>Đang học</option><option value="inactive" ${s.status === 'inactive' ? 'selected' : ''}>Nghỉ học</option></select>
                         </div>
@@ -226,7 +357,15 @@ Router.register('students', async (container) => {
             if (!name) { Toast.warning('Vui lòng nhập họ tên'); return; }
             const classIds = Array.from(document.querySelectorAll('#s-classes input:checked')).map(cb => cb.value);
             try {
-                await DB.updateStudent(id, { name, dateOfBirth: document.getElementById('s-dob').value || '', parentPhone: document.getElementById('s-phone').value || '', status: document.getElementById('s-status').value, classIds, notes: document.getElementById('s-notes').value || '' });
+                await DB.updateStudent(id, { 
+                    name, 
+                    school: document.getElementById('s-school').value.trim(),
+                    grade: document.getElementById('s-grade').value.trim(),
+                    parentPhone: document.getElementById('s-phone').value || '', 
+                    status: document.getElementById('s-status').value, 
+                    classIds, 
+                    notes: document.getElementById('s-notes').value || '' 
+                });
                 Modal.close();
                 Toast.success('Đã cập nhật');
                 students = await DB.getStudents();
@@ -284,14 +423,57 @@ Router.register('students', async (container) => {
                     const ws = wb.Sheets[wb.SheetNames[0]];
                     const rows = XLSX.utils.sheet_to_json(ws, { header: 1 });
 
-                    // Skip header row
-                    const data = rows.slice(1).filter(r => r[0]).map(r => ({
-                        name: String(r[0] || '').trim(),
-                        dateOfBirth: r[1] ? String(r[1]).trim() : '',
-                        parentPhone: r[2] ? String(r[2]).trim() : '',
-                        className: r[3] ? String(r[3]).trim() : '',
-                        notes: r[4] ? String(r[4]).trim() : ''
-                    }));
+                    if (rows.length < 3) {
+                        Toast.warning('File không hợp lệ', 'File Excel phải có ít nhất 2 dòng tiêu đề và 1 dòng dữ liệu');
+                        return;
+                    }
+
+                    // Map subjects dynamically from Row 2 (index 1)
+                    // We assume columns D (index 3) onwards are subjects, until we hit "SĐT" column or end of data
+                    const row1 = rows[0] || [];
+                    const row2 = rows[1] || [];
+                    
+                    // Find phone column index
+                    let phoneColIdx = -1;
+                    for (let i = 0; i < row1.length; i++) {
+                        if (String(row1[i]).toLowerCase().includes('sđt')) { phoneColIdx = i; break; }
+                    }
+                    if (phoneColIdx === -1) {
+                        for (let i = 0; i < row2.length; i++) {
+                            if (String(row2[i]).toLowerCase().includes('sđt')) { phoneColIdx = i; break; }
+                        }
+                    }
+                    if (phoneColIdx === -1) phoneColIdx = row2.length; // fallback
+
+                    const subjectsMap = []; // { index, name }
+                    for (let i = 3; i < phoneColIdx; i++) {
+                        if (row2[i]) subjectsMap.push({ index: i, name: String(row2[i]).trim() });
+                    }
+
+                    // Parse data from Row 3 (index 2)
+                    const data = rows.slice(2).filter(r => r[0]).map(r => {
+                        const name = String(r[0] || '').trim();
+                        const gradeText = String(r[1] || '').trim();
+                        let grade = gradeText.replace(/lớp/i, '').trim(); // "Lớp 3" -> "3", "Tiền tiểu học" -> "Tiền tiểu học"
+                        const school = String(r[2] || '').trim();
+                        const phone = r[phoneColIdx] ? String(r[phoneColIdx]).trim() : '';
+
+                        const registeredClasses = [];
+                        subjectsMap.forEach(subj => {
+                            if (r[subj.index]) {
+                                // e.g. "Toán" + "12" = "Toán 12"
+                                // If grade is text like "Tiền tiểu học", it becomes "AV giao tiếp Tiền tiểu học"
+                                const className = `${subj.name} ${grade}`.trim();
+                                registeredClasses.push(className);
+                            }
+                        });
+
+                        return {
+                            name, school, grade: gradeText,
+                            parentPhone: phone,
+                            registeredClasses
+                        };
+                    });
 
                     this._importData = data;
 
@@ -300,11 +482,12 @@ Router.register('students', async (container) => {
                         <p style="font-size:13px;color:var(--success-400);margin-bottom:8px;">✅ Tìm thấy <strong>${data.length}</strong> học viên</p>
                         <div class="table-container" style="max-height:300px;overflow-y:auto;">
                             <table>
-                                <thead><tr><th>Họ tên</th><th>Ngày sinh</th><th>SĐT</th><th>Lớp</th><th>Ghi chú</th></tr></thead>
+                                <thead><tr><th>Họ tên</th><th>Trường</th><th>SĐT</th><th>Đăng ký lớp</th></tr></thead>
                                 <tbody>${data.slice(0, 50).map(d => `<tr>
-                                    <td>${d.name}</td><td>${d.dateOfBirth}</td><td>${d.parentPhone}</td>
-                                    <td>${d.className ? `<span class="badge ${classes.find(c => c.name === d.className) ? 'badge-success' : 'badge-warning'}">${d.className}</span>` : '—'}</td>
-                                    <td class="text-sm">${d.notes}</td>
+                                    <td>${d.name}</td>
+                                    <td>${d.school}</td>
+                                    <td>${d.parentPhone}</td>
+                                    <td class="text-sm">${d.registeredClasses.map(c => `<span class="badge badge-info">${c}</span>`).join(' ')}</td>
                                 </tr>`).join('')}</tbody>
                             </table>
                         </div>
@@ -326,23 +509,47 @@ Router.register('students', async (container) => {
             btn.innerHTML = '<div class="spinner" style="width:16px;height:16px;border-width:2px;"></div> Đang nhập...';
 
             try {
+                // 1. Gather all required classes and create missing ones
+                const allRequiredClasses = new Set();
+                this._importData.forEach(d => d.registeredClasses.forEach(c => allRequiredClasses.add(c)));
+                
+                const existingClassNames = classes.map(c => c.name.toLowerCase());
+                const classesToCreate = Array.from(allRequiredClasses).filter(c => !existingClassNames.includes(c.toLowerCase()));
+                
+                for (const className of classesToCreate) {
+                    await DB.addClass({ name: className, subject: className.split(' ')[0], fee: 0, room: '', notes: 'Tạo tự động từ Excel', status: 'active', teacherIds: [] });
+                }
+                
+                // Refresh classes list
+                if (classesToCreate.length > 0) classes = await DB.getClasses();
+
+                // 2. Prepare students data
                 const studentsToAdd = this._importData.map(d => {
                     const classIds = [];
-                    if (d.className) {
-                        const cls = classes.find(c => c.name.toLowerCase() === d.className.toLowerCase());
+                    d.registeredClasses.forEach(className => {
+                        const cls = classes.find(c => c.name.toLowerCase() === className.toLowerCase());
                         if (cls) classIds.push(cls.id);
-                    }
-                    return { name: d.name, dateOfBirth: d.dateOfBirth, parentPhone: d.parentPhone, classIds, notes: d.notes, status: 'active' };
+                    });
+                    return { 
+                        name: d.name, 
+                        school: d.school,
+                        grade: d.grade,
+                        parentPhone: d.parentPhone, 
+                        classIds, 
+                        status: 'active',
+                        dateOfBirth: '',
+                        notes: d.school ? `Trường: ${d.school}` : ''
+                    };
                 });
 
-                // Batch add (Firestore batch limit = 500)
+                // 3. Batch add (Firestore batch limit = 500)
                 for (let i = 0; i < studentsToAdd.length; i += 450) {
                     const chunk = studentsToAdd.slice(i, i + 450);
                     await DB.addStudentsBatch(chunk);
                 }
 
                 Modal.close();
-                Toast.success('Thành công', `Đã nhập ${studentsToAdd.length} học viên`);
+                Toast.success('Thành công', `Đã nhập ${studentsToAdd.length} học viên và tạo ${classesToCreate.length} lớp mới.`);
                 students = await DB.getStudents();
                 renderTable();
                 this._importData = [];
