@@ -81,21 +81,21 @@ Router.register('classes', async (container) => {
                             <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:6px;">
                                 <span style="color:var(--text-secondary);" title="Dự kiến = Sĩ số x Học phí - (Số buổi TC x Lương ca)">Dự kiến:</span>
                                 <div style="text-align:right;">
-                                    <span style="color:var(--success-500);">${DB.formatCurrency(expectedRev)}</span>
+                                    <span style="color:var(--primary-500);">${DB.formatCurrency(expectedRev)}</span>
                                     <span style="color:var(--text-muted);margin:0 4px;">-</span>
                                     <span style="color:var(--danger-500);">${DB.formatCurrency(expectedSal)}</span>
                                     <span style="color:var(--text-muted);margin:0 4px;">=</span>
-                                    <strong style="color:${expectedProfit >= 0 ? 'var(--primary-600)' : 'var(--danger-600)'};">${DB.formatCurrency(expectedProfit)}</strong>
+                                    <strong style="color:${expectedProfit >= 0 ? 'var(--success-600)' : 'var(--danger-600)'};">${DB.formatCurrency(expectedProfit)}</strong>
                                 </div>
                             </div>
                             <div style="display:flex;justify-content:space-between;font-size:12px;">
                                 <span style="color:var(--text-secondary);" title="Thực tế = Đã thu - Đã chấm công">Thực tế (Tháng ${DB.currentMonth()}):</span>
                                 <div style="text-align:right;">
-                                    <span style="color:var(--success-500);">${DB.formatCurrency(realtimeRev)}</span>
+                                    <span style="color:var(--primary-500);">${DB.formatCurrency(realtimeRev)}</span>
                                     <span style="color:var(--text-muted);margin:0 4px;">-</span>
                                     <span style="color:var(--danger-500);">${DB.formatCurrency(realtimeSal)}</span>
                                     <span style="color:var(--text-muted);margin:0 4px;">=</span>
-                                    <strong style="color:${realtimeProfit >= 0 ? 'var(--primary-600)' : 'var(--danger-600)'};">${DB.formatCurrency(realtimeProfit)}</strong>
+                                    <strong style="color:${realtimeProfit >= 0 ? 'var(--success-600)' : 'var(--danger-600)'};">${DB.formatCurrency(realtimeProfit)}</strong>
                                 </div>
                             </div>
                         </div>
