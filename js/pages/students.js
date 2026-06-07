@@ -393,8 +393,8 @@ Router.register('students', async (container) => {
                     <div style="padding:16px;background:rgba(99,102,241,0.08);border-radius:var(--radius-md);margin-bottom:16px;">
                         <p style="font-size:13px;color:var(--text-secondary);margin:0;">
                             <strong>📋 Định dạng file Excel:</strong><br>
-                            Cột A: Họ tên | Cột B: Ngày sinh | Cột C: SĐT Phụ huynh | Cột D: Tên lớp | Cột E: Ghi chú<br>
-                            <em>Hàng 1 là tiêu đề (sẽ bỏ qua). Tên lớp phải trùng với lớp đã tạo trong hệ thống.</em>
+                            Cột A: Họ tên | Cột B: Khối | Cột C: Trường | Cột D trở đi: Các môn học | Cột chứa chữ "SĐT": SĐT Phụ huynh<br>
+                            <em>Dữ liệu học viên bắt đầu từ dòng 3 (2 dòng đầu là tiêu đề môn học). Hệ thống tự động ghép môn và khối để tạo lớp.</em>
                         </p>
                     </div>
                     <div style="border:2px dashed var(--neutral-600);border-radius:var(--radius-lg);padding:32px;text-align:center;cursor:pointer;" id="excel-drop-zone" onclick="document.getElementById('excel-file-input').click()">
