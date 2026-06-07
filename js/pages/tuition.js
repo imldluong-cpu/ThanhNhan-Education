@@ -162,7 +162,20 @@ Router.register('tuition', async (container) => {
             try {
                 await DB.updateTuition(id, { status: 'paid', paidDate: DB.today() });
                 const t = tuitions.find(x => x.id === id);
-                if (t) { t.status = 'paid'; t.paidDate = DB.today(); }
+                if (t) { 
+                    t.status = 'paid'; 
+                    t.paidDate = DB.today(); 
+                    
+                    // Auto-sync with Finance
+                    await DB.addFinanceRecord({
+                        type: 'revenue',
+                        category: 'Học phí',
+                        description: `Thu học phí: ${t.studentName || getStudentName(t.studentId)} ${t.note ? '(' + t.note + ')' : ''}`,
+                        amount: t.amount,
+                        date: DB.today(),
+                        createdBy: window.currentUser ? window.currentUser.id : 'system'
+                    });
+                }
 
                 if (createNext && t) {
                     const [y, m, d] = t.dueDate.split('-');
@@ -258,7 +271,22 @@ Router.register('tuition', async (container) => {
         async saveEdit(id) {
             try {
                 const status = document.getElementById('t-status').value;
+                const oldT = tuitions.find(x => x.id === id);
                 await DB.updateTuition(id, { studentId: document.getElementById('t-student').value, studentName: getStudentName(document.getElementById('t-student').value), amount: parseInt(document.getElementById('t-amount').value) || 0, dueDate: document.getElementById('t-due').value, status, paidDate: status === 'paid' ? DB.today() : '' });
+                
+                if (status === 'paid' && oldT && oldT.status !== 'paid') {
+                    const studentName = getStudentName(document.getElementById('t-student').value);
+                    const note = oldT.note ? ` (${oldT.note})` : '';
+                    await DB.addFinanceRecord({
+                        type: 'revenue',
+                        category: 'Học phí',
+                        description: `Thu học phí: ${studentName}${note}`,
+                        amount: parseInt(document.getElementById('t-amount').value) || 0,
+                        date: DB.today(),
+                        createdBy: window.currentUser ? window.currentUser.id : 'system'
+                    });
+                }
+
                 Modal.close();
                 tuitions = await DB.getTuitions();
                 render();
