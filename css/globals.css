@@ -447,12 +447,13 @@ img { max-width: 100%; display: block; }
 }
 
 .btn-primary {
-    background: linear-gradient(135deg, var(--primary-600), var(--accent-600));
+    background: var(--accent-500); /* Navy Blue */
     color: white;
-    box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
+    box-shadow: 0 2px 8px rgba(31, 58, 93, 0.3);
 }
 .btn-primary:hover:not(:disabled) {
-    box-shadow: 0 4px 16px rgba(99, 102, 241, 0.4);
+    background: var(--accent-600); /* Darker Navy */
+    box-shadow: 0 4px 16px rgba(31, 58, 93, 0.4);
     transform: translateY(-1px);
 }
 
