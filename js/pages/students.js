@@ -72,7 +72,55 @@ Router.register('students', async (container) => {
         if (window.lucide) lucide.createIcons();
     }
 
-    container.innerHTML = `
+        const isOwnerAdmin = Auth.hasAnyRole('owner', 'admin');
+        const totalStudents = students.length;
+        const gradeCounts = {};
+        const schoolCounts = {};
+
+        students.forEach(s => {
+            const grade = s.grade || 'Chưa phân khối';
+            gradeCounts[grade] = (gradeCounts[grade] || 0) + 1;
+            if (s.school) {
+                const school = s.school.trim();
+                schoolCounts[school] = (schoolCounts[school] || 0) + 1;
+            }
+        });
+
+        const topSchools = Object.entries(schoolCounts).sort((a, b) => b[1] - a[1]).slice(0, 5);
+
+        let dashboardHTML = '<div class="stats-grid mb-6" style="grid-template-columns:repeat(auto-fit, minmax(250px, 1fr));">';
+        if (isOwnerAdmin) {
+            dashboardHTML += `
+                <div class="stat-card">
+                    <div class="stat-label">Tổng học viên toàn trung tâm</div>
+                    <div class="stat-value" style="font-size:2rem;color:var(--primary-600);">${totalStudents}</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label mb-2" style="font-weight:600;color:var(--text-color);">Học viên theo khối</div>
+                    <div style="max-height:100px;overflow-y:auto;font-size:13px;padding-right:8px;">
+                        ${Object.entries(gradeCounts).sort((a,b)=>b[1]-a[1]).map(([g, count]) => `
+                            <div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border-color);">
+                                <span>${g}</span><strong>${count}</strong>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        }
+        dashboardHTML += `
+            <div class="stat-card">
+                <div class="stat-label mb-2" style="font-weight:600;color:var(--text-color);">Top 5 Trường (Đông nhất)</div>
+                <div style="max-height:100px;overflow-y:auto;font-size:13px;padding-right:8px;">
+                    ${topSchools.length > 0 ? topSchools.map(([school, count], idx) => `
+                        <div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border-color);">
+                            <span>${idx + 1}. ${school}</span><strong>${count} hs</strong>
+                        </div>
+                    `).join('') : '<div class="text-secondary">Chưa có dữ liệu</div>'}
+                </div>
+            </div>
+        </div>`;
+
+        container.innerHTML = `
         <div class="page-header">
             <div>
                 <h1 class="page-title"><i data-lucide="users"></i> Quản lý Học viên</h1>
@@ -85,6 +133,8 @@ Router.register('students', async (container) => {
                 ` : ''}
             </div>
         </div>
+
+        ${dashboardHTML}
 
         <div class="filter-bar">
             <div class="search-box">
