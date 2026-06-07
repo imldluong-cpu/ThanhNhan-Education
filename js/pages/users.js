@@ -108,7 +108,7 @@ Router.register('users', async (container) => {
                         <h4 style="margin-bottom:8px;color:var(--primary-500);font-size:14px;">${c.name}</h4>
                         <div class="form-row">
                             <div class="form-group"><label class="form-label">Lương theo ca (VNĐ/ca)</label><input type="number" class="input sal-shift" data-cid="${c.id}" value="${classConf.perShift || 0}"></div>
-                            <div class="form-group"><label class="form-label">Lương theo giờ (VNĐ/h)</label><input type="number" class="input sal-hourly" data-cid="${c.id}" value="${classConf.perHour || 0}"></div>
+                            <div class="form-group"><label class="form-label">Số buổi tiêu chuẩn</label><input type="number" class="input sal-hourly" data-cid="${c.id}" value="${classConf.perHour || 0}"></div>
                         </div>
                     </div>
                 `;
