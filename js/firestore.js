@@ -304,6 +304,33 @@ const DB = {
         return await window.db.collection('schedules').doc(id).delete();
     },
 
+    // === SCHEDULE EXCEPTIONS (Lịch bù) ===
+    async getScheduleExceptions() {
+        const snap = await window.db.collection('scheduleExceptions').get();
+        return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    },
+
+    async getScheduleExceptionsByMonth(monthStr) {
+        // monthStr format: YYYY-MM
+        const start = `${monthStr}-01`;
+        const end = `${monthStr}-31`; // Approx
+        const snap = await window.db.collection('scheduleExceptions')
+            .where('originalDate', '>=', start)
+            .where('originalDate', '<=', end)
+            .get();
+        return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    },
+
+    async addScheduleException(data) {
+        data.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+        const ref = await window.db.collection('scheduleExceptions').add(data);
+        return { id: ref.id, ...data };
+    },
+
+    async deleteScheduleException(id) {
+        return await window.db.collection('scheduleExceptions').doc(id).delete();
+    },
+
     // === SETTINGS ===
     async getSettings() {
         const doc = await window.db.collection('settings').doc('general').get();

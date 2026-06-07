@@ -345,6 +345,13 @@
 .checkbox-label:hover { border-color: var(--primary-500); }
 .checkbox-label input:checked + * { color: var(--primary-400); }
 
+/* === FullCalendar Overrides === */
+.fc-event.dashed-border {
+    border-style: dashed !important;
+    border-width: 2px !important;
+    opacity: 0.9;
+}
+
 /* === Misc Helpers === */
 .mb-4 { margin-bottom: var(--space-4); }
 .mb-6 { margin-bottom: var(--space-6); }

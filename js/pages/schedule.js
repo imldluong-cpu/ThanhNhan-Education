@@ -4,10 +4,11 @@
 
 Router.register('schedule', async (container) => {
     const canEdit = Auth.hasAnyRole('owner', 'admin', 'staff', 'teacher');
-    let classes = [], schedules = [];
+    let classes = [], schedules = [], scheduleExceptions = [];
     try {
         classes = await DB.getClasses();
         schedules = await DB.getSchedules();
+        scheduleExceptions = await DB.getScheduleExceptions();
     } catch(e) { console.warn(e); }
 
     let filterClassId = '';
@@ -116,17 +117,19 @@ Router.register('schedule', async (container) => {
                     return true;
                 });
 
-                // Convert to start/end dates handling timezone offset
+                // Generate recurring events
                 for (let d = new Date(start.getTime()); d < end; d.setDate(d.getDate() + 1)) {
                     let dbDay = d.getDay() + 1;
                     if (dbDay === 1) dbDay = 8; // Sunday
 
+                    const dateStr = d.toISOString().split('T')[0];
                     const dayEvents = filtered.filter(s => s.dayOfWeek === dbDay);
                     
                     dayEvents.forEach(s => {
-                        const dateStr = d.toISOString().split('T')[0];
-                        const color = getClassColor(s.classId);
+                        const exception = scheduleExceptions.find(ex => ex.scheduleId === s.id && ex.originalDate === dateStr);
+                        if (exception) return; // Skip if exception exists
                         
+                        const color = getClassColor(s.classId);
                         expandedEvents.push({
                             id: s.id + '_' + dateStr,
                             groupId: s.id,
@@ -135,17 +138,43 @@ Router.register('schedule', async (container) => {
                             end: `${dateStr}T${s.endTime}:00`,
                             backgroundColor: color,
                             borderColor: color,
-                            extendedProps: { ...s, occurrenceDate: dateStr }
+                            extendedProps: { ...s, occurrenceDate: dateStr, isException: false }
                         });
                     });
                 }
+                
+                // Add exceptions
+                scheduleExceptions.forEach(ex => {
+                    if (ex.newDate) {
+                        const d = new Date(ex.newDate);
+                        if (d >= start && d < end) {
+                            const originalSch = schedules.find(s => s.id === ex.scheduleId);
+                            if (originalSch && (!filterClassId || originalSch.classId === filterClassId)) {
+                                const color = getClassColor(originalSch.classId);
+                                expandedEvents.push({
+                                    id: 'ex_' + ex.id,
+                                    groupId: originalSch.id,
+                                    title: '(Bù) ' + getClassName(originalSch.classId) + (ex.newRoom ? ` (📍 ${ex.newRoom})` : (originalSch.room ? ` (📍 ${originalSch.room})` : '')),
+                                    start: `${ex.newDate}T${ex.newStartTime}:00`,
+                                    end: `${ex.newDate}T${ex.newEndTime}:00`,
+                                    backgroundColor: 'transparent',
+                                    borderColor: color,
+                                    textColor: color,
+                                    classNames: ['dashed-border'],
+                                    extendedProps: { ...originalSch, exceptionId: ex.id, isException: true }
+                                });
+                            }
+                        }
+                    }
+                });
                 
                 successCallback(expandedEvents);
             },
             eventDrop: async function(info) {
                 if (!canEdit) { info.revert(); return; }
-                const newStart = info.event.start;
-                const newEnd = info.event.end || new Date(newStart.getTime() + 90 * 60000);
+                const ev = info.event;
+                const newStart = ev.start;
+                const newEnd = ev.end || new Date(newStart.getTime() + 90 * 60000);
                 
                 let dayOfWeek = newStart.getDay() + 1;
                 if (dayOfWeek === 1) dayOfWeek = 8;
@@ -153,24 +182,90 @@ Router.register('schedule', async (container) => {
                 const startTime = newStart.toTimeString().substring(0, 5);
                 const endTime = newEnd.toTimeString().substring(0, 5);
                 
-                try {
-                    await DB.updateSchedule(info.event.groupId, {
-                        dayOfWeek: dayOfWeek,
-                        startTime: startTime,
-                        endTime: endTime
-                    });
-                    
-                    const sch = schedules.find(s => s.id === info.event.groupId);
-                    if (sch) {
-                        sch.dayOfWeek = dayOfWeek;
-                        sch.startTime = startTime;
-                        sch.endTime = endTime;
-                    }
-                    Toast.success('Đã dời lịch');
-                } catch(e) {
-                    info.revert();
-                    Toast.error('Lỗi', e.message);
+                const newDateStr = newStart.toISOString().split('T')[0];
+                const isException = ev.extendedProps.isException;
+
+                Modal.confirm({
+                    title: 'Tùy chọn dời lịch',
+                    message: 'Bạn muốn dời lịch cố định hàng tuần, hay chỉ dời lịch bù cho đúng buổi này?',
+                    confirmText: 'Chỉ dời buổi này (Bù)',
+                    middleBtnText: 'Dời lịch cố định',
+                    cancelText: 'Hủy'
+                });
+
+                // Bắt sự kiện Cancel
+                const modal = document.getElementById('active-modal');
+                if (modal) {
+                    const cancelBtn = modal.querySelector('.btn-secondary[onclick="Modal.close()"]');
+                    const closeIcon = modal.querySelector('.btn-icon');
+                    const revertFn = () => { info.revert(); Modal.close(); };
+                    if (cancelBtn) cancelBtn.onclick = revertFn;
+                    if (closeIcon) closeIcon.onclick = revertFn;
                 }
+
+                // Nút giữa: Dời cố định
+                Modal.bindMiddle(async () => {
+                    try {
+                        if (isException) {
+                            await DB.deleteScheduleException(ev.extendedProps.exceptionId);
+                            scheduleExceptions = scheduleExceptions.filter(e => e.id !== ev.extendedProps.exceptionId);
+                        }
+
+                        await DB.updateSchedule(ev.groupId, {
+                            dayOfWeek: dayOfWeek,
+                            startTime: startTime,
+                            endTime: endTime
+                        });
+                        
+                        const sch = schedules.find(s => s.id === ev.groupId);
+                        if (sch) {
+                            sch.dayOfWeek = dayOfWeek;
+                            sch.startTime = startTime;
+                            sch.endTime = endTime;
+                        }
+                        Toast.success('Đã cập nhật lịch cố định');
+                        window.calendar.refetchEvents();
+                    } catch(e) {
+                        info.revert();
+                        throw e;
+                    }
+                });
+
+                // Nút xác nhận: Dời bù
+                Modal.bindConfirm(async () => {
+                    try {
+                        if (isException) {
+                            await DB.updateScheduleException(ev.extendedProps.exceptionId, {
+                                newDate: newDateStr,
+                                newStartTime: startTime,
+                                newEndTime: endTime
+                            });
+                            const ex = scheduleExceptions.find(e => e.id === ev.extendedProps.exceptionId);
+                            if (ex) {
+                                ex.newDate = newDateStr;
+                                ex.newStartTime = startTime;
+                                ex.newEndTime = endTime;
+                            }
+                        } else {
+                            const originalDate = ev.extendedProps.occurrenceDate;
+                            const originalSch = schedules.find(s => s.id === ev.groupId);
+                            const newEx = await DB.addScheduleException({
+                                scheduleId: ev.groupId,
+                                originalDate: originalDate,
+                                newDate: newDateStr,
+                                newStartTime: startTime,
+                                newEndTime: endTime,
+                                newRoom: originalSch.room || ''
+                            });
+                            scheduleExceptions.push(newEx);
+                        }
+                        Toast.success('Đã dời lịch bù thành công');
+                        window.calendar.refetchEvents();
+                    } catch(e) {
+                        info.revert();
+                        throw e;
+                    }
+                });
             },
             eventResize: async function(info) {
                 if (!canEdit) { info.revert(); return; }
@@ -448,6 +543,7 @@ Router.register('schedule', async (container) => {
 
                 Modal.close();
                 schedules = await DB.getSchedules();
+                scheduleExceptions = await DB.getScheduleExceptions();
                 render();
                 Toast.success('Đã cập nhật');
             } catch(e) { Toast.error('Lỗi', e.message); }
