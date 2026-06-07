@@ -75,6 +75,11 @@ Router.register('settings', async (container) => {
                         <p style="font-size:12px;color:var(--text-muted);margin-top:16px;">
                             Nếu trung tâm thay đổi bảng giá, vui lòng liên hệ lập trình viên để cập nhật công thức nội bộ, hoặc mở file quy định gốc lên xem.
                         </p>
+                        <div style="margin-top:20px;padding-top:16px;border-top:1px dashed var(--border-color);">
+                            <p style="font-size:13px;margin-bottom:8px;"><strong>Công cụ quản trị:</strong></p>
+                            <button class="btn btn-secondary btn-sm" onclick="SettingsPage.updateAllClassFees()"><i data-lucide="refresh-cw" style="width:14px;height:14px;"></i> Cập nhật Học phí cho toàn bộ Lớp cũ</button>
+                            <p style="font-size:11px;color:var(--text-muted);margin-top:4px;">Hệ thống sẽ duyệt qua tất cả các lớp hiện có và tự động áp dụng mức học phí mới nhất dựa trên tên lớp.</p>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -84,7 +89,65 @@ Router.register('settings', async (container) => {
 
     render();
 
+    function getFeeForClass(name) {
+        if (!name) return 0;
+        const lowerName = name.toLowerCase();
+        const isOneOnOne = lowerName.includes('1:1') || lowerName.includes('1 kèm 1') || lowerName.includes('kèm riêng');
+        const match = lowerName.match(/(?:lớp|khối|\s|^|a|b|c)(\d{1,2})(?:\s|$|[a-z])/i);
+        if (!match) return 0;
+        
+        const grade = parseInt(match[1]);
+        if (grade < 1 || grade > 12) return 0;
+
+        let fee = 0;
+        if (isOneOnOne) {
+            if (grade >= 1 && grade <= 5) fee = 1300000;
+            else if (grade >= 6 && grade <= 8) fee = 1400000;
+            else if (grade >= 9 && grade <= 11) fee = 1500000;
+            else if (grade === 12) fee = 1800000;
+        } else {
+            if (grade >= 1 && grade <= 5) fee = 500000;
+            else if (grade === 6) fee = 525000;
+            else if (grade === 7) fee = 550000;
+            else if (grade === 8) fee = 575000;
+            else if (grade === 9) fee = 600000;
+            else if (grade === 10) fee = 625000;
+            else if (grade === 11) fee = 650000;
+            else if (grade === 12) fee = 675000;
+        }
+        return fee;
+    }
+
     window.SettingsPage = {
+        async updateAllClassFees() {
+            if (!confirm('Hệ thống sẽ quét toàn bộ danh sách lớp học và ghi đè Học phí theo bảng quy định chuẩn (dựa vào số khối trong tên lớp). Bạn có chắc chắn muốn thực hiện?')) return;
+            
+            try {
+                Toast.success('Đang xử lý...', 'Vui lòng không đóng trang');
+                const classes = await DB.getClasses();
+                const batch = window.db.batch();
+                let count = 0;
+
+                classes.forEach(c => {
+                    const newFee = getFeeForClass(c.name);
+                    if (newFee > 0 && newFee !== c.fee) {
+                        const ref = window.db.collection('classes').doc(c.id);
+                        batch.update(ref, { fee: newFee });
+                        count++;
+                    }
+                });
+
+                if (count > 0) {
+                    await batch.commit();
+                    Toast.success('Thành công', \`Đã tự động cập nhật học phí cho \${count} lớp học.\`);
+                } else {
+                    Toast.success('Hoàn tất', 'Tất cả các lớp đều đã có học phí chuẩn, không cần cập nhật thêm.');
+                }
+            } catch(e) {
+                Toast.error('Lỗi', e.message);
+            }
+        },
+
         async saveLocation() {
             const lat = parseFloat(document.getElementById('set-lat').value);
             const lng = parseFloat(document.getElementById('set-lng').value);
