@@ -141,13 +141,52 @@ Router.register('tuition', async (container) => {
             render();
         },
 
-        async markPaid(id) {
+        markPaid(id) {
+            Modal.confirm({
+                title: 'Xác nhận thanh toán',
+                message: 'Đánh dấu khoản thu này là "Đã đóng" và tự động tạo phiếu thu cho tháng tiếp theo?',
+                confirmText: 'Xác nhận & Tạo tháng sau',
+                middleBtnText: 'Chỉ xác nhận',
+                cancelText: 'Hủy',
+                danger: false
+            });
+            Modal.bindConfirm(async () => {
+                await TuitionPage._processPaid(id, true);
+            });
+            Modal.bindMiddle(async () => {
+                await TuitionPage._processPaid(id, false);
+            });
+        },
+
+        async _processPaid(id, createNext) {
             try {
                 await DB.updateTuition(id, { status: 'paid', paidDate: DB.today() });
-                // Update local data immediately
                 const t = tuitions.find(x => x.id === id);
                 if (t) { t.status = 'paid'; t.paidDate = DB.today(); }
-                Toast.success('Đã xác nhận thanh toán');
+
+                if (createNext && t) {
+                    const [y, m, d] = t.dueDate.split('-');
+                    const nextDue = new Date(y, m - 1, d);
+                    nextDue.setMonth(nextDue.getMonth() + 1);
+                    const nextY = nextDue.getFullYear();
+                    const nextM = String(nextDue.getMonth() + 1).padStart(2, '0');
+                    const nextD = String(nextDue.getDate()).padStart(2, '0');
+                    const nextDueStr = `${nextY}-${nextM}-${nextD}`;
+                    
+                    await DB.addTuition({
+                        studentId: t.studentId,
+                        studentName: t.studentName,
+                        classId: t.classId || 'Nhiều môn',
+                        amount: t.amount,
+                        dueDate: nextDueStr,
+                        status: 'pending',
+                        reminderSent: false,
+                        note: `Học phí tháng ${nextM}/${nextY} (Tạo tự động)`
+                    });
+                }
+
+                Toast.success('Thành công', createNext ? 'Đã xác nhận và tạo phiếu tháng sau' : 'Đã xác nhận thanh toán');
+                tuitions = await DB.getTuitions();
                 render();
             } catch(e) { Toast.error('Lỗi', e.message); }
         },

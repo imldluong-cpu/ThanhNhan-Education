@@ -63,6 +63,7 @@ const Modal = {
             content: `<p style="color:var(--text-secondary);font-size:var(--font-size-sm);">${message}</p>`,
             footer: `
                 <button class="btn btn-secondary" onclick="Modal.close()">${cancelText || 'Hủy'}</button>
+                ${options.middleBtnText ? `<button class="btn btn-secondary" id="modal-middle-btn">${options.middleBtnText}</button>` : ''}
                 <button class="btn ${danger ? 'btn-danger' : 'btn-primary'}" id="modal-confirm-btn">${confirmText || 'Xác nhận'}</button>
             `
         });
@@ -71,6 +72,24 @@ const Modal = {
     // Helper to bind confirm button after showing
     bindConfirm(callback) {
         const btn = document.getElementById('modal-confirm-btn');
+        if (btn) {
+            btn.onclick = async () => {
+                btn.disabled = true;
+                btn.innerHTML = '<div class="spinner" style="width:16px;height:16px;border-width:2px;"></div>';
+                try {
+                    await callback();
+                    Modal.close();
+                } catch (e) {
+                    btn.disabled = false;
+                    btn.textContent = 'Thử lại';
+                    Toast.error('Có lỗi xảy ra: ' + e.message);
+                }
+            };
+        }
+    },
+
+    bindMiddle(callback) {
+        const btn = document.getElementById('modal-middle-btn');
         if (btn) {
             btn.onclick = async () => {
                 btn.disabled = true;
