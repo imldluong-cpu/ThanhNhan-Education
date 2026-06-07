@@ -5,7 +5,8 @@
 Router.register('classes', async (container) => {
     const canEdit = Auth.hasAnyRole('owner', 'staff');
     const isTeacher = Auth.isTeacher();
-    let classes = [], teachers = [];
+    let classes = [], teachers = [], students = [], tuitions = [], teacherAttendance = [];
+    let searchText = '';
 
     try {
         if (isTeacher) {
@@ -14,6 +15,14 @@ Router.register('classes', async (container) => {
             classes = await DB.getClasses();
         }
         teachers = await DB.getTeachers();
+
+        if (canEdit) {
+            const studentsSnap = await window.db.collection('students').where('status', '==', 'active').get();
+            students = studentsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+            
+            tuitions = await DB.getTuitions();
+            teacherAttendance = await DB.getTeacherAttendance(DB.currentMonth());
+        }
     } catch(e) { console.warn(e); }
 
     function getTeacherNames(teacherIds) {
@@ -28,10 +37,72 @@ Router.register('classes', async (container) => {
         const grid = document.getElementById('classes-grid');
         if (!grid) return;
 
-        if (classes.length === 0) {
-            grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1;"><i data-lucide="school"></i><h3>Chưa có lớp học</h3><p>${canEdit ? 'Nhấn "Thêm lớp" để tạo lớp mới' : 'Bạn chưa được phân công lớp nào'}</p></div>`;
+        const filteredClasses = classes.filter(c => {
+            if (!searchText) return true;
+            const s = searchText.toLowerCase();
+            return (c.name || '').toLowerCase().includes(s) || (c.subject || '').toLowerCase().includes(s);
+        });
+
+        if (filteredClasses.length === 0) {
+            grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1;"><i data-lucide="school"></i><h3>Không tìm thấy lớp học</h3><p>${canEdit ? 'Nhấn "Thêm lớp" để tạo lớp mới' : 'Bạn chưa được phân công lớp nào'}</p></div>`;
         } else {
-            grid.innerHTML = classes.map(c => `
+            grid.innerHTML = filteredClasses.map(c => {
+                let profitHtml = '';
+                if (canEdit) {
+                    const activeStudents = students.filter(s => (s.classIds || []).includes(c.id));
+                    const expectedRev = activeStudents.length * (c.fee || 0);
+                    
+                    let expectedSal = 0;
+                    (c.teacherIds || []).forEach(tid => {
+                        const t = teachers.find(x => x.id === tid);
+                        if (t && t.salaryConfig && t.salaryConfig[c.id]) {
+                            const conf = t.salaryConfig[c.id];
+                            expectedSal += (conf.perShift || 0) * (conf.perHour || 0);
+                        }
+                    });
+                    const expectedProfit = expectedRev - expectedSal;
+
+                    const paidTuitions = tuitions.filter(t => t.classId === c.id && t.month === DB.currentMonth() && t.status === 'paid');
+                    const realtimeRev = paidTuitions.reduce((sum, t) => sum + Number(t.amount || 0), 0);
+
+                    const classAtt = teacherAttendance.filter(r => r.classId === c.id);
+                    let realtimeSal = 0;
+                    classAtt.forEach(r => {
+                        let rSalary = r.salary || 0;
+                        if (r.salaryMultiplier !== undefined) rSalary *= r.salaryMultiplier;
+                        if (r.penaltyAmount) rSalary -= r.penaltyAmount;
+                        if (rSalary < 0) rSalary = 0;
+                        realtimeSal += rSalary;
+                    });
+                    const realtimeProfit = realtimeRev - realtimeSal;
+
+                    profitHtml = `
+                        <div style="margin-top:16px;padding-top:12px;border-top:1px dashed var(--border-color);">
+                            <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:6px;">
+                                <span style="color:var(--text-secondary);" title="Dự kiến = Sĩ số x Học phí - (Số buổi TC x Lương ca)">Dự kiến:</span>
+                                <div style="text-align:right;">
+                                    <span style="color:var(--success-500);">${DB.formatCurrency(expectedRev)}</span>
+                                    <span style="color:var(--text-muted);margin:0 4px;">-</span>
+                                    <span style="color:var(--danger-500);">${DB.formatCurrency(expectedSal)}</span>
+                                    <span style="color:var(--text-muted);margin:0 4px;">=</span>
+                                    <strong style="color:${expectedProfit >= 0 ? 'var(--primary-600)' : 'var(--danger-600)'};">${DB.formatCurrency(expectedProfit)}</strong>
+                                </div>
+                            </div>
+                            <div style="display:flex;justify-content:space-between;font-size:12px;">
+                                <span style="color:var(--text-secondary);" title="Thực tế = Đã thu - Đã chấm công">Thực tế (Tháng ${DB.currentMonth()}):</span>
+                                <div style="text-align:right;">
+                                    <span style="color:var(--success-500);">${DB.formatCurrency(realtimeRev)}</span>
+                                    <span style="color:var(--text-muted);margin:0 4px;">-</span>
+                                    <span style="color:var(--danger-500);">${DB.formatCurrency(realtimeSal)}</span>
+                                    <span style="color:var(--text-muted);margin:0 4px;">=</span>
+                                    <strong style="color:${realtimeProfit >= 0 ? 'var(--primary-600)' : 'var(--danger-600)'};">${DB.formatCurrency(realtimeProfit)}</strong>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }
+
+                return `
                 <div class="card" style="border-top:3px solid ${c.status === 'active' ? 'var(--primary-500)' : 'var(--neutral-600)'};">
                     <div class="card-body">
                         <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:var(--space-4);">
@@ -48,15 +119,16 @@ Router.register('classes', async (container) => {
                             <div style="display:flex;align-items:center;gap:8px;"><i data-lucide="book-open" style="width:16px;height:16px;color:var(--primary-400);"></i> ${c.subject || 'Chưa rõ'}</div>
                             <div style="display:flex;align-items:center;gap:8px;"><i data-lucide="user" style="width:16px;height:16px;color:var(--accent-400);"></i> ${getTeacherNames(c.teacherIds)}</div>
                             <div style="display:flex;align-items:center;gap:8px;"><i data-lucide="map-pin" style="width:16px;height:16px;color:var(--success-400);"></i> ${c.room || 'Chưa có phòng'}</div>
-                            <div style="display:flex;align-items:center;gap:8px;"><i data-lucide="wallet" style="width:16px;height:16px;color:var(--warning-400);"></i> ${c.fee ? DB.formatCurrency(c.fee) + '/tháng' : 'Chưa cập nhật'}</div>
+                            ${!isTeacher ? `<div style="display:flex;align-items:center;gap:8px;"><i data-lucide="wallet" style="width:16px;height:16px;color:var(--warning-400);"></i> ${c.fee ? DB.formatCurrency(c.fee) + '/tháng' : 'Chưa cập nhật'}</div>` : ''}
                         </div>
+                        ${profitHtml}
                     </div>
                     <div class="card-footer">
                         <button class="btn btn-ghost btn-sm" onclick="Router.navigate('attendance')"><i data-lucide="clipboard-check"></i> Điểm danh</button>
                         <button class="btn btn-ghost btn-sm" onclick="Router.navigate('schedule')"><i data-lucide="calendar-days"></i> Lịch học</button>
                     </div>
                 </div>
-            `).join('');
+            `}).join('');
         }
         if (window.lucide) lucide.createIcons();
     }
@@ -67,7 +139,11 @@ Router.register('classes', async (container) => {
                 <h1 class="page-title"><i data-lucide="school"></i> Quản lý Lớp học</h1>
                 <p class="page-subtitle">${classes.length} lớp trong hệ thống</p>
             </div>
-            <div class="page-actions">
+            <div class="page-actions" style="display:flex;align-items:center;gap:12px;">
+                <div class="search-box" style="position:relative;">
+                    <i data-lucide="search" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);width:16px;height:16px;color:var(--text-muted);"></i>
+                    <input type="text" class="input" placeholder="Tìm lớp, môn học..." style="padding-left:36px;width:250px;" onkeyup="ClassesPage.filter(this.value)">
+                </div>
                 ${Auth.isOwner() ? '<button class="btn btn-secondary" onclick="window.open(\'assets/docs/QuyDinhTaiChinh_ThanhNhanEducation.pdf\', \'_blank\')"><i data-lucide="file-text"></i> Xem quy định</button>' : ''}
                 ${canEdit ? '<button class="btn btn-primary" onclick="ClassesPage.showAdd()"><i data-lucide="plus"></i> Thêm lớp</button>' : ''}
             </div>
@@ -79,6 +155,11 @@ Router.register('classes', async (container) => {
     renderCards();
 
     window.ClassesPage = {
+        filter(text) {
+            searchText = text;
+            renderCards();
+        },
+
         suggestFee(name) {
             if (!name) return;
             const feeInput = document.getElementById('c-fee');

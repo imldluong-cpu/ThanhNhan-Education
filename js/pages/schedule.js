@@ -304,6 +304,15 @@ Router.register('schedule', async (container) => {
                 }
 
                 await DB.addSchedulesBatch(toAdd);
+                
+                // Update class room if at least one room is specified
+                const roomToUpdate = toAdd.find(s => s.room)?.room;
+                if (roomToUpdate) {
+                    await DB.updateClass(classId, { room: roomToUpdate });
+                    const c = classes.find(x => x.id === classId);
+                    if (c) c.room = roomToUpdate;
+                }
+
                 Modal.close();
                 Toast.success('Đã thêm ' + toAdd.length + ' lịch học');
                 schedules = await DB.getSchedules();
@@ -374,6 +383,13 @@ Router.register('schedule', async (container) => {
                 }
 
                 await DB.updateSchedule(id, newData);
+                
+                if (newData.room) {
+                    await DB.updateClass(newData.classId, { room: newData.room });
+                    const c = classes.find(x => x.id === newData.classId);
+                    if (c) c.room = newData.room;
+                }
+
                 Modal.close();
                 schedules = await DB.getSchedules();
                 if (Auth.isTeacher()) {
