@@ -168,6 +168,23 @@ const DB = {
         return await window.db.collection('teacherAttendance').doc(id).delete();
     },
 
+    // === SALARY ADJUSTMENTS ===
+    async getSalaryAdjustments(month) {
+        const snap = await window.db.collection('salaryAdjustments')
+            .where('month', '==', month)
+            .get();
+        return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    },
+
+    async addSalaryAdjustment(data) {
+        data.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+        return await window.db.collection('salaryAdjustments').add(data);
+    },
+
+    async deleteSalaryAdjustment(id) {
+        return await window.db.collection('salaryAdjustments').doc(id).delete();
+    },
+
     // === FINANCE ===
     async getFinanceRecords(month) {
         let snap;

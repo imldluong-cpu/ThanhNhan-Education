@@ -13,6 +13,7 @@ Router.register('teacher-attendance', async (container) => {
     try {
         settings = await DB.getSettings();
         records = await DB.getTeacherAttendance(selectedMonth);
+        adjustments = await DB.getSalaryAdjustments(selectedMonth);
         schedules = await DB.getSchedules();
         if (isOwner) teachers = await DB.getTeachers();
         if (isTeacher) {
@@ -56,6 +57,12 @@ Router.register('teacher-attendance', async (container) => {
         if (!area) return;
         const myRecords = getMyRecords();
 
+        const teacherAdjustments = {};
+        adjustments.forEach(a => {
+            if (!teacherAdjustments[a.teacherId]) teacherAdjustments[a.teacherId] = [];
+            teacherAdjustments[a.teacherId].push(a);
+        });
+
         // Summary
         const teacherSummary = {};
         let totalSalaryAll = 0;
@@ -63,8 +70,23 @@ Router.register('teacher-attendance', async (container) => {
             if (!teacherSummary[r.teacherId]) teacherSummary[r.teacherId] = { total: 0, hours: 0, salary: 0 };
             teacherSummary[r.teacherId].total++;
             teacherSummary[r.teacherId].hours += (r.hours || 0);
-            teacherSummary[r.teacherId].salary += (r.salary || 0);
-            totalSalaryAll += (r.salary || 0);
+            
+            let rSalary = r.salary || 0;
+            if (r.salaryMultiplier !== undefined) rSalary = rSalary * r.salaryMultiplier;
+            if (r.penaltyAmount) rSalary = rSalary - r.penaltyAmount;
+            if (rSalary < 0) rSalary = 0;
+            r.finalSalary = rSalary;
+
+            teacherSummary[r.teacherId].salary += rSalary;
+            totalSalaryAll += rSalary;
+        });
+
+        Object.entries(teacherSummary).forEach(([tid, s]) => {
+            const adjs = teacherAdjustments[tid] || [];
+            let adjSum = 0;
+            adjs.forEach(a => adjSum += Number(a.amount));
+            s.salary += adjSum;
+            totalSalaryAll += adjSum;
         });
 
         let html = '';
@@ -106,15 +128,23 @@ Router.register('teacher-attendance', async (container) => {
         if (myRecords.length === 0) {
             html += `<tr><td colspan="${isOwner ? 8 : 7}"><div class="empty-state"><p>Chưa có dữ liệu chấm công tháng này</p></div></td></tr>`;
         } else {
-            html += myRecords.sort((a, b) => (b.date || '').localeCompare(a.date || '')).map(r => `<tr>
+                html += myRecords.sort((a, b) => (b.date || '').localeCompare(a.date || '')).map(r => `<tr>
                 ${isOwner ? `<td>${getTeacherName(r.teacherId)}</td>` : ''}
                 <td>${DB.formatDate(r.date)}</td>
                 <td>${r.shift !== 'custom' ? shiftNames[r.shift] || r.shift : `${r.startTime || ''}-${r.endTime || ''}`}</td>
                 <td>${getClassName(r.classId)}</td>
                 <td><strong>${r.hours || 0}h</strong></td>
-                <td style="color:var(--success-500);font-weight:600;">${DB.formatCurrency(r.salary || 0)}</td>
+                <td style="color:var(--success-500);font-weight:600;">
+                    ${DB.formatCurrency(r.finalSalary)}
+                    ${r.penaltyReason ? `<div style="color:var(--danger-500);font-size:11px;font-weight:400;margin-top:2px;">${r.penaltyReason}</div>` : ''}
+                </td>
                 <td class="text-sm">${r.note || ''}</td>
-                <td><button class="btn-icon" onclick="TAPage.removeRecord('${r.id}')"><i data-lucide="trash-2"></i></button></td>
+                <td>
+                    <div class="table-actions">
+                        ${isOwner ? `<button class="btn-icon" title="Phạt vi phạm" onclick="TAPage.showPenalty('${r.id}')"><i data-lucide="alert-triangle" style="color:var(--danger-500);"></i></button>` : ''}
+                        <button class="btn-icon" title="Xóa" onclick="TAPage.removeRecord('${r.id}')"><i data-lucide="trash-2"></i></button>
+                    </div>
+                </td>
             </tr>`).join('');
         }
 
@@ -126,11 +156,23 @@ Router.register('teacher-attendance', async (container) => {
                 <h3 style="margin:0;">Tổng hợp lương tháng ${selectedMonth} ${isOwner ? `(Tổng: ${DB.formatCurrency(totalSalaryAll)})` : ''}</h3>
                 ${isOwner ? `<button class="btn btn-primary" onclick="TAPage.finalizeSalary()"><i data-lucide="check-circle"></i> Chốt lương & Chi trả</button>` : ''}
             </div>`;
-            html += '<div class="stats-grid">';
+            html += '<div class="stats-grid" style="align-items:start;">';
             Object.entries(teacherSummary).forEach(([tid, s]) => {
+                const adjs = teacherAdjustments[tid] || [];
+                let adjsHtml = '';
+                adjs.forEach(a => {
+                    adjsHtml += `<div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;margin-top:6px;padding-top:6px;border-top:1px dashed var(--border-color);">
+                        <span style="flex:1;">${a.reason}</span>
+                        <span style="color:${a.amount >= 0 ? 'var(--success-500)' : 'var(--danger-500)'};font-weight:600;margin-left:8px;">${a.amount > 0 ? '+' : ''}${DB.formatCurrency(a.amount)}</span>
+                        ${isOwner ? `<button class="btn-icon" style="padding:0;margin-left:4px;" onclick="TAPage.removeAdjustment('${a.id}')"><i data-lucide="x" style="width:14px;height:14px;color:var(--text-muted);"></i></button>` : ''}
+                    </div>`;
+                });
+
                 html += `<div class="stat-card" style="padding:16px;">
                     <div class="stat-value" style="color:var(--success-500);">${DB.formatCurrency(s.salary)}</div>
-                    <div class="stat-label">${getTeacherName(tid)} — ${s.total} buổi (${s.hours}h)</div>
+                    <div class="stat-label" style="margin-bottom:8px;">${getTeacherName(tid)} — ${s.total} buổi (${s.hours}h)</div>
+                    ${adjsHtml}
+                    ${isOwner ? `<button class="btn btn-secondary btn-sm" style="width:100%;margin-top:12px;font-size:12px;" onclick="TAPage.showAdjustment('${tid}')"><i data-lucide="plus-circle" style="width:14px;height:14px;"></i> Thêm thưởng/phạt</button>` : ''}
                 </div>`;
             });
             html += '</div>';
@@ -158,6 +200,7 @@ Router.register('teacher-attendance', async (container) => {
         async changeMonth(m) {
             selectedMonth = m;
             records = await DB.getTeacherAttendance(m);
+            adjustments = await DB.getSalaryAdjustments(m);
             render();
         },
 
@@ -165,9 +208,23 @@ Router.register('teacher-attendance', async (container) => {
             if (!Auth.isOwner()) return;
             const myRecords = getMyRecords();
             const summary = {};
+            const teacherAdjustments = {};
+            adjustments.forEach(a => {
+                if (!teacherAdjustments[a.teacherId]) teacherAdjustments[a.teacherId] = [];
+                teacherAdjustments[a.teacherId].push(a);
+            });
+
             myRecords.forEach(r => {
                 if (!summary[r.teacherId]) summary[r.teacherId] = { salary: 0 };
-                summary[r.teacherId].salary += (r.salary || 0);
+                let rSalary = r.salary || 0;
+                if (r.salaryMultiplier !== undefined) rSalary = rSalary * r.salaryMultiplier;
+                if (r.penaltyAmount) rSalary = rSalary - r.penaltyAmount;
+                if (rSalary < 0) rSalary = 0;
+                summary[r.teacherId].salary += rSalary;
+            });
+            Object.entries(summary).forEach(([tid, s]) => {
+                const adjs = teacherAdjustments[tid] || [];
+                adjs.forEach(a => s.salary += Number(a.amount));
             });
             if (Object.keys(summary).length === 0) return Toast.warning('Chưa có dữ liệu', 'Không có dữ liệu lương để chốt');
             
@@ -456,6 +513,173 @@ Router.register('teacher-attendance', async (container) => {
             Modal.bindConfirm(async () => {
                 await DB.deleteTeacherAttendanceRecord(id);
                 records = records.filter(r => r.id !== id);
+                render();
+                Toast.success('Đã xóa');
+            });
+        },
+
+        // === PENALTY & BONUS ===
+        showPenalty(id) {
+            const r = records.find(x => x.id === id);
+            if (!r) return;
+            
+            Modal.show({
+                title: '⚡ Phạt vi phạm giờ giấc',
+                content: `
+                    <div class="form-group">
+                        <label class="form-label">Giáo viên: <strong>${getTeacherName(r.teacherId)}</strong></label>
+                        <p style="font-size:12px;color:var(--text-secondary);margin-bottom:12px;">Ngày: ${DB.formatDate(r.date)} | Ca: ${shiftNames[r.shift] || r.shift}</p>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Chọn mức phạt</label>
+                        <select class="select" id="penalty-select" onchange="TAPage.onPenaltyChange()">
+                            <option value="">-- Chọn hình thức xử lý --</option>
+                            <option value="warn">Nhắc nhở (Không trừ tiền)</option>
+                            <option value="late_10">Đi trễ 10p (Phạt 20.000đ)</option>
+                            <option value="late_15">Đi trễ 15p (Trừ 50% lương buổi)</option>
+                            <option value="late_20">Đi trễ 20p (Trừ 100% lương buổi)</option>
+                            <option value="custom">Tùy chỉnh...</option>
+                        </select>
+                    </div>
+                    <div id="penalty-custom" style="display:none;background:var(--bg-glass);padding:12px;border-radius:8px;">
+                        <div class="form-group">
+                            <label class="form-label">Số tiền phạt (VNĐ)</label>
+                            <input type="number" class="input" id="penalty-amount" placeholder="VD: 20000">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Nhân hệ số lương (1 = 100%, 0.5 = 50%, 0 = 0%)</label>
+                            <input type="number" step="0.1" class="input" id="penalty-multiplier" value="1">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Lý do</label>
+                            <input type="text" class="input" id="penalty-reason">
+                        </div>
+                    </div>
+                `,
+                footer: `<button class="btn btn-secondary" onclick="Modal.close()">Hủy</button><button class="btn btn-primary" onclick="TAPage.savePenalty('${id}')">Áp dụng</button>`
+            });
+        },
+
+        onPenaltyChange() {
+            const val = document.getElementById('penalty-select').value;
+            const customDiv = document.getElementById('penalty-custom');
+            const amt = document.getElementById('penalty-amount');
+            const mul = document.getElementById('penalty-multiplier');
+            const rsn = document.getElementById('penalty-reason');
+            
+            if (val === 'custom') {
+                customDiv.style.display = 'block';
+            } else {
+                customDiv.style.display = 'none';
+                if (val === 'warn') { amt.value = 0; mul.value = 1; rsn.value = 'Nhắc nhở đi trễ'; }
+                else if (val === 'late_10') { amt.value = 20000; mul.value = 1; rsn.value = 'Đi trễ > 10p'; }
+                else if (val === 'late_15') { amt.value = 0; mul.value = 0.5; rsn.value = 'Đi trễ > 15p'; }
+                else if (val === 'late_20') { amt.value = 0; mul.value = 0; rsn.value = 'Đi trễ > 20p'; }
+                else { amt.value = ''; mul.value = ''; rsn.value = ''; }
+            }
+        },
+
+        async savePenalty(id) {
+            const amt = parseInt(document.getElementById('penalty-amount').value) || 0;
+            const mul = parseFloat(document.getElementById('penalty-multiplier').value);
+            const rsn = document.getElementById('penalty-reason').value;
+            
+            if (isNaN(mul)) { Toast.warning('Vui lòng chọn hoặc nhập đủ thông tin'); return; }
+            
+            try {
+                const data = { penaltyAmount: amt, salaryMultiplier: mul, penaltyReason: rsn };
+                await DB.updateTeacherAttendanceRecord(id, data);
+                const r = records.find(x => x.id === id);
+                if (r) Object.assign(r, data);
+                Modal.close();
+                Toast.success('Đã áp dụng mức phạt');
+                render();
+            } catch(e) { Toast.error('Lỗi', e.message); }
+        },
+
+        showAdjustment(teacherId) {
+            Modal.show({
+                title: '🎁 Thêm Thưởng / Phạt',
+                content: `
+                    <div class="form-group">
+                        <label class="form-label">Chọn Loại Thưởng/Phạt</label>
+                        <select class="select" id="adj-select" onchange="TAPage.onAdjChange()">
+                            <option value="">-- Chọn --</option>
+                            <option value="upsell_gv">Thưởng Upsell (Giáo viên) - 25% tháng đầu</option>
+                            <option value="upsell_cf">Thưởng Upsell (Cofounder) - 50% tháng đầu</option>
+                            <option value="retention">Thưởng Giữ sĩ số - 5% doanh thu</option>
+                            <option value="custom">Tùy chỉnh...</option>
+                        </select>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group" id="adj-calc-group" style="display:none;">
+                            <label class="form-label">Học phí / Doanh thu (VNĐ)</label>
+                            <input type="number" class="input" id="adj-base" placeholder="Nhập vào để máy tự tính thưởng" oninput="TAPage.onAdjInput()">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Số tiền điều chỉnh (VNĐ) *</label>
+                        <input type="number" class="input" id="adj-amount" placeholder="Ghi số âm (VD: -50000) nếu là Phạt">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Ghi chú / Lý do *</label>
+                        <input type="text" class="input" id="adj-reason" placeholder="VD: Thưởng Upsell học viên A">
+                    </div>
+                `,
+                footer: `<button class="btn btn-secondary" onclick="Modal.close()">Hủy</button><button class="btn btn-primary" onclick="TAPage.saveAdjustment('${teacherId}')">Lưu</button>`
+            });
+        },
+
+        onAdjChange() {
+            const val = document.getElementById('adj-select').value;
+            const calcGrp = document.getElementById('adj-calc-group');
+            const rsn = document.getElementById('adj-reason');
+            const amt = document.getElementById('adj-amount');
+            
+            if (val === 'upsell_gv' || val === 'upsell_cf' || val === 'retention') {
+                calcGrp.style.display = 'block';
+                if (val === 'upsell_gv') rsn.value = 'Thưởng Upsell (GV)';
+                if (val === 'upsell_cf') rsn.value = 'Thưởng Upsell (Cofounder)';
+                if (val === 'retention') rsn.value = 'Thưởng giữ sĩ số lớp';
+            } else {
+                calcGrp.style.display = 'none';
+                if (val !== 'custom') rsn.value = '';
+            }
+            amt.value = '';
+            document.getElementById('adj-base').value = '';
+        },
+
+        onAdjInput() {
+            const val = document.getElementById('adj-select').value;
+            const base = parseInt(document.getElementById('adj-base').value) || 0;
+            const amtInput = document.getElementById('adj-amount');
+            
+            if (val === 'upsell_gv') amtInput.value = base * 0.25;
+            else if (val === 'upsell_cf') amtInput.value = base * 0.50;
+            else if (val === 'retention') amtInput.value = base * 0.05;
+        },
+
+        async saveAdjustment(teacherId) {
+            const amt = parseInt(document.getElementById('adj-amount').value);
+            const rsn = document.getElementById('adj-reason').value;
+            if (isNaN(amt) || !rsn) { Toast.warning('Vui lòng nhập số tiền và lý do'); return; }
+            
+            try {
+                const adj = { teacherId, amount: amt, reason: rsn, month: selectedMonth };
+                const docRef = await DB.addSalaryAdjustment(adj);
+                adj.id = docRef.id;
+                adjustments.push(adj);
+                Modal.close();
+                Toast.success('Đã thêm');
+                render();
+            } catch(e) { Toast.error('Lỗi', e.message); }
+        },
+
+        async removeAdjustment(id) {
+            Modal.confirm({ title: 'Xóa', message: 'Bạn muốn xóa khoản điều chỉnh này?', confirmText: 'Xóa', danger: true });
+            Modal.bindConfirm(async () => {
+                await DB.deleteSalaryAdjustment(id);
+                adjustments = adjustments.filter(a => a.id !== id);
                 render();
                 Toast.success('Đã xóa');
             });
