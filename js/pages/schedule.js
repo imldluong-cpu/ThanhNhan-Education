@@ -6,12 +6,8 @@ Router.register('schedule', async (container) => {
     const canEdit = Auth.hasAnyRole('owner', 'admin', 'staff', 'teacher');
     let classes = [], schedules = [];
     try {
-        classes = Auth.isTeacher() ? await DB.getClassesByTeacher(window.currentUser.id) : await DB.getClasses();
+        classes = await DB.getClasses();
         schedules = await DB.getSchedules();
-        if (Auth.isTeacher()) {
-            const classIds = classes.map(c => c.id);
-            schedules = schedules.filter(s => classIds.includes(s.classId));
-        }
     } catch(e) { console.warn(e); }
 
     let filterClassId = '';
@@ -316,10 +312,6 @@ Router.register('schedule', async (container) => {
                 Modal.close();
                 Toast.success('Đã thêm ' + toAdd.length + ' lịch học');
                 schedules = await DB.getSchedules();
-                if (Auth.isTeacher()) {
-                    const classIds = classes.map(c => c.id);
-                    schedules = schedules.filter(s => classIds.includes(s.classId));
-                }
                 render();
             } catch(e) { Toast.error('Lỗi', e.message); }
         },
@@ -392,10 +384,6 @@ Router.register('schedule', async (container) => {
 
                 Modal.close();
                 schedules = await DB.getSchedules();
-                if (Auth.isTeacher()) {
-                    const classIds = classes.map(c => c.id);
-                    schedules = schedules.filter(s => classIds.includes(s.classId));
-                }
                 render();
                 Toast.success('Đã cập nhật');
             } catch(e) { Toast.error('Lỗi', e.message); }
