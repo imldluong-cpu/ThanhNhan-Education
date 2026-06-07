@@ -68,6 +68,7 @@ Router.register('classes', async (container) => {
                 <p class="page-subtitle">${classes.length} lớp trong hệ thống</p>
             </div>
             <div class="page-actions">
+                ${Auth.isOwner() ? '<button class="btn btn-secondary" onclick="window.open(\'assets/docs/quy_dinh_tai_chinh.pdf\', \'_blank\')"><i data-lucide="file-text"></i> Xem quy định</button>' : ''}
                 ${canEdit ? '<button class="btn btn-primary" onclick="ClassesPage.showAdd()"><i data-lucide="plus"></i> Thêm lớp</button>' : ''}
             </div>
         </div>
@@ -78,6 +79,38 @@ Router.register('classes', async (container) => {
     renderCards();
 
     window.ClassesPage = {
+        suggestFee(name) {
+            if (!name) return;
+            const feeInput = document.getElementById('c-fee');
+            if (!feeInput) return;
+            
+            const lowerName = name.toLowerCase();
+            const isOneOnOne = lowerName.includes('1:1') || lowerName.includes('1 kèm 1') || lowerName.includes('kèm riêng');
+            const match = lowerName.match(/(?:lớp|khối|\s|^|a|b|c)(\d{1,2})(?:\s|$|[a-z])/i);
+            if (!match) return;
+            
+            const grade = parseInt(match[1]);
+            if (grade < 1 || grade > 12) return;
+
+            let fee = 0;
+            if (isOneOnOne) {
+                if (grade >= 1 && grade <= 5) fee = 1300000;
+                else if (grade >= 6 && grade <= 8) fee = 1400000;
+                else if (grade >= 9 && grade <= 11) fee = 1500000;
+                else if (grade === 12) fee = 1800000;
+            } else {
+                if (grade >= 1 && grade <= 5) fee = 500000;
+                else if (grade === 6) fee = 525000;
+                else if (grade === 7) fee = 550000;
+                else if (grade === 8) fee = 575000;
+                else if (grade === 9) fee = 600000;
+                else if (grade === 10) fee = 625000;
+                else if (grade === 11) fee = 650000;
+                else if (grade === 12) fee = 675000;
+            }
+            if (fee > 0) feeInput.value = fee;
+        },
+
         showAdd() {
             const teacherCheckboxes = teachers.map(t => `
                 <label class="checkbox-label"><input type="checkbox" value="${t.id}"> ${t.displayName || t.email}</label>
@@ -89,7 +122,7 @@ Router.register('classes', async (container) => {
                     <div class="form-row">
                         <div class="form-group">
                             <label class="form-label">Tên lớp *</label>
-                            <input type="text" class="input" id="c-name" placeholder="VD: Toán 12A">
+                            <input type="text" class="input" id="c-name" placeholder="VD: Toán 12A" oninput="ClassesPage.suggestFee(this.value)">
                         </div>
                         <div class="form-group">
                             <label class="form-label">Môn học</label>
@@ -169,7 +202,7 @@ Router.register('classes', async (container) => {
                     <div class="form-row">
                         <div class="form-group">
                             <label class="form-label">Tên lớp *</label>
-                            <input type="text" class="input" id="c-name" value="${c.name || ''}">
+                            <input type="text" class="input" id="c-name" value="${c.name || ''}" oninput="ClassesPage.suggestFee(this.value)">
                         </div>
                         <div class="form-group">
                             <label class="form-label">Môn học</label>

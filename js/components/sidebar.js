@@ -55,6 +55,7 @@ const Sidebar = {
         // Users - owner only
         if (isOwner) {
             menuItems.push({ icon: 'shield-check', label: 'Người dùng', page: 'users' });
+            menuItems.push({ icon: 'settings', label: 'Cài đặt', page: 'settings' });
         }
 
         const menuHTML = menuItems.map(item => `
