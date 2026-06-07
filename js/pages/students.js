@@ -72,7 +72,7 @@ Router.register('students', async (container) => {
         if (window.lucide) lucide.createIcons();
     }
 
-        const isOwnerAdmin = Auth.hasAnyRole('owner', 'admin');
+        const isOwnerAdmin = Auth.hasAnyRole('owner', 'admin', 'staff');
         const totalStudents = students.length;
         const gradeCounts = {};
         const schoolCounts = {};
