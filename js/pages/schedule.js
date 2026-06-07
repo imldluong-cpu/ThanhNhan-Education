@@ -3,7 +3,7 @@
 // ============================================
 
 Router.register('schedule', async (container) => {
-    const canEdit = Auth.hasAnyRole('owner');
+    const canEdit = Auth.hasAnyRole('owner', 'admin', 'teacher');
     let classes = [], schedules = [];
     try {
         classes = Auth.isTeacher() ? await DB.getClassesByTeacher(window.currentUser.id) : await DB.getClasses();
@@ -206,7 +206,13 @@ Router.register('schedule', async (container) => {
                             ${timeSlots.slice(1).map(t => `<option value="${t}">${t}</option>`).join('')}
                             <option value="21:00">21:00</option>
                         </select>
-                        <input type="text" class="input" id="sa-room-${i}" placeholder="Phòng" style="width:80px;">
+                        <select class="select" id="sa-room-${i}" style="width:100px;">
+                            <option value="">Phòng</option>
+                            <option value="Trệt">Trệt</option>
+                            <option value="P.T1">P.T1</option>
+                            <option value="P.T2">P.T2</option>
+                            <option value="P.ST">P.ST</option>
+                        </select>
                         ${i > 0 ? `<button class="btn-icon" onclick="this.parentElement.remove()" title="Xóa"><i data-lucide="x" style="width:14px;"></i></button>` : ''}
                     </div>`;
             }
@@ -245,7 +251,13 @@ Router.register('schedule', async (container) => {
                     ${timeSlots.slice(1).map(t => `<option value="${t}">${t}</option>`).join('')}
                     <option value="21:00">21:00</option>
                 </select>
-                <input type="text" class="input" id="sa-room-${i}" placeholder="Phòng" style="width:80px;">
+                <select class="select" id="sa-room-${i}" style="width:100px;">
+                    <option value="">Phòng</option>
+                    <option value="Trệt">Trệt</option>
+                    <option value="P.T1">P.T1</option>
+                    <option value="P.T2">P.T2</option>
+                    <option value="P.ST">P.ST</option>
+                </select>
                 <button class="btn-icon" onclick="this.parentElement.remove()" title="Xóa"><i data-lucide="x" style="width:14px;"></i></button>
             `;
             container.appendChild(div);
@@ -277,6 +289,20 @@ Router.register('schedule', async (container) => {
             if (toAdd.length === 0) return;
 
             try {
+                const allDB = await DB.getSchedules();
+                for (const item of toAdd) {
+                    if (!item.room) continue;
+                    const conflict = allDB.find(s => 
+                        s.dayOfWeek === item.dayOfWeek && 
+                        s.room === item.room && 
+                        Math.max(timeToSlot(s.startTime), timeToSlot(item.startTime)) < Math.min(timeToSlot(s.endTime), timeToSlot(item.endTime))
+                    );
+                    if (conflict) { 
+                        Toast.error('Trùng phòng học', `Phòng ${item.room} đã có lớp từ ${conflict.startTime} đến ${conflict.endTime}`); 
+                        return; 
+                    }
+                }
+
                 await DB.addSchedulesBatch(toAdd);
                 Modal.close();
                 Toast.success('Đã thêm ' + toAdd.length + ' lịch học');
@@ -302,7 +328,15 @@ Router.register('schedule', async (container) => {
                     <div class="form-row">
                         <div class="form-group"><label class="form-label">Thứ</label>
                             <select class="select" id="se-day">${dayNames.map((d, j) => `<option value="${j+2}" ${j+2 === sch.dayOfWeek ? 'selected' : ''}>${d}</option>`).join('')}</select></div>
-                        <div class="form-group"><label class="form-label">Phòng</label><input type="text" class="input" id="se-room" value="${sch.room || ''}"></div>
+                        <div class="form-group"><label class="form-label">Phòng</label>
+                            <select class="select" id="se-room">
+                                <option value="" ${!sch.room ? 'selected' : ''}>Phòng</option>
+                                <option value="Trệt" ${sch.room === 'Trệt' ? 'selected' : ''}>Trệt</option>
+                                <option value="P.T1" ${sch.room === 'P.T1' ? 'selected' : ''}>P.T1</option>
+                                <option value="P.T2" ${sch.room === 'P.T2' ? 'selected' : ''}>P.T2</option>
+                                <option value="P.ST" ${sch.room === 'P.ST' ? 'selected' : ''}>P.ST</option>
+                            </select>
+                        </div>
                     </div>
                     <div class="form-row">
                         <div class="form-group"><label class="form-label">Bắt đầu</label>
@@ -317,15 +351,35 @@ Router.register('schedule', async (container) => {
 
         async saveEdit(id) {
             try {
-                await DB.updateSchedule(id, {
+                const newData = {
                     classId: document.getElementById('se-class').value,
                     dayOfWeek: parseInt(document.getElementById('se-day').value),
                     startTime: document.getElementById('se-start').value,
                     endTime: document.getElementById('se-end').value,
                     room: document.getElementById('se-room').value
-                });
+                };
+
+                if (newData.room) {
+                    const allDB = await DB.getSchedules();
+                    const conflict = allDB.find(s => 
+                        s.id !== id &&
+                        s.dayOfWeek === newData.dayOfWeek && 
+                        s.room === newData.room && 
+                        Math.max(timeToSlot(s.startTime), timeToSlot(newData.startTime)) < Math.min(timeToSlot(s.endTime), timeToSlot(newData.endTime))
+                    );
+                    if (conflict) { 
+                        Toast.error('Trùng phòng học', `Phòng ${newData.room} đã có lớp từ ${conflict.startTime} đến ${conflict.endTime}`); 
+                        return; 
+                    }
+                }
+
+                await DB.updateSchedule(id, newData);
                 Modal.close();
                 schedules = await DB.getSchedules();
+                if (Auth.isTeacher()) {
+                    const classIds = classes.map(c => c.id);
+                    schedules = schedules.filter(s => classIds.includes(s.classId));
+                }
                 render();
                 Toast.success('Đã cập nhật');
             } catch(e) { Toast.error('Lỗi', e.message); }
