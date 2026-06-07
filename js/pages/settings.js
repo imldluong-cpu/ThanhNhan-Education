@@ -139,7 +139,7 @@ Router.register('settings', async (container) => {
 
                 if (count > 0) {
                     await batch.commit();
-                    Toast.success('Thành công', \`Đã tự động cập nhật học phí cho \${count} lớp học.\`);
+                    Toast.success('Thành công', 'Đã tự động cập nhật học phí cho ' + count + ' lớp học.');
                 } else {
                     Toast.success('Hoàn tất', 'Tất cả các lớp đều đã có học phí chuẩn, không cần cập nhật thêm.');
                 }
