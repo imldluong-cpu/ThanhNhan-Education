@@ -35,7 +35,7 @@ Router.register('grades', async (container) => {
             const majorExams = grades.filter(g => ['GK1','CK1','GK2','CK2'].some(k => g.examName.includes(k)));
             if (majorExams.length === 0) return '';
 
-            let >=8 = 0, <8 = 0;
+            let count8OrAbove = 0, countBelow8 = 0;
             // Dãy điểm 1-10 để đếm số lượng học sinh đạt mỗi mức điểm
             const scoreDist = { '0-4':0, '4.5-6':0, '6.5-7.5':0, '8-10':0 };
             
@@ -46,7 +46,7 @@ Router.register('grades', async (container) => {
                     const normalized = (parseFloat(score) / max) * 10; // Đưa về hệ 10
                     if (isNaN(normalized)) return;
                     totalScores++;
-                    if (normalized >= 8) >=8++; else <8++;
+                    if (normalized >= 8) count8OrAbove++; else countBelow8++;
                     
                     if (normalized < 4.5) scoreDist['0-4']++;
                     else if (normalized < 6.5) scoreDist['4.5-6']++;
@@ -56,7 +56,7 @@ Router.register('grades', async (container) => {
             });
 
             if (totalScores === 0) return '';
-            const pct8 = Math.round((>=8 / totalScores) * 100);
+            const pct8 = Math.round((count8OrAbove / totalScores) * 100);
 
             return `
                 <div class="card mb-6">
@@ -68,8 +68,8 @@ Router.register('grades', async (container) => {
                             <div style="font-size:3rem;font-weight:700;color:${pct8 >= 80 ? 'var(--success-500)' : pct8 >= 50 ? 'var(--warning-500)' : 'var(--danger-500)'};">${pct8}%</div>
                             <div style="color:var(--text-secondary);">Tỉ lệ đạt >= 8 điểm (Ngưỡng lý tưởng)</div>
                             <div style="margin-top:16px;">
-                                <div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span style="color:var(--success-500);">>= 8 điểm</span><strong>${>=8} lượt</strong></div>
-                                <div style="display:flex;justify-content:space-between;"><span style="color:var(--danger-500);">< 8 điểm</span><strong>${<8} lượt</strong></div>
+                                <div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span style="color:var(--success-500);">>= 8 điểm</span><strong>${count8OrAbove} lượt</strong></div>
+                                <div style="display:flex;justify-content:space-between;"><span style="color:var(--danger-500);">< 8 điểm</span><strong>${countBelow8} lượt</strong></div>
                             </div>
                         </div>
                         <div style="width:250px;height:250px;position:relative;">
