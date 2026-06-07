@@ -3,7 +3,7 @@
 // ============================================
 
 Router.register('attendance', async (container) => {
-    const canEdit = Auth.hasAnyRole('owner', 'teacher');
+    const canEdit = Auth.hasAnyRole('owner', 'admin', 'staff', 'teacher');
     let classes = [], schedules = [];
     try {
         classes = Auth.isTeacher() ? await DB.getClassesByTeacher(window.currentUser.id) : await DB.getClasses();
@@ -83,7 +83,8 @@ Router.register('attendance', async (container) => {
                         }).join('')}
                     </div>
                     ${canEdit ? `
-                        <div style="margin-top:var(--space-6);display:flex;justify-content:center;">
+                        <div style="margin-top:var(--space-6);display:flex;justify-content:center;gap:var(--space-3);">
+                            <button class="btn btn-secondary btn-lg" onclick="AttendancePage.markAllPresent()"><i data-lucide="check-square"></i> Điểm danh cả lớp</button>
                             <button class="btn btn-primary btn-lg" onclick="AttendancePage.save()"><i data-lucide="save"></i> Lưu điểm danh</button>
                         </div>
                     ` : ''}
@@ -154,6 +155,18 @@ Router.register('attendance', async (container) => {
                     else if (st === 'absent') btns[1].classList.add('active-absent');
                     else if (st === 'late') btns[2].classList.add('active-late');
                 }
+            });
+        },
+
+        markAllPresent() {
+            students.forEach(s => {
+                localRecords[s.id] = 'present';
+            });
+            const items = document.querySelectorAll('.attendance-item');
+            items.forEach(item => {
+                const btns = item.querySelectorAll('.status-btn');
+                btns.forEach(btn => btn.classList.remove('active-present', 'active-absent', 'active-late'));
+                btns[0].classList.add('active-present');
             });
         },
 

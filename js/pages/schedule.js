@@ -3,7 +3,7 @@
 // ============================================
 
 Router.register('schedule', async (container) => {
-    const canEdit = Auth.hasAnyRole('owner', 'admin', 'teacher');
+    const canEdit = Auth.hasAnyRole('owner', 'admin', 'staff', 'teacher');
     let classes = [], schedules = [];
     try {
         classes = Auth.isTeacher() ? await DB.getClassesByTeacher(window.currentUser.id) : await DB.getClasses();
