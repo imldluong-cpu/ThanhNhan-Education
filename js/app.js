@@ -80,8 +80,8 @@ const App = {
         page.innerHTML = `
             <div class="login-container">
                 <div class="login-card">
-                    <div class="login-logo" style="text-align:center;">
-                        <img src="assets/images/logo.png" alt="Thành Nhân Education" style="max-width: 240px; margin-bottom: 24px;">
+                    <div class="login-logo" style="display:flex; justify-content:center; align-items:center;">
+                        <img src="assets/images/logo.png" alt="Thành Nhân Education" style="max-width: 240px; margin-bottom: 24px; display: block; margin-left: auto; margin-right: auto;">
                     </div>
 
                     <button class="google-login-btn" onclick="App.loginWithGoogle()" id="google-login-btn">
