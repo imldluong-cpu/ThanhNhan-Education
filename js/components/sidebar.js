@@ -73,8 +73,14 @@ const Sidebar = {
             : `<div class="sidebar-user-avatar" style="background:var(--primary-600);display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:14px;">${displayName.charAt(0).toUpperCase()}</div>`;
 
         sidebar.innerHTML = `
-            <div class="sidebar-brand" style="display:flex;justify-content:center;align-items:center;padding:16px;">
-                <img src="assets/images/logo.png" alt="Thành Nhân Education" style="max-height:60px;object-fit:contain;background:white;padding:4px;border-radius:4px;">
+            <div class="sidebar-brand">
+                <div class="sidebar-brand-icon" style="background: white; padding: 4px;">
+                    <img src="assets/images/logo.png" alt="Logo" style="width: 100%; height: 100%; object-fit: contain;">
+                </div>
+                <div class="sidebar-brand-text">
+                    <h2>Thành Nhân</h2>
+                    <p>Education Center</p>
+                </div>
             </div>
 
             <nav class="sidebar-nav">
