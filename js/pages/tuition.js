@@ -61,18 +61,35 @@ Router.register('tuition', async (container) => {
         `;
 
         if (activeTab === 'reminder') {
+            const todayStr = DB.today();
+            const todayDate = new Date(todayStr);
+            const limitDate = new Date(todayDate);
+            limitDate.setDate(limitDate.getDate() + 7);
+            
+            const reminderFiltered = filtered.filter(t => {
+                if (!t.dueDate) return true;
+                const d = new Date(t.dueDate);
+                return d <= limitDate;
+            });
+
             // Reminder cards view
             content += `<div class="card"><div class="card-body">`;
-            if (filtered.length === 0) {
-                content += '<div class="empty-state"><p>Tất cả học phí đã được thu! 🎉</p></div>';
+            if (reminderFiltered.length === 0) {
+                content += '<div class="empty-state"><p>Tất cả học phí đã được thu hoặc chưa đến kỳ! 🎉</p></div>';
             } else {
-                content += filtered.map(t => `
-                    <div class="reminder-card" style="${t.reminderSent ? 'opacity:0.6;' : ''}margin-bottom:8px;">
+                content += reminderFiltered.map(t => {
+                    const d = new Date(t.dueDate);
+                    const isOverdue = d < todayDate;
+                    const statusColor = isOverdue ? 'var(--danger-500)' : 'var(--warning-500)';
+                    const statusText = isOverdue ? 'Quá hạn' : 'Sắp đến hạn';
+                    
+                    return `
+                    <div class="reminder-card" style="${t.reminderSent ? 'opacity:0.6;' : ''}margin-bottom:8px;border-left:4px solid ${statusColor};">
                         <div class="reminder-info">
-                            <div class="reminder-avatar">${getStudentName(t.studentId).charAt(0)}</div>
+                            <div class="reminder-avatar" style="background:${statusColor}22;color:${statusColor}">${getStudentName(t.studentId).charAt(0)}</div>
                             <div class="reminder-details">
-                                <h4>${getStudentName(t.studentId)}</h4>
-                                <p>${DB.formatCurrency(t.amount)} — Hạn: ${DB.formatDate(t.dueDate)} ${t.reminderSent ? '(Đã nhắc)' : ''}</p>
+                                <h4>${getStudentName(t.studentId)} <span style="font-size:12px;font-weight:normal;color:var(--text-secondary);">(${getClassName(t.classId)})</span></h4>
+                                <p>${DB.formatCurrency(t.amount)} — Hạn: ${DB.formatDate(t.dueDate)} <span style="color:${statusColor};font-weight:600;">(${statusText})</span> ${t.reminderSent ? '(Đã nhắc)' : ''}</p>
                             </div>
                         </div>
                         <div style="display:flex;gap:8px;flex-shrink:0;">
@@ -80,7 +97,7 @@ Router.register('tuition', async (container) => {
                             <button class="btn btn-success btn-sm" onclick="TuitionPage.markPaid('${t.id}')">✓ Đã đóng</button>
                         </div>
                     </div>
-                `).join('');
+                `}).join('');
             }
             content += '</div></div>';
         } else {
