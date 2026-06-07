@@ -73,18 +73,8 @@ const Sidebar = {
             : `<div class="sidebar-user-avatar" style="background:var(--primary-600);display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:14px;">${displayName.charAt(0).toUpperCase()}</div>`;
 
         sidebar.innerHTML = `
-            <div class="sidebar-brand">
-                <div class="sidebar-brand-icon">
-                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M4 19V9L12 3L20 9V19"/>
-                        <path d="M9 19V13H15V19"/>
-                        <circle cx="12" cy="9" r="2"/>
-                    </svg>
-                </div>
-                <div class="sidebar-brand-text">
-                    <h2>Thành Nhân</h2>
-                    <p>Education Center</p>
-                </div>
+            <div class="sidebar-brand" style="display:flex;justify-content:center;align-items:center;padding:16px;">
+                <img src="assets/images/logo.png" alt="Thành Nhân Education" style="max-height:60px;object-fit:contain;background:white;padding:4px;border-radius:4px;">
             </div>
 
             <nav class="sidebar-nav">
