@@ -59,8 +59,8 @@ Router.register('students', async (container) => {
                 <td>${s.parentPhone || '—'}</td>
                 <td>${getClassNames(s.classIds)}</td>
                 <td><span class="badge badge-${s.status === 'active' ? 'success' : 'danger'}">${s.status === 'active' ? 'Đang học' : 'Nghỉ học'}</span></td>
-                <td>
                     <div class="table-actions">
+                        ${isOwnerAdmin ? `<button class="btn-icon" title="Báo cáo học tập" onclick="StudentsPage.showReport('${s.id}')"><i data-lucide="line-chart"></i></button>` : ''}
                         ${canEdit ? `
                             <button class="btn-icon" title="Sửa" onclick="StudentsPage.edit('${s.id}')"><i data-lucide="pencil"></i></button>
                             <button class="btn-icon" title="Xóa" onclick="StudentsPage.remove('${s.id}', '${(s.name || '').replace(/'/g, "\\'")}')"><i data-lucide="trash-2"></i></button>
@@ -425,13 +425,117 @@ Router.register('students', async (container) => {
 
         // === DELETE ===
         remove(id, name) {
-            Modal.confirm({ title: 'Xóa học viên', message: `Xóa <strong>${name}</strong>?`, confirmText: 'Xóa', danger: true });
+            Modal.confirm({ title: 'Xóa học viên', message: `Bạn có chắc muốn xóa học viên <strong>${name}</strong>?`, confirmText: 'Xóa', danger: true });
             Modal.bindConfirm(async () => {
-                await DB.deleteStudent(id);
-                Toast.success('Đã xóa');
-                students = await DB.getStudents();
-                renderTable();
+                try {
+                    await DB.deleteStudent(id);
+                    students = await DB.getStudents();
+                    renderTable();
+                    Toast.success('Đã xóa học viên');
+                } catch(e) { Toast.error('Lỗi', e.message); }
             });
+        },
+
+        async showReport(id) {
+            const s = students.find(st => st.id === id);
+            if (!s || !s.classIds || s.classIds.length === 0) {
+                Toast.warning('Học viên chưa có lớp học nào');
+                return;
+            }
+
+            Modal.show({
+                title: `Báo cáo học tập: ${s.name}`,
+                size: 'lg',
+                content: `<div style="text-align:center;padding:32px;"><div class="spinner"></div><p>Đang tải dữ liệu điểm số...</p></div>`,
+                footer: `<button class="btn btn-secondary" onclick="Modal.close()">Đóng</button>`
+            });
+
+            try {
+                const allGrades = [];
+                for (const cid of s.classIds) {
+                    const classGrades = await DB.getGrades(cid);
+                    allGrades.push(...classGrades.map(g => ({...g, className: getClassNames([cid])})));
+                }
+
+                const studentExams = allGrades.filter(g => g.scores && g.scores[s.id] !== undefined);
+
+                if (studentExams.length === 0) {
+                    const mBody = document.getElementById('active-modal')?.querySelector('.modal-body');
+                    if(mBody) mBody.innerHTML = `<div class="empty-state"><p>Chưa có dữ liệu điểm số nào.</p></div>`;
+                    return;
+                }
+
+                const subjectStats = {};
+                studentExams.forEach(g => {
+                    const cname = g.className;
+                    if (!subjectStats[cname]) subjectStats[cname] = [];
+                    subjectStats[cname].push({
+                        examName: g.examName,
+                        date: g.date,
+                        score: parseFloat(g.scores[s.id]),
+                        maxScore: g.maxScore || 10,
+                        comment: g.comments ? (g.comments[s.id] || '') : ''
+                    });
+                });
+
+                let html = '<div style="max-height:60vh;overflow-y:auto;padding-right:8px;">';
+
+                for (const [subj, exams] of Object.entries(subjectStats)) {
+                    exams.sort((a,b) => new Date(a.date) - new Date(b.date));
+                    
+                    let progressText = 'Chưa đủ dữ liệu đánh giá';
+                    let progressColor = 'var(--text-secondary)';
+                    
+                    const majorExams = exams.filter(e => ['GK1','CK1','GK2','CK2'].some(k => e.examName.includes(k)));
+                    if (majorExams.length >= 2) {
+                        const first = majorExams[0];
+                        const last = majorExams[majorExams.length - 1];
+                        const firstPct = first.score / first.maxScore;
+                        const lastPct = last.score / last.maxScore;
+                        if (lastPct - firstPct >= 0.1) { progressText = '📈 Có tiến bộ'; progressColor = 'var(--success-500)'; }
+                        else if (lastPct - firstPct <= -0.1) { progressText = '📉 Sa sút, cần chú ý'; progressColor = 'var(--danger-500)'; }
+                        else { progressText = '➡️ Phong độ ổn định'; progressColor = 'var(--info-500)'; }
+                    }
+
+                    html += `
+                        <div class="card mb-4" style="background:var(--bg-glass);">
+                            <div class="card-header" style="padding:12px 16px;background:var(--bg-color);border-bottom:1px solid var(--border-color);">
+                                <h4 style="margin:0;font-size:15px;display:flex;justify-content:space-between;">
+                                    <span>${subj}</span>
+                                    <span style="font-size:13px;font-weight:normal;color:${progressColor}">${progressText}</span>
+                                </h4>
+                            </div>
+                            <div class="table-container" style="border:none;">
+                                <table style="margin:0;">
+                                    <thead><tr><th style="padding:8px 16px;">Kỳ thi</th><th style="padding:8px 16px;">Điểm</th><th style="padding:8px 16px;">Nhận xét của GV</th></tr></thead>
+                                    <tbody>
+                                        ${exams.map(e => {
+                                            const isTN = e.examName.includes('Tại TN') || e.examName.includes('Làm bài tại TN');
+                                            const scoreColor = (e.score/e.maxScore) >= 0.8 ? 'var(--success-500)' : (e.score/e.maxScore) >= 0.5 ? 'var(--warning-500)' : 'var(--danger-500)';
+                                            return `
+                                            <tr style="${isTN ? 'opacity:0.8;' : 'font-weight:500;'}">
+                                                <td style="padding:8px 16px;">${e.examName} <br><small style="color:var(--text-secondary);font-weight:normal;">${DB.formatDate(e.date)}</small></td>
+                                                <td style="padding:8px 16px;color:${scoreColor};">${e.score}/${e.maxScore}</td>
+                                                <td style="padding:8px 16px;font-size:13px;">${e.comment || '—'}</td>
+                                            </tr>
+                                            `;
+                                        }).join('')}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    `;
+                }
+                html += '</div>';
+
+                const modalBody = document.getElementById('active-modal').querySelector('.modal-body');
+                if (modalBody) modalBody.innerHTML = html;
+
+            } catch (e) {
+                console.error(e);
+                const mBody = document.getElementById('active-modal')?.querySelector('.modal-body');
+                if(mBody) mBody.innerHTML = `<div class="empty-state"><p class="text-danger">Lỗi tải dữ liệu: ${e.message}</p></div>`;
+            }
         },
 
         // === EXCEL IMPORT ===
