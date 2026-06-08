@@ -2,6 +2,8 @@
 // HEADER COMPONENT
 // ============================================
 
+window.currentAcademicYear = localStorage.getItem('academicYear') || '2026-2027';
+
 const Header = {
     render() {
         const header = document.getElementById('header');
@@ -13,6 +15,8 @@ const Header = {
             year: 'numeric'
         });
 
+        const years = ['2023-2024', '2024-2025', '2025-2026', '2026-2027', '2027-2028'];
+
         header.innerHTML = `
             <div class="header-left">
                 <button class="mobile-menu-btn" onclick="Sidebar.toggleMobile()">
@@ -22,7 +26,12 @@ const Header = {
                     <span id="breadcrumb-text">Tổng quan</span>
                 </div>
             </div>
-            <div class="header-right">
+            <div class="header-right" style="display: flex; align-items: center; gap: 16px;">
+                <div class="header-year">
+                    <select class="select" id="global-academic-year" onchange="Header.changeAcademicYear(this.value)" style="padding: 6px 12px; font-weight: bold; border-color: var(--primary-500); color: var(--primary-600); background-color: var(--primary-50); border-radius: var(--radius-md); cursor: pointer;">
+                        ${years.map(y => `<option value="${y}" ${y === window.currentAcademicYear ? 'selected' : ''}>Năm học ${y}</option>`).join('')}
+                    </select>
+                </div>
                 <div class="header-date">
                     <i data-lucide="calendar"></i>
                     ${dateStr}
@@ -31,6 +40,14 @@ const Header = {
         `;
 
         if (window.lucide) lucide.createIcons();
+    },
+
+    changeAcademicYear(year) {
+        window.currentAcademicYear = year;
+        localStorage.setItem('academicYear', year);
+        if (Router.currentPage) {
+            Router.navigate(Router.currentPage);
+        }
     },
 
     updateBreadcrumb(page) {

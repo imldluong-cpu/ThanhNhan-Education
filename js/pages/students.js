@@ -128,6 +128,7 @@ Router.register('students', async (container) => {
             </div>
             <div class="page-actions" style="display:flex;gap:8px;">
                 ${canEdit ? `
+                    <button class="btn btn-secondary" onclick="StudentsPage.showImportOldYear()"><i data-lucide="history"></i> Nhập từ năm cũ</button>
                     <button class="btn btn-secondary" onclick="StudentsPage.showImportExcel()"><i data-lucide="file-spreadsheet"></i> Nhập từ Excel</button>
                     <button class="btn btn-primary" onclick="StudentsPage.showAdd()"><i data-lucide="plus"></i> Thêm học viên</button>
                 ` : ''}
@@ -162,6 +163,70 @@ Router.register('students', async (container) => {
     window.StudentsPage = {
         search(val) { searchTerm = val; renderTable(); },
         filterByClass(val) { filterClass = val; renderTable(); },
+
+        // === IMPORT OLD YEAR ===
+        async showImportOldYear() {
+            Modal.show({ title: 'Lấy học viên từ năm cũ', content: `<div class="empty-state"><div class="spinner"></div></div>` });
+            
+            const snap = await window.db.collection('students').get();
+            const year = window.currentAcademicYear || '2026-2027';
+            const oldStudents = snap.docs
+                .map(d => ({ academicYear: '2025-2026', ...d.data(), id: d.id }))
+                .filter(d => d.academicYear !== year);
+
+            if (oldStudents.length === 0) {
+                Modal.show({ title: 'Lấy học viên từ năm cũ', content: `<div class="empty-state"><p>Không có học viên ở các năm học khác.</p></div>` });
+                return;
+            }
+
+            const currentKeys = students.map(s => (s.name||'').toLowerCase() + (s.parentPhone || ''));
+            const available = oldStudents.filter(s => !currentKeys.includes((s.name||'').toLowerCase() + (s.parentPhone || '')));
+
+            Modal.show({
+                title: 'Lấy học viên từ năm cũ',
+                content: `
+                    <p style="margin-bottom:12px;color:var(--text-secondary);font-size:13px;">Chọn các học viên cũ để copy sang năm học <strong>${year}</strong>. Lớp học sẽ được bỏ trống để bạn tự xếp lại.</p>
+                    <div style="max-height:400px;overflow-y:auto;border:1px solid var(--border-color);border-radius:8px;padding:8px;">
+                        ${available.length === 0 ? '<p class="text-center text-secondary py-4">Tất cả học viên cũ đã có mặt ở năm nay.</p>' : 
+                        available.map(s => `
+                            <label class="checkbox-label" style="display:flex;width:100%;margin-bottom:8px;padding:8px;">
+                                <input type="checkbox" class="import-old-cb" value="${s.id}"> 
+                                <div style="margin-left:8px;">
+                                    <strong>${s.name}</strong> - Khối ${s.grade || '?'} - SĐT: ${s.parentPhone || '—'}
+                                </div>
+                            </label>
+                        `).join('')}
+                    </div>
+                `,
+                footer: `
+                    <button class="btn btn-secondary" onclick="Modal.close()">Hủy</button>
+                    ${available.length > 0 ? `<button class="btn btn-primary" onclick="StudentsPage.importOldYear()">Chuyển sang ${year}</button>` : ''}
+                `
+            });
+            window.StudentsPage._oldStudentsData = available;
+        },
+
+        async importOldYear() {
+            const checkboxes = document.querySelectorAll('.import-old-cb:checked');
+            if (checkboxes.length === 0) { Toast.warning('Chưa chọn học viên'); return; }
+            
+            const selectedIds = Array.from(checkboxes).map(c => c.value);
+            const toImport = window.StudentsPage._oldStudentsData.filter(s => selectedIds.includes(s.id));
+            
+            const newData = toImport.map(s => {
+                const { id, classIds, academicYear, createdAt, updatedAt, ...rest } = s;
+                return { ...rest, classIds: [] };
+            });
+
+            Toast.info('Đang copy...');
+            try {
+                await DB.addStudentsBatch(newData);
+                Modal.close();
+                Toast.success(`Đã chuyển ${newData.length} học viên sang năm ${window.currentAcademicYear || '2026-2027'}`);
+                students = await DB.getStudents();
+                Router.navigate(Router.currentPage);
+            } catch(e) { Toast.error('Lỗi', e.message); }
+        },
 
         // === QUICK ADD CLASS ===
         quickAddClass() {
