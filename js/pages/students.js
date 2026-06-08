@@ -49,9 +49,10 @@ Router.register('students', async (container) => {
         if (!tbody) return;
 
         if (filtered.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state"><h3>Chưa có học viên</h3><p>Nhấn "Thêm học viên" để bắt đầu</p></div></td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="${canEdit ? 9 : 8}"><div class="empty-state"><h3>Chưa có học viên</h3><p>Nhấn "Thêm học viên" để bắt đầu</p></div></td></tr>`;
         } else {
             tbody.innerHTML = filtered.map((s, i) => `<tr>
+                ${canEdit ? `<td><input type="checkbox" class="student-cb" value="${s.id}" onchange="StudentsPage.toggleBulk()"></td>` : ''}
                 <td>${i + 1}</td>
                 <td><strong>${s.name || ''}</strong></td>
                 <td>${s.grade || '—'}</td>
@@ -59,6 +60,7 @@ Router.register('students', async (container) => {
                 <td>${s.parentPhone || '—'}</td>
                 <td>${getClassNames(s.classIds)}</td>
                 <td><span class="badge badge-${s.status === 'active' ? 'success' : 'danger'}">${s.status === 'active' ? 'Đang học' : 'Nghỉ học'}</span></td>
+                <td>
                     <div class="table-actions">
                         ${isOwnerAdmin ? `<button class="btn-icon" title="Báo cáo học tập" onclick="StudentsPage.showReport('${s.id}')"><i data-lucide="line-chart"></i></button>` : ''}
                         ${canEdit ? `
@@ -70,6 +72,17 @@ Router.register('students', async (container) => {
             </tr>`).join('');
         }
         if (window.lucide) lucide.createIcons();
+        
+        // Update select all state
+        if (canEdit) {
+            const allCb = document.getElementById('selectAll-cb');
+            const cbs = document.querySelectorAll('.student-cb');
+            if (allCb && cbs.length > 0) {
+                allCb.checked = Array.from(cbs).every(c => c.checked);
+            } else if (allCb) {
+                allCb.checked = false;
+            }
+        }
     }
 
         const isOwnerAdmin = Auth.hasAnyRole('owner', 'admin', 'staff');
@@ -148,10 +161,22 @@ Router.register('students', async (container) => {
             </select>
         </div>
 
+        <div id="bulk-toolbar" style="display:none; padding:12px; background:var(--bg-glass); border-radius:var(--radius-md); margin-bottom:16px; align-items:center; justify-content:space-between; border:1px solid var(--border-color);">
+            <div><strong id="bulk-count" style="color:var(--primary-600);">0</strong> học viên được chọn</div>
+            <div style="display:flex;gap:8px;">
+                <button class="btn btn-secondary btn-sm" onclick="StudentsPage.bulkUpdateClass()"><i data-lucide="book-open"></i> Sửa Lớp</button>
+                <button class="btn btn-secondary btn-sm" onclick="StudentsPage.bulkUpdateStatus()"><i data-lucide="toggle-left"></i> Sửa Trạng thái</button>
+                <button class="btn btn-danger btn-sm" onclick="StudentsPage.bulkDelete()"><i data-lucide="trash-2"></i> Xóa</button>
+            </div>
+        </div>
+
         <div class="card">
             <div class="table-container">
                 <table>
-                    <thead><tr><th>STT</th><th>Họ tên</th><th>Khối</th><th>Trường</th><th>SĐT Phụ huynh</th><th>Lớp</th><th>Trạng thái</th><th>Thao tác</th></tr></thead>
+                    <thead><tr>
+                        ${canEdit ? `<th style="width:40px;"><input type="checkbox" id="selectAll-cb" onchange="StudentsPage.toggleAll(this.checked)"></th>` : ''}
+                        <th>STT</th><th>Họ tên</th><th>Khối</th><th>Trường</th><th>SĐT Phụ huynh</th><th>Lớp</th><th>Trạng thái</th><th>Thao tác</th>
+                    </tr></thead>
                     <tbody id="students-tbody"></tbody>
                 </table>
             </div>
@@ -163,6 +188,125 @@ Router.register('students', async (container) => {
     window.StudentsPage = {
         search(val) { searchTerm = val; renderTable(); },
         filterByClass(val) { filterClass = val; renderTable(); },
+
+        // === BULK ACTIONS ===
+        toggleBulk() {
+            const checked = document.querySelectorAll('.student-cb:checked');
+            const toolbar = document.getElementById('bulk-toolbar');
+            if (toolbar) {
+                if (checked.length > 0) {
+                    toolbar.style.display = 'flex';
+                    document.getElementById('bulk-count').textContent = checked.length;
+                } else {
+                    toolbar.style.display = 'none';
+                }
+            }
+        },
+        toggleAll(checked) {
+            document.querySelectorAll('.student-cb').forEach(cb => cb.checked = checked);
+            this.toggleBulk();
+        },
+        async bulkUpdateClass() {
+            const checked = Array.from(document.querySelectorAll('.student-cb:checked')).map(c => c.value);
+            if (checked.length === 0) return;
+            
+            Modal.show({
+                title: 'Cập nhật lớp hàng loạt',
+                content: `
+                    <p style="margin-bottom:12px;font-size:13px;color:var(--text-secondary);">Bạn đang chọn <strong>${checked.length}</strong> học viên. Chọn các lớp muốn gán cho họ (Lớp cũ của họ sẽ bị thay thế bằng danh sách mới này):</p>
+                    <div style="display:flex;flex-wrap:wrap;gap:8px;" id="bulk-classes">
+                        ${classes.map(c => `<label class="checkbox-label"><input type="checkbox" value="${c.id}"> ${c.name}</label>`).join('')}
+                    </div>
+                `,
+                footer: `<button class="btn btn-secondary" onclick="Modal.close()">Hủy</button>
+                         <button class="btn btn-primary" onclick="StudentsPage.saveBulkClass()">Cập nhật</button>`
+            });
+        },
+        async saveBulkClass() {
+            const checkedIds = Array.from(document.querySelectorAll('.student-cb:checked')).map(c => c.value);
+            const selectedClassIds = Array.from(document.querySelectorAll('#bulk-classes input:checked')).map(c => c.value);
+            
+            Toast.info('Đang cập nhật...');
+            try {
+                const batch = window.db.batch();
+                checkedIds.forEach(id => {
+                    const ref = window.db.collection('students').doc(id);
+                    batch.update(ref, { classIds: selectedClassIds });
+                });
+                await batch.commit();
+                Modal.close();
+                Toast.success(`Đã cập nhật lớp cho ${checkedIds.length} học viên`);
+                students = await DB.getStudents();
+                renderTable();
+                this.toggleBulk();
+                document.getElementById('selectAll-cb').checked = false;
+            } catch(e) { Toast.error('Lỗi', e.message); }
+        },
+        bulkUpdateStatus() {
+            const checked = Array.from(document.querySelectorAll('.student-cb:checked')).map(c => c.value);
+            if (checked.length === 0) return;
+            
+            Modal.show({
+                title: 'Đổi trạng thái hàng loạt',
+                content: `
+                    <div class="form-group">
+                        <label class="form-label">Chọn trạng thái mới cho ${checked.length} học viên</label>
+                        <select class="select" id="bulk-status">
+                            <option value="active">Đang học</option>
+                            <option value="inactive">Nghỉ học</option>
+                        </select>
+                    </div>
+                `,
+                footer: `<button class="btn btn-secondary" onclick="Modal.close()">Hủy</button>
+                         <button class="btn btn-primary" onclick="StudentsPage.saveBulkStatus()">Cập nhật</button>`
+            });
+        },
+        async saveBulkStatus() {
+            const checkedIds = Array.from(document.querySelectorAll('.student-cb:checked')).map(c => c.value);
+            const status = document.getElementById('bulk-status').value;
+            
+            Toast.info('Đang cập nhật...');
+            try {
+                const batch = window.db.batch();
+                checkedIds.forEach(id => {
+                    const ref = window.db.collection('students').doc(id);
+                    batch.update(ref, { status });
+                });
+                await batch.commit();
+                Modal.close();
+                Toast.success('Đã cập nhật trạng thái');
+                students = await DB.getStudents();
+                renderTable();
+                this.toggleBulk();
+                document.getElementById('selectAll-cb').checked = false;
+            } catch(e) { Toast.error('Lỗi', e.message); }
+        },
+        bulkDelete() {
+            const checked = Array.from(document.querySelectorAll('.student-cb:checked')).map(c => c.value);
+            if (checked.length === 0) return;
+            
+            Modal.confirm({
+                title: 'Xóa hàng loạt',
+                message: `Bạn chắc chắn muốn xóa vĩnh viễn <strong>${checked.length}</strong> học viên đã chọn? Hành động này không thể hoàn tác.`,
+                confirmText: 'Xóa tất cả',
+                danger: true
+            });
+            Modal.bindConfirm(async () => {
+                try {
+                    const batch = window.db.batch();
+                    checked.forEach(id => {
+                        const ref = window.db.collection('students').doc(id);
+                        batch.delete(ref);
+                    });
+                    await batch.commit();
+                    Toast.success(`Đã xóa ${checked.length} học viên`);
+                    students = await DB.getStudents();
+                    renderTable();
+                    this.toggleBulk();
+                    document.getElementById('selectAll-cb').checked = false;
+                } catch(e) { Toast.error('Lỗi', e.message); }
+            });
+        },
 
         // === IMPORT OLD YEAR ===
         async showImportOldYear() {
