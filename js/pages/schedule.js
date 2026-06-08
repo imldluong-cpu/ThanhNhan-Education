@@ -142,10 +142,17 @@ Router.register('schedule', async (container) => {
                     let dbDay = d.getDay() + 1;
                     if (dbDay === 1) dbDay = 8; // Sunday
 
-                    const dateStr = d.toISOString().split('T')[0];
+                    const year = d.getFullYear();
+                    const month = String(d.getMonth() + 1).padStart(2, '0');
+                    const day = String(d.getDate()).padStart(2, '0');
+                    const dateStr = `${year}-${month}-${day}`;
+                    
                     const dayEvents = filtered.filter(s => s.dayOfWeek === dbDay);
                     
                     dayEvents.forEach(s => {
+                        const c = classes.find(x => x.id === s.classId);
+                        if (c && c.startDate && dateStr < c.startDate) return; // Skip if before start date
+
                         const exception = scheduleExceptions.find(ex => ex.scheduleId === s.id && ex.originalDate === dateStr);
                         if (exception) return; // Skip if exception exists
                         
