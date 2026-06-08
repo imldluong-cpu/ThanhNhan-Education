@@ -229,22 +229,23 @@ const App = {
             if (sidebar) sidebar.classList.remove('open');
             if (overlay) {
                 overlay.classList.remove('active');
-                overlay.remove(); // Xóa hẳn overlay khỏi DOM để tránh bị kẹt
+                overlay.remove();
             }
 
-            await Auth.signOut();
+            // Gọi sign out không dùng await để tránh bị treo trên mobile
+            Auth.signOut().catch(console.error);
             
-            // Xóa cache và reset router
+            // Xóa cache
             localStorage.removeItem('academicYear');
             
-            // Ép giao diện chuyển về màn hình đăng nhập
-            document.getElementById('app-shell').style.display = 'none';
-            document.getElementById('login-page').style.display = '';
-            App.renderLogin();
+            // Ép tải lại trang ngay lập tức với query string để chống cache
+            setTimeout(() => {
+                window.location.href = window.location.pathname + "?t=" + new Date().getTime();
+            }, 100);
             
-            Toast.info('Đã đăng xuất thành công');
         } catch (error) {
-            Toast.error('Lỗi', error.message);
+            console.error('Logout error:', error);
+            alert('Lỗi đăng xuất: ' + error.message);
         }
     },
 
