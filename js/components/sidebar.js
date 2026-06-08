@@ -89,21 +89,21 @@ const Sidebar = {
                     <div class="sidebar-section-title">Menu chính</div>
                     ${menuHTML}
                 </div>
-            </nav>
 
-            <div class="sidebar-user">
-                <div class="sidebar-user-info">
-                    ${avatarHTML}
-                    <div class="sidebar-user-details">
-                        <div class="sidebar-user-name">${displayName}</div>
-                        <div class="sidebar-user-role">${roleDisplay}</div>
+                <div class="sidebar-user" style="border-top: 1px solid rgba(255,255,255,0.1); margin-top: var(--space-4); padding-top: var(--space-4); padding-left: 0; padding-right: 0;">
+                    <div class="sidebar-user-info">
+                        ${avatarHTML}
+                        <div class="sidebar-user-details">
+                            <div class="sidebar-user-name">${displayName}</div>
+                            <div class="sidebar-user-role">${roleDisplay}</div>
+                        </div>
                     </div>
+                    <button class="sidebar-logout-btn" onclick="App.logout()">
+                        <i data-lucide="log-out"></i>
+                        Đăng xuất
+                    </button>
                 </div>
-                <button class="sidebar-logout-btn" onclick="App.logout()">
-                    <i data-lucide="log-out"></i>
-                    Đăng xuất
-                </button>
-            </div>
+            </nav>
         `;
 
         if (window.lucide) lucide.createIcons();
