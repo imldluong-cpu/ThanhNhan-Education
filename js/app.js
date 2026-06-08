@@ -227,12 +227,22 @@ const App = {
             const sidebar = document.getElementById('sidebar');
             const overlay = document.querySelector('.sidebar-overlay');
             if (sidebar) sidebar.classList.remove('open');
-            if (overlay) overlay.classList.remove('active');
+            if (overlay) {
+                overlay.classList.remove('active');
+                overlay.remove(); // Xóa hẳn overlay khỏi DOM để tránh bị kẹt
+            }
 
             await Auth.signOut();
             
-            // Xóa state và reload để đảm bảo giao diện được reset hoàn toàn
-            window.location.reload();
+            // Xóa cache và reset router
+            localStorage.removeItem('academicYear');
+            
+            // Ép giao diện chuyển về màn hình đăng nhập
+            document.getElementById('app-shell').style.display = 'none';
+            document.getElementById('login-page').style.display = '';
+            App.renderLogin();
+            
+            Toast.info('Đã đăng xuất thành công');
         } catch (error) {
             Toast.error('Lỗi', error.message);
         }
