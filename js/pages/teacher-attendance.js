@@ -438,7 +438,7 @@ Router.register('teacher-attendance', async (container) => {
         // === OWNER: ADD RECORD MANUALLY ===
         showAddRecord() {
             const initialDate = DB.today();
-            const validClasses = getClassesForDate(initialDate);
+            const classListHtml = classes.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
             
             Modal.show({
                 title: 'Thêm chấm công',
@@ -446,7 +446,7 @@ Router.register('teacher-attendance', async (container) => {
                     <div class="form-group"><label class="form-label">Giáo viên *</label>
                         <select class="select" id="ta-teacher"><option value="">Chọn</option>${teachers.map(t => `<option value="${t.id}">${t.displayName || t.email}</option>`).join('')}</select></div>
                     <div class="form-row">
-                        <div class="form-group"><label class="form-label">Ngày</label><input type="date" class="input" id="ta-date" value="${initialDate}" onchange="TAPage.updateAddClasses(this.value)"></div>
+                        <div class="form-group"><label class="form-label">Ngày</label><input type="date" class="input" id="ta-date" value="${initialDate}"></div>
                         <div class="form-group"><label class="form-label">Ca</label>
                             <select class="select" id="ta-shift"><option value="morning">Sáng</option><option value="afternoon">Chiều</option><option value="evening">Tối</option><option value="custom">Tùy chỉnh</option></select></div>
                     </div>
@@ -454,19 +454,12 @@ Router.register('teacher-attendance', async (container) => {
                         <div class="form-group"><label class="form-label">Giờ vào</label><input type="time" class="input" id="ta-start"></div>
                         <div class="form-group"><label class="form-label">Giờ ra</label><input type="time" class="input" id="ta-end"></div>
                     </div>
-                    <div class="form-group"><label class="form-label">Lớp (Chỉ hiện lớp có lịch trong ngày)</label>
-                        <select class="select" id="ta-class"><option value="">Chọn</option>${validClasses.map(c => `<option value="${c.id}">${c.name}</option>`).join('')}</select></div>
+                    <div class="form-group"><label class="form-label">Lớp (Tất cả lớp)</label>
+                        <select class="select" id="ta-class"><option value="">Chọn</option>${classListHtml}</select></div>
                     <div class="form-group"><label class="form-label">Ghi chú</label><input type="text" class="input" id="ta-note"></div>
                 `,
                 footer: `<button class="btn btn-secondary" onclick="Modal.close()">Hủy</button><button class="btn btn-primary" onclick="TAPage.saveRecord()">Lưu</button>`
             });
-        },
-
-        updateAddClasses(dateStr) {
-            const classSelect = document.getElementById('ta-class');
-            if (!classSelect) return;
-            const validClasses = getClassesForDate(dateStr);
-            classSelect.innerHTML = `<option value="">Chọn</option>${validClasses.map(c => `<option value="${c.id}">${c.name}</option>`).join('')}`;
         },
 
         async saveRecord() {
