@@ -72,7 +72,7 @@ Sidebar.toggleMobile = function() {
             sidebar.classList.remove('open');
             ov.classList.remove('active');
         };
-        document.body.appendChild(ov);
+        document.getElementById('app-shell').appendChild(ov);
     } else {
         overlay.classList.toggle('active');
     }
