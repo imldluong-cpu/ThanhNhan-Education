@@ -107,6 +107,26 @@ Router.register('schedule', async (container) => {
             editable: canEdit,
             eventOverlap: true,
             slotEventOverlap: false,
+            eventContent: function(arg) {
+                const title = arg.event.title;
+                const timeText = arg.timeText;
+                let html = `
+                    <div class="fc-event-main-frame" style="position:relative;width:100%;height:100%;">
+                        <div class="fc-event-time">${timeText}</div>
+                        <div class="fc-event-title-container">
+                            <div class="fc-event-title fc-sticky">${title}</div>
+                        </div>
+                `;
+                if (canEdit) {
+                    html += `
+                        <button class="event-delete-btn" style="position:absolute;top:2px;right:2px;background:rgba(0,0,0,0.15);border:none;border-radius:4px;color:inherit;cursor:pointer;padding:2px;display:flex;align-items:center;justify-content:center;transition:background 0.2s;" onmouseover="this.style.background='rgba(0,0,0,0.3)'" onmouseout="this.style.background='rgba(0,0,0,0.15)'" onclick="event.stopPropagation(); SchedulePage.removeSchedule('${arg.event.groupId}', ${arg.event.extendedProps.isException ? `'${arg.event.extendedProps.exceptionId}'` : 'null'})" title="Xóa lịch này">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                        </button>
+                    `;
+                }
+                html += `</div>`;
+                return { html: html };
+            },
             events: function(info, successCallback, failureCallback) {
                 const start = info.start;
                 const end = info.end;
@@ -335,17 +355,17 @@ Router.register('schedule', async (container) => {
         // === ADD SCHEDULE (multi-row) ===
         _schedRows: 1,
 
-        showAddSchedule() {
+        showAddSchedule(preselectClassId = '') {
             this._schedRows = 1;
             Modal.show({
                 title: 'Thêm lịch học',
                 size: 'lg',
-                content: this._buildAddContent(),
+                content: this._buildAddContent(preselectClassId),
                 footer: `<button class="btn btn-secondary" onclick="Modal.close()">Hủy</button><button class="btn btn-primary" onclick="SchedulePage.saveNewSchedules()">💾 Lưu tất cả</button>`
             });
         },
 
-        _buildAddContent() {
+        _buildAddContent(preselectClassId) {
             let rowsHtml = '';
             for (let i = 0; i < this._schedRows; i++) {
                 rowsHtml += `
@@ -373,8 +393,12 @@ Router.register('schedule', async (container) => {
             }
 
             return `
-                <div class="form-group"><label class="form-label">Lớp *</label>
-                    <select class="select" id="sa-class"><option value="">Chọn lớp</option>${classes.map(c => `<option value="${c.id}">${c.name}</option>`).join('')}</select></div>
+                <div class="form-row">
+                    <div class="form-group"><label class="form-label">Lớp *</label>
+                        <select class="select" id="sa-class"><option value="">Chọn lớp</option>${classes.map(c => `<option value="${c.id}" ${c.id === preselectClassId ? 'selected' : ''}>${c.name}</option>`).join('')}</select></div>
+                    <div class="form-group"><label class="form-label">Ngày bắt đầu (Dự kiến)</label>
+                        <input type="date" class="input" id="sa-start-date" value="${DB.today()}"></div>
+                </div>
                 <div class="form-group">
                     <label class="form-label">Lịch học 
                         <button class="btn btn-ghost btn-sm" onclick="SchedulePage.addScheduleRow()" style="font-size:12px;margin-left:8px;">
@@ -421,6 +445,7 @@ Router.register('schedule', async (container) => {
 
         async saveNewSchedules() {
             const classId = document.getElementById('sa-class').value;
+            const startDate = document.getElementById('sa-start-date').value;
             if (!classId) { Toast.warning('Chọn lớp'); return; }
 
             const rows = document.querySelectorAll('.sched-add-row');
@@ -460,12 +485,15 @@ Router.register('schedule', async (container) => {
 
                 await DB.addSchedulesBatch(toAdd);
                 
-                // Update class room if at least one room is specified
+                // Update class room and startDate
                 const roomToUpdate = toAdd.find(s => s.room)?.room;
-                if (roomToUpdate) {
-                    await DB.updateClass(classId, { room: roomToUpdate });
+                if (roomToUpdate || startDate) {
+                    const updateData = {};
+                    if (roomToUpdate) updateData.room = roomToUpdate;
+                    if (startDate) updateData.startDate = startDate;
+                    await DB.updateClass(classId, updateData);
                     const c = classes.find(x => x.id === classId);
-                    if (c) c.room = roomToUpdate;
+                    if (c) Object.assign(c, updateData);
                 }
 
                 Modal.close();
@@ -504,9 +532,19 @@ Router.register('schedule', async (container) => {
                         <div class="form-group"><label class="form-label">Kết thúc</label>
                             <select class="select" id="se-end">${[...timeSlots.slice(1), '21:00'].map(t => `<option value="${t}" ${t === sch.endTime ? 'selected' : ''}>${t}</option>`).join('')}</select></div>
                     </div>
+                    </div>
                 `,
-                footer: `<button class="btn btn-secondary" onclick="Modal.close()">Hủy</button><button class="btn btn-primary" onclick="SchedulePage.saveEdit('${id}')">Cập nhật</button>`
+                footer: `
+                    <div style="display:flex;justify-content:space-between;width:100%;">
+                        <button class="btn btn-ghost" onclick="SchedulePage.showAddSchedule('${sch.classId}')"><i data-lucide="plus"></i> Thêm buổi khác</button>
+                        <div style="display:flex;gap:8px;">
+                            <button class="btn btn-secondary" onclick="Modal.close()">Hủy</button>
+                            <button class="btn btn-primary" onclick="SchedulePage.saveEdit('${id}')">Cập nhật</button>
+                        </div>
+                    </div>
+                `
             });
+            if (window.lucide) lucide.createIcons();
         },
 
         async saveEdit(id) {
@@ -549,13 +587,20 @@ Router.register('schedule', async (container) => {
             } catch(e) { Toast.error('Lỗi', e.message); }
         },
 
-        removeSchedule(id) {
-            Modal.confirm({ title: 'Xóa lịch', message: 'Xóa lịch học này?', confirmText: 'Xóa', danger: true });
+        removeSchedule(id, exceptionId = null) {
+            Modal.confirm({ title: 'Xóa lịch', message: 'Bạn chắc chắn muốn xóa lịch học này?', confirmText: 'Xóa', danger: true });
             Modal.bindConfirm(async () => {
-                await DB.deleteSchedule(id);
-                schedules = schedules.filter(s => s.id !== id);
-                render();
-                Toast.success('Đã xóa');
+                try {
+                    if (exceptionId) {
+                        await DB.deleteScheduleException(exceptionId);
+                        scheduleExceptions = scheduleExceptions.filter(e => e.id !== exceptionId);
+                    } else {
+                        await DB.deleteSchedule(id);
+                        schedules = schedules.filter(s => s.id !== id);
+                    }
+                    render();
+                    Toast.success('Đã xóa lịch học');
+                } catch(e) { Toast.error('Lỗi', e.message); }
             });
         }
     };

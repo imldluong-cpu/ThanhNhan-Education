@@ -108,7 +108,7 @@ Router.register('classes', async (container) => {
                         <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:var(--space-4);">
                             <div>
                                 <h3 style="font-size:var(--font-size-lg);font-weight:700;margin-bottom:4px;">${c.name}</h3>
-                                <span class="badge badge-${c.status === 'active' ? 'success' : 'neutral'}">${c.status === 'active' ? 'Đang hoạt động' : 'Tạm ngưng'}</span>
+                                <span class="badge badge-${c.status === 'active' ? 'success' : (c.status === 'upcoming' ? 'warning' : 'neutral')}">${c.status === 'active' ? 'Đang hoạt động' : (c.status === 'upcoming' ? 'Chuẩn bị khai giảng' : 'Tạm ngưng')}</span>
                             </div>
                             ${canEdit ? `<div class="table-actions">
                                 <button class="btn-icon" title="Sửa" onclick="ClassesPage.edit('${c.id}')"><i data-lucide="pencil"></i></button>
@@ -119,6 +119,7 @@ Router.register('classes', async (container) => {
                             <div style="display:flex;align-items:center;gap:8px;"><i data-lucide="book-open" style="width:16px;height:16px;color:var(--primary-400);"></i> ${c.subject || 'Chưa rõ'}</div>
                             <div style="display:flex;align-items:center;gap:8px;"><i data-lucide="user" style="width:16px;height:16px;color:var(--accent-400);"></i> ${getTeacherNames(c.teacherIds)}</div>
                             <div style="display:flex;align-items:center;gap:8px;"><i data-lucide="map-pin" style="width:16px;height:16px;color:var(--success-400);"></i> ${c.room || 'Chưa có phòng'}</div>
+                            ${c.status === 'upcoming' && c.startDate ? `<div style="display:flex;align-items:center;gap:8px;"><i data-lucide="calendar-clock" style="width:16px;height:16px;color:var(--warning-500);"></i> <strong style="color:var(--warning-600);">Khai giảng: ${DB.formatDate(c.startDate)}</strong></div>` : ''}
                             ${!isTeacher ? `<div style="display:flex;align-items:center;gap:8px;"><i data-lucide="wallet" style="width:16px;height:16px;color:var(--warning-400);"></i> ${c.fee ? DB.formatCurrency(c.fee) + '/tháng' : 'Chưa cập nhật'}</div>` : ''}
                         </div>
                         ${profitHtml}
@@ -224,12 +225,19 @@ Router.register('classes', async (container) => {
                         <label class="form-label">Giáo viên phụ trách</label>
                         <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px;" id="c-teachers">${teacherCheckboxes}</div>
                     </div>
-                    <div class="form-group">
-                        <label class="form-label">Trạng thái</label>
-                        <select class="select" id="c-status">
-                            <option value="active">Đang hoạt động</option>
-                            <option value="inactive">Tạm ngưng</option>
-                        </select>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Trạng thái</label>
+                            <select class="select" id="c-status" onchange="document.getElementById('c-start-group').style.display = this.value === 'upcoming' ? 'block' : 'none'">
+                                <option value="active">Đang hoạt động</option>
+                                <option value="upcoming">Chuẩn bị khai giảng</option>
+                                <option value="inactive">Tạm ngưng</option>
+                            </select>
+                        </div>
+                        <div class="form-group" id="c-start-group" style="display:none;">
+                            <label class="form-label">Ngày khai giảng</label>
+                            <input type="date" class="input" id="c-start-date" value="${DB.today()}">
+                        </div>
                     </div>
                     <div class="form-group">
                         <label class="form-label">Ghi chú</label>
@@ -251,13 +259,16 @@ Router.register('classes', async (container) => {
             const fee = parseInt(document.getElementById('c-fee').value) || 0;
 
             try {
+                const status = document.getElementById('c-status').value;
+                const startDate = document.getElementById('c-start-date') ? document.getElementById('c-start-date').value : '';
                 await DB.addClass({
                     name,
                     subject: document.getElementById('c-subject').value || '',
                     fee,
                     room: document.getElementById('c-room').value || '',
                     teacherIds,
-                    status: document.getElementById('c-status').value,
+                    status,
+                    startDate: status === 'upcoming' ? startDate : '',
                     notes: document.getElementById('c-notes').value || ''
                 });
                 Modal.close();
@@ -304,12 +315,19 @@ Router.register('classes', async (container) => {
                         <label class="form-label">Giáo viên phụ trách</label>
                         <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px;" id="c-teachers">${teacherCheckboxes}</div>
                     </div>
-                    <div class="form-group">
-                        <label class="form-label">Trạng thái</label>
-                        <select class="select" id="c-status">
-                            <option value="active" ${c.status === 'active' ? 'selected' : ''}>Đang hoạt động</option>
-                            <option value="inactive" ${c.status === 'inactive' ? 'selected' : ''}>Tạm ngưng</option>
-                        </select>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Trạng thái</label>
+                            <select class="select" id="c-status" onchange="document.getElementById('c-start-group').style.display = this.value === 'upcoming' ? 'block' : 'none'">
+                                <option value="active" ${c.status === 'active' ? 'selected' : ''}>Đang hoạt động</option>
+                                <option value="upcoming" ${c.status === 'upcoming' ? 'selected' : ''}>Chuẩn bị khai giảng</option>
+                                <option value="inactive" ${c.status === 'inactive' ? 'selected' : ''}>Tạm ngưng</option>
+                            </select>
+                        </div>
+                        <div class="form-group" id="c-start-group" style="display:${c.status === 'upcoming' ? 'block' : 'none'};">
+                            <label class="form-label">Ngày khai giảng</label>
+                            <input type="date" class="input" id="c-start-date" value="${c.startDate || DB.today()}">
+                        </div>
                     </div>
                     <div class="form-group">
                         <label class="form-label">Ghi chú</label>
@@ -331,13 +349,16 @@ Router.register('classes', async (container) => {
             const fee = parseInt(document.getElementById('c-fee').value) || 0;
 
             try {
+                const status = document.getElementById('c-status').value;
+                const startDate = document.getElementById('c-start-date') ? document.getElementById('c-start-date').value : '';
                 await DB.updateClass(id, {
                     name,
                     subject: document.getElementById('c-subject').value || '',
                     fee,
                     room: document.getElementById('c-room').value || '',
                     teacherIds,
-                    status: document.getElementById('c-status').value,
+                    status,
+                    startDate: status === 'upcoming' ? startDate : '',
                     notes: document.getElementById('c-notes').value || ''
                 });
                 Modal.close();
