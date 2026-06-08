@@ -223,8 +223,16 @@ const App = {
 
     async logout() {
         try {
+            // Đóng sidebar trên mobile nếu đang mở
+            const sidebar = document.getElementById('sidebar');
+            const overlay = document.querySelector('.sidebar-overlay');
+            if (sidebar) sidebar.classList.remove('open');
+            if (overlay) overlay.classList.remove('active');
+
             await Auth.signOut();
-            Toast.info('Đã đăng xuất');
+            
+            // Xóa state và reload để đảm bảo giao diện được reset hoàn toàn
+            window.location.reload();
         } catch (error) {
             Toast.error('Lỗi', error.message);
         }

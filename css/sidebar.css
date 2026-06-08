@@ -8,7 +8,6 @@
     left: 0;
     width: var(--sidebar-width);
     height: 100vh;
-    height: 100dvh;
     background: rgba(31, 58, 93, 0.98); /* Navy Blue */
     border-right: 1px solid var(--border-color);
     display: flex;
@@ -16,6 +15,7 @@
     z-index: 100;
     backdrop-filter: blur(20px);
     transition: all var(--transition-base);
+    overflow-y: auto;
     overflow-x: hidden;
 }
 
