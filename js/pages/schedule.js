@@ -86,19 +86,23 @@ Router.register('schedule', async (container) => {
             window.calendar.destroy();
         }
 
+        const isMobile = window.innerWidth <= 768;
+
         window.calendar = new FullCalendar.Calendar(grid, {
-            initialView: 'timeGridWeek',
+            initialView: isMobile ? 'listWeek' : 'timeGridWeek',
             initialDate: new Date(), // Current date
             firstDay: 1, // Start on Monday
             headerToolbar: {
                 left: 'prev,next today',
                 center: 'title',
-                right: 'dayGridMonth,timeGridWeek'
+                right: isMobile ? 'listWeek,listMonth' : 'dayGridMonth,timeGridWeek'
             },
             buttonText: {
                 today: 'Hôm nay',
                 month: 'Tháng',
-                week: 'Tuần'
+                week: 'Tuần',
+                listWeek: 'DS Tuần',
+                listMonth: 'DS Tháng'
             },
             allDaySlot: false,
             slotMinTime: '07:00:00',

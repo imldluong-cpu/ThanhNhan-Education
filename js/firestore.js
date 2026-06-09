@@ -367,16 +367,21 @@ const DB = {
     formatDate(dateStr) {
         if (!dateStr) return '';
         const d = new Date(dateStr);
-        return d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+        const day = String(d.getDate()).padStart(2, '0');
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const year = d.getFullYear();
+        return `${day}/${month}/${year}`;
     },
 
     formatDateTime(timestamp) {
         if (!timestamp) return '';
         const d = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
-        return d.toLocaleDateString('vi-VN', {
-            day: '2-digit', month: '2-digit', year: 'numeric',
-            hour: '2-digit', minute: '2-digit'
-        });
+        const day = String(d.getDate()).padStart(2, '0');
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const year = d.getFullYear();
+        const hours = String(d.getHours()).padStart(2, '0');
+        const minutes = String(d.getMinutes()).padStart(2, '0');
+        return `${day}/${month}/${year} ${hours}:${minutes}`;
     },
 
     today() {
