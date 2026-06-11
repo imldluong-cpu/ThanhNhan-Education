@@ -430,6 +430,16 @@ Router.register('students', async (container) => {
                         <div class="form-group"><label class="form-label">Khối / Lớp</label><input type="text" class="input" id="s-grade" placeholder="VD: Lớp 12, Tiền tiểu học"></div>
                         <div class="form-group"><label class="form-label">Trường</label><input type="text" class="input" id="s-school"></div>
                     </div>
+                    <div class="form-row">
+                        <div class="form-group"><label class="form-label">Ngày nhập học</label><input type="date" class="input" id="s-enrollment-date" value="${DB.today()}"></div>
+                        <div class="form-group"><label class="form-label">Giới tính</label>
+                            <select class="select" id="s-gender">
+                                <option value="">Chưa xác định</option>
+                                <option value="male">Nam</option>
+                                <option value="female">Nữ</option>
+                            </select>
+                        </div>
+                    </div>
                     <hr style="margin:16px 0;border:none;border-top:1px solid var(--border-color);">
                     <div class="form-group">
                         <label class="form-label" style="display:flex;justify-content:space-between;">
@@ -552,6 +562,8 @@ Router.register('students', async (container) => {
                     school: document.getElementById('s-school').value.trim(),
                     grade: gradeText,
                     parentPhone: document.getElementById('s-phone').value || '', 
+                    enrollmentDate: document.getElementById('s-enrollment-date').value,
+                    gender: document.getElementById('s-gender').value,
                     status: 'active', 
                     classIds, 
                     notes: document.getElementById('s-notes').value || '' 
@@ -596,6 +608,16 @@ Router.register('students', async (container) => {
                         <div class="form-group"><label class="form-label">Trường</label><input type="text" class="input" id="s-school" value="${s.school || ''}"></div>
                     </div>
                     <div class="form-row">
+                        <div class="form-group"><label class="form-label">Ngày nhập học</label><input type="date" class="input" id="s-enrollment-date" value="${s.enrollmentDate || DB.today()}"></div>
+                        <div class="form-group"><label class="form-label">Giới tính</label>
+                            <select class="select" id="s-gender">
+                                <option value="" ${!s.gender ? 'selected' : ''}>Chưa xác định</option>
+                                <option value="male" ${s.gender === 'male' ? 'selected' : ''}>Nam</option>
+                                <option value="female" ${s.gender === 'female' ? 'selected' : ''}>Nữ</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-row">
                         <div class="form-group"><label class="form-label">Trạng thái</label>
                             <select class="select" id="s-status"><option value="active" ${s.status === 'active' ? 'selected' : ''}>Đang học</option><option value="inactive" ${s.status === 'inactive' ? 'selected' : ''}>Nghỉ học</option></select>
                         </div>
@@ -621,6 +643,8 @@ Router.register('students', async (container) => {
                     school: document.getElementById('s-school').value.trim(),
                     grade: document.getElementById('s-grade').value.trim(),
                     parentPhone: document.getElementById('s-phone').value || '', 
+                    enrollmentDate: document.getElementById('s-enrollment-date').value,
+                    gender: document.getElementById('s-gender').value,
                     status: document.getElementById('s-status').value, 
                     classIds, 
                     notes: document.getElementById('s-notes').value || '' 
