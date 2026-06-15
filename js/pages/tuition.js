@@ -12,12 +12,28 @@ Router.register('tuition', async (container) => {
 
     let activeTab = 'all';
     let searchTerm = '';
+    
+    function getAcademicYear(dateStr) {
+        if (!dateStr) return 'Khác';
+        const d = new Date(dateStr);
+        if (isNaN(d.getTime())) return 'Khác';
+        const year = d.getFullYear();
+        const month = d.getMonth() + 1;
+        if (month >= 6) return `${year} - ${year + 1}`;
+        return `${year - 1} - ${year}`;
+    }
+    
+    let currentYearStr = getAcademicYear(DB.today());
+    let activeYear = currentYearStr;
 
     function getStudentName(id) { return (students.find(s => s.id === id) || {}).name || '—'; }
     function getClassName(id) { return (classes.find(c => c.id === id) || {}).name || '—'; }
 
     function getFiltered() {
         let list = tuitions;
+        if (activeYear) {
+            list = list.filter(t => getAcademicYear(t.dueDate) === activeYear);
+        }
         if (activeTab === 'pending') list = list.filter(t => t.status === 'pending');
         else if (activeTab === 'overdue') list = list.filter(t => t.status === 'overdue');
         else if (activeTab === 'paid') list = list.filter(t => t.status === 'paid');
@@ -33,15 +49,25 @@ Router.register('tuition', async (container) => {
         const mainArea = document.getElementById('tuition-main');
         if (!mainArea) return;
 
-        // Summary
+        const filtered = getFiltered();
+
+        const yearSet = new Set();
+        tuitions.forEach(t => yearSet.add(getAcademicYear(t.dueDate)));
+        if (!yearSet.has(currentYearStr)) yearSet.add(currentYearStr);
+        const years = Array.from(yearSet).sort().reverse();
+        
+        const yearSelect = document.getElementById('t-year-filter');
+        if (yearSelect) {
+            yearSelect.innerHTML = `<option value="">Tất cả năm học</option>` + 
+                years.map(y => `<option value="${y}" ${activeYear === y ? 'selected' : ''}>Năm học ${y}</option>`).join('');
+        }
+
         let totalDue = 0, totalPaid = 0, totalOwed = 0;
-        tuitions.forEach(t => {
+        filtered.forEach(t => {
             const amt = t.amount || 0;
             totalDue += amt;
             if (t.status === 'paid') totalPaid += amt; else totalOwed += amt;
         });
-
-        const filtered = getFiltered();
 
         let content = `
             <div class="stats-grid mb-6">
@@ -141,8 +167,10 @@ Router.register('tuition', async (container) => {
             <button class="tab-item" onclick="TuitionPage.switchTab('paid', this)">Đã đóng</button>
             <button class="tab-item" onclick="TuitionPage.switchTab('reminder', this)">📞 Nhắc học phí</button>
         </div>
-        <div class="filter-bar">
+        <div class="filter-bar" style="display:flex; justify-content:space-between; align-items:center;">
             <div class="search-box"><i data-lucide="search"></i><input type="text" class="input" placeholder="Tìm theo tên..." oninput="TuitionPage.search(this.value)"></div>
+            <select class="select" id="t-year-filter" style="max-width:200px;" onchange="TuitionPage.filterYear(this.value)">
+            </select>
         </div>
         <div id="tuition-main"></div>
     `;
@@ -151,6 +179,7 @@ Router.register('tuition', async (container) => {
 
     window.TuitionPage = {
         search(val) { searchTerm = val; render(); },
+        filterYear(val) { activeYear = val; render(); },
         switchTab(tab, el) {
             activeTab = tab;
             document.querySelectorAll('.tab-item').forEach(t => t.classList.remove('active'));
