@@ -20,7 +20,20 @@ Router.register('students', async (container) => {
             const q = searchTerm.toLowerCase();
             list = list.filter(s => (s.name || '').toLowerCase().includes(q) || (s.parentPhone || '').includes(q));
         }
-        return list;
+        
+        const sortedList = [...list];
+        sortedList.sort((a, b) => {
+            const getGradeNum = (str) => {
+                if (!str) return 999;
+                const match = str.match(/\d+/);
+                return match ? parseInt(match[0], 10) : 999;
+            };
+            const gradeA = getGradeNum(a.grade);
+            const gradeB = getGradeNum(b.grade);
+            if (gradeA !== gradeB) return gradeA - gradeB;
+            return (a.name || '').localeCompare(b.name || '');
+        });
+        return sortedList;
     }
 
     function getClassNames(classIds) {

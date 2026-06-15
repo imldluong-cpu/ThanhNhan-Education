@@ -43,6 +43,18 @@ Router.register('classes', async (container) => {
             return (c.name || '').toLowerCase().includes(s) || (c.subject || '').toLowerCase().includes(s);
         });
 
+        filteredClasses.sort((a, b) => {
+            const getGradeNum = (str) => {
+                if (!str) return 999;
+                const match = str.match(/\d+/);
+                return match ? parseInt(match[0], 10) : 999;
+            };
+            const gradeA = getGradeNum(a.name);
+            const gradeB = getGradeNum(b.name);
+            if (gradeA !== gradeB) return gradeA - gradeB;
+            return (a.name || '').localeCompare(b.name || '');
+        });
+
         if (filteredClasses.length === 0) {
             grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1;"><i data-lucide="school"></i><h3>Không tìm thấy lớp học</h3><p>${canEdit ? 'Nhấn "Thêm lớp" để tạo lớp mới' : 'Bạn chưa được phân công lớp nào'}</p></div>`;
         } else {
