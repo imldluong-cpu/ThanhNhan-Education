@@ -580,8 +580,8 @@ Router.register('students', async (container) => {
                     const className = `${subj.name} ${grade}`.trim();
                     let cls = classes.find(c => c.name.toLowerCase() === className.toLowerCase());
                     if (!cls) {
-                        const newCls = await DB.addClass({ name: className, subject: subj.name, fee: 0, room: '', notes: '', status: 'active', teacherIds: [] });
-                        cls = { id: newCls.id, name: className };
+                        const newCls = await DB.addClass({ name: className, subject: subj.name, fee: subj.fee, room: '', notes: '', status: 'active', teacherIds: [] });
+                        cls = { id: newCls.id, name: className, fee: subj.fee };
                         classes.push(cls);
                     }
                     classIds.push(cls.id);
