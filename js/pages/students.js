@@ -427,7 +427,7 @@ Router.register('students', async (container) => {
                         <div class="form-group"><label class="form-label">SĐT Phụ huynh</label><input type="tel" class="input" id="s-phone"></div>
                     </div>
                     <div class="form-row">
-                        <div class="form-group"><label class="form-label">Khối / Lớp</label><input type="text" class="input" id="s-grade" placeholder="VD: Lớp 12, Tiền tiểu học"></div>
+                        <div class="form-group"><label class="form-label">Khối / Lớp</label><input type="text" class="input" id="s-grade" placeholder="VD: Lớp 12, Tiền tiểu học" oninput="StudentsPage.autoFillFees()"></div>
                         <div class="form-group"><label class="form-label">Trường</label><input type="text" class="input" id="s-school"></div>
                     </div>
                     <div class="form-row">
@@ -437,6 +437,12 @@ Router.register('students', async (container) => {
                                 <option value="">Chưa xác định</option>
                                 <option value="male">Nam</option>
                                 <option value="female">Nữ</option>
+                            </select>
+                        </div>
+                        <div class="form-group"><label class="form-label">Trạng thái</label>
+                            <select class="select" id="s-status">
+                                <option value="active">Đang học</option>
+                                <option value="pending">Chờ sắp lớp</option>
                             </select>
                         </div>
                     </div>
@@ -500,9 +506,35 @@ Router.register('students', async (container) => {
             const input = document.getElementById(feeId);
             if (input) {
                 input.style.display = cb.checked ? 'block' : 'none';
-                if (!cb.checked) input.value = '';
+                if (!cb.checked) {
+                    input.value = '';
+                } else {
+                    const gradeText = (document.getElementById('s-grade')?.value || '').trim();
+                    const grade = gradeText.replace(/lớp/i, '').trim();
+                    const className = `${cb.value} ${grade}`.trim();
+                    const cls = classes.find(c => c.name.toLowerCase() === className.toLowerCase());
+                    if (cls && cls.fee) {
+                        input.value = cls.fee;
+                    }
+                }
                 this.calcTuition();
             }
+        },
+
+        autoFillFees() {
+            const gradeText = document.getElementById('s-grade').value.trim();
+            const grade = gradeText.replace(/lớp/i, '').trim();
+            if (!grade) return;
+            
+            document.querySelectorAll('.subj-cb:checked').forEach(cb => {
+                const feeInput = cb.parentElement.nextElementSibling;
+                const className = `${cb.value} ${grade}`.trim();
+                const cls = classes.find(c => c.name.toLowerCase() === className.toLowerCase());
+                if (cls && cls.fee) {
+                    feeInput.value = cls.fee;
+                }
+            });
+            this.calcTuition();
         },
 
         calcTuition() {
@@ -564,7 +596,7 @@ Router.register('students', async (container) => {
                     parentPhone: document.getElementById('s-phone').value || '', 
                     enrollmentDate: document.getElementById('s-enrollment-date').value,
                     gender: document.getElementById('s-gender').value,
-                    status: 'active', 
+                    status: document.getElementById('s-status').value, 
                     classIds, 
                     notes: document.getElementById('s-notes').value || '' 
                 });
@@ -619,7 +651,11 @@ Router.register('students', async (container) => {
                     </div>
                     <div class="form-row">
                         <div class="form-group"><label class="form-label">Trạng thái</label>
-                            <select class="select" id="s-status"><option value="active" ${s.status === 'active' ? 'selected' : ''}>Đang học</option><option value="inactive" ${s.status === 'inactive' ? 'selected' : ''}>Nghỉ học</option></select>
+                            <select class="select" id="s-status">
+                                <option value="active" ${s.status === 'active' ? 'selected' : ''}>Đang học</option>
+                                <option value="pending" ${s.status === 'pending' ? 'selected' : ''}>Chờ sắp lớp</option>
+                                <option value="inactive" ${s.status === 'inactive' ? 'selected' : ''}>Nghỉ học</option>
+                            </select>
                         </div>
                     </div>
                     <div class="form-group">
