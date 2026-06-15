@@ -253,6 +253,7 @@ Router.register('students', async (container) => {
                         <label class="form-label">Chọn trạng thái mới cho ${checked.length} học viên</label>
                         <select class="select" id="bulk-status">
                             <option value="active">Đang học</option>
+                            <option value="pending">Chờ sắp lớp</option>
                             <option value="inactive">Nghỉ học</option>
                         </select>
                     </div>
