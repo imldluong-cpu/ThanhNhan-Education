@@ -59,7 +59,7 @@ Router.register('students', async (container) => {
                 <td>${s.school || '—'}</td>
                 <td>${s.parentPhone || '—'}</td>
                 <td>${getClassNames(s.classIds)}</td>
-                <td><span class="badge badge-${s.status === 'active' ? 'success' : 'danger'}">${s.status === 'active' ? 'Đang học' : 'Nghỉ học'}</span></td>
+                <td><span class="badge badge-${s.status === 'active' ? 'success' : s.status === 'pending' ? 'warning' : 'danger'}">${s.status === 'active' ? 'Đang học' : s.status === 'pending' ? 'Chờ sắp lớp' : 'Nghỉ học'}</span></td>
                 <td>
                     <div class="table-actions">
                         ${isOwnerAdmin ? `<button class="btn-icon" title="Báo cáo học tập" onclick="StudentsPage.showReport('${s.id}')"><i data-lucide="line-chart"></i></button>` : ''}
