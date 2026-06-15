@@ -165,7 +165,7 @@ Router.register('students', async (container) => {
             <div><strong id="bulk-count" style="color:var(--primary-600);">0</strong> học viên được chọn</div>
             <div style="display:flex;gap:8px;">
                 <button class="btn btn-secondary btn-sm" onclick="StudentsPage.bulkUpdateClass()"><i data-lucide="book-open"></i> Sửa Lớp</button>
-                <button class="btn btn-secondary btn-sm" onclick="StudentsPage.bulkUpdateStatus()"><i data-lucide="toggle-left"></i> Sửa Trạng thái</button>
+                <button class="btn btn-secondary btn-sm" onclick="StudentsPage.bulkUpdateInfo()"><i data-lucide="edit"></i> Sửa Thông tin</button>
                 <button class="btn btn-danger btn-sm" onclick="StudentsPage.bulkDelete()"><i data-lucide="trash-2"></i> Xóa</button>
             </div>
         </div>
@@ -242,40 +242,70 @@ Router.register('students', async (container) => {
                 document.getElementById('selectAll-cb').checked = false;
             } catch(e) { Toast.error('Lỗi', e.message); }
         },
-        bulkUpdateStatus() {
+        bulkUpdateInfo() {
             const checked = Array.from(document.querySelectorAll('.student-cb:checked')).map(c => c.value);
             if (checked.length === 0) return;
             
             Modal.show({
-                title: 'Đổi trạng thái hàng loạt',
+                title: 'Cập nhật thông tin hàng loạt',
                 content: `
+                    <p style="font-size:13px; color:var(--text-secondary); margin-bottom:12px;">Đang chọn <strong>${checked.length}</strong> học viên. Bỏ trống hoặc chọn "Giữ nguyên" với thông tin không muốn thay đổi.</p>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Trạng thái mới</label>
+                            <select class="select" id="bulk-status">
+                                <option value="">-- Giữ nguyên --</option>
+                                <option value="active">Đang học</option>
+                                <option value="pending">Chờ sắp lớp</option>
+                                <option value="inactive">Nghỉ học</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Ngày nhập học</label>
+                            <input type="date" class="input" id="bulk-enrollment-date">
+                        </div>
+                    </div>
                     <div class="form-group">
-                        <label class="form-label">Chọn trạng thái mới cho ${checked.length} học viên</label>
-                        <select class="select" id="bulk-status">
-                            <option value="active">Đang học</option>
-                            <option value="pending">Chờ sắp lớp</option>
-                            <option value="inactive">Nghỉ học</option>
+                        <label class="form-label">Ưu đãi học phí</label>
+                        <select class="select" id="bulk-discount">
+                            <option value="">-- Giữ nguyên --</option>
+                            <option value="0">Không có ưu đãi</option>
+                            <option value="0.05">Ưu đãi 5% (2 môn / nhóm 3 HS)</option>
+                            <option value="0.10">Ưu đãi 10% (3 môn)</option>
+                            <option value="0.20">Ưu đãi 20% (nhóm 5 HS)</option>
                         </select>
                     </div>
                 `,
                 footer: `<button class="btn btn-secondary" onclick="Modal.close()">Hủy</button>
-                         <button class="btn btn-primary" onclick="StudentsPage.saveBulkStatus()">Cập nhật</button>`
+                         <button class="btn btn-primary" onclick="StudentsPage.saveBulkInfo()">Cập nhật</button>`
             });
         },
-        async saveBulkStatus() {
+        async saveBulkInfo() {
             const checkedIds = Array.from(document.querySelectorAll('.student-cb:checked')).map(c => c.value);
             const status = document.getElementById('bulk-status').value;
+            const enrollmentDate = document.getElementById('bulk-enrollment-date').value;
+            const discountStr = document.getElementById('bulk-discount').value;
             
+            const updates = {};
+            if (status) updates.status = status;
+            if (enrollmentDate) updates.enrollmentDate = enrollmentDate;
+            if (discountStr !== "") updates.discount = parseFloat(discountStr);
+            
+            if (Object.keys(updates).length === 0) {
+                Modal.close();
+                return;
+            }
+
             Toast.info('Đang cập nhật...');
             try {
                 const batch = window.db.batch();
                 checkedIds.forEach(id => {
                     const ref = window.db.collection('students').doc(id);
-                    batch.update(ref, { status });
+                    batch.update(ref, updates);
                 });
                 await batch.commit();
                 Modal.close();
-                Toast.success('Đã cập nhật trạng thái');
+                Toast.success('Đã cập nhật thông tin');
                 students = await DB.getStudents();
                 renderTable();
                 this.toggleBulk();
