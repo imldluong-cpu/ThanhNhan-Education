@@ -251,6 +251,48 @@ Router.register('tuition', async (container) => {
                 const cls = classes.find(c => c.id === this.value);
                 if (cls?.fee) document.getElementById('t-amount').value = cls.fee;
             });
+            
+            document.getElementById('t-student')?.addEventListener('change', function() {
+                const studentId = this.value;
+                if (!studentId) return;
+                
+                const student = students.find(s => s.id === studentId);
+                if (student && student.classIds && student.classIds.length > 0) {
+                    let totalFee = 0;
+                    let classNames = [];
+                    
+                    student.classIds.forEach(cid => {
+                        const cls = classes.find(c => c.id === cid);
+                        if (cls) {
+                            totalFee += (cls.fee || 0);
+                            classNames.push(cls.name);
+                        }
+                    });
+                    
+                    if (totalFee > 0) {
+                        document.getElementById('t-amount').value = totalFee;
+                    }
+                    
+                    const classSelect = document.getElementById('t-class');
+                    if (student.classIds.length === 1) {
+                        classSelect.value = student.classIds[0];
+                    } else if (student.classIds.length > 1) {
+                        let multiOption = Array.from(classSelect.options).find(opt => opt.value === 'Nhiều môn');
+                        if (!multiOption) {
+                            multiOption = document.createElement('option');
+                            multiOption.value = 'Nhiều môn';
+                            classSelect.appendChild(multiOption);
+                        }
+                        multiOption.text = 'Nhiều môn (' + classNames.join(', ') + ')';
+                        classSelect.value = 'Nhiều môn';
+                    }
+                    
+                    if (classNames.length > 0) {
+                        const month = new Date().getMonth() + 1;
+                        document.getElementById('t-note').value = 'Học phí T' + month + ' - ' + classNames.join(', ');
+                    }
+                }
+            });
         },
 
         async saveNew() {
