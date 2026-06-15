@@ -265,15 +265,21 @@ Router.register('students', async (container) => {
                             <input type="date" class="input" id="bulk-enrollment-date">
                         </div>
                     </div>
-                    <div class="form-group">
-                        <label class="form-label">Ưu đãi học phí</label>
-                        <select class="select" id="bulk-discount">
-                            <option value="">-- Giữ nguyên --</option>
-                            <option value="0">Không có ưu đãi</option>
-                            <option value="0.05">Ưu đãi 5% (2 môn / nhóm 3 HS)</option>
-                            <option value="0.10">Ưu đãi 10% (3 môn)</option>
-                            <option value="0.20">Ưu đãi 20% (nhóm 5 HS)</option>
-                        </select>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Ưu đãi học phí</label>
+                            <select class="select" id="bulk-discount">
+                                <option value="">-- Giữ nguyên --</option>
+                                <option value="0">Không có ưu đãi</option>
+                                <option value="0.05">Ưu đãi 5% (2 môn / nhóm 3 HS)</option>
+                                <option value="0.10">Ưu đãi 10% (3 môn)</option>
+                                <option value="0.20">Ưu đãi 20% (nhóm 5 HS)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Khối / Lớp</label>
+                            <input type="text" class="input" id="bulk-grade" placeholder="Bỏ trống để giữ nguyên, vd: 8">
+                        </div>
                     </div>
                 `,
                 footer: `<button class="btn btn-secondary" onclick="Modal.close()">Hủy</button>
@@ -285,11 +291,13 @@ Router.register('students', async (container) => {
             const status = document.getElementById('bulk-status').value;
             const enrollmentDate = document.getElementById('bulk-enrollment-date').value;
             const discountStr = document.getElementById('bulk-discount').value;
+            const gradeText = document.getElementById('bulk-grade').value.trim();
             
             const updates = {};
             if (status) updates.status = status;
             if (enrollmentDate) updates.enrollmentDate = enrollmentDate;
             if (discountStr !== "") updates.discount = parseFloat(discountStr);
+            if (gradeText) updates.grade = gradeText;
             
             if (Object.keys(updates).length === 0) {
                 Modal.close();
