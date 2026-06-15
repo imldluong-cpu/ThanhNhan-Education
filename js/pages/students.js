@@ -502,6 +502,21 @@ Router.register('students', async (container) => {
             container.appendChild(div);
         },
 
+        getDefaultFee(gradeStr) {
+            const match = gradeStr.match(/\d+/);
+            if (!match) return 0;
+            const g = parseInt(match[0]);
+            if (g >= 1 && g <= 5) return 500000;
+            if (g === 6) return 525000;
+            if (g === 7) return 550000;
+            if (g === 8) return 575000;
+            if (g === 9) return 600000;
+            if (g === 10) return 625000;
+            if (g === 11) return 650000;
+            if (g === 12) return 675000;
+            return 0;
+        },
+
         toggleSubject(cb, feeId) {
             const input = document.getElementById(feeId);
             if (input) {
@@ -515,6 +530,9 @@ Router.register('students', async (container) => {
                     const cls = classes.find(c => c.name.toLowerCase() === className.toLowerCase());
                     if (cls && cls.fee) {
                         input.value = cls.fee;
+                    } else {
+                        const defaultFee = StudentsPage.getDefaultFee(gradeText);
+                        if (defaultFee > 0) input.value = defaultFee;
                     }
                 }
                 this.calcTuition();
@@ -532,6 +550,9 @@ Router.register('students', async (container) => {
                 const cls = classes.find(c => c.name.toLowerCase() === className.toLowerCase());
                 if (cls && cls.fee) {
                     feeInput.value = cls.fee;
+                } else {
+                    const defaultFee = StudentsPage.getDefaultFee(gradeText);
+                    if (defaultFee > 0) feeInput.value = defaultFee;
                 }
             });
             this.calcTuition();
