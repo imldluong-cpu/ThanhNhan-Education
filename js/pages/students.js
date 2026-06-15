@@ -618,6 +618,7 @@ Router.register('students', async (container) => {
                     enrollmentDate: document.getElementById('s-enrollment-date').value,
                     gender: document.getElementById('s-gender').value,
                     status: document.getElementById('s-status').value, 
+                    discount: parseFloat(document.getElementById('s-discount').value) || 0,
                     classIds, 
                     notes: document.getElementById('s-notes').value || '' 
                 });
@@ -678,6 +679,14 @@ Router.register('students', async (container) => {
                                 <option value="inactive" ${s.status === 'inactive' ? 'selected' : ''}>Nghỉ học</option>
                             </select>
                         </div>
+                        <div class="form-group"><label class="form-label">Ưu đãi học phí</label>
+                            <select class="select" id="s-discount">
+                                <option value="0" ${!s.discount ? 'selected' : ''}>Không có ưu đãi</option>
+                                <option value="0.05" ${s.discount === 0.05 ? 'selected' : ''}>Ưu đãi 5% (2 môn / nhóm 3 HS)</option>
+                                <option value="0.10" ${s.discount === 0.1 ? 'selected' : ''}>Ưu đãi 10% (3 môn)</option>
+                                <option value="0.20" ${s.discount === 0.2 ? 'selected' : ''}>Ưu đãi 20% (nhóm 5 HS)</option>
+                            </select>
+                        </div>
                     </div>
                     <div class="form-group">
                         <label class="form-label">Lớp học</label>
@@ -703,6 +712,7 @@ Router.register('students', async (container) => {
                     enrollmentDate: document.getElementById('s-enrollment-date').value,
                     gender: document.getElementById('s-gender').value,
                     status: document.getElementById('s-status').value, 
+                    discount: parseFloat(document.getElementById('s-discount').value) || 0,
                     classIds, 
                     notes: document.getElementById('s-notes').value || '' 
                 });

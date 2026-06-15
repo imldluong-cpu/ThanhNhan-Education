@@ -299,7 +299,9 @@ Router.register('tuition', async (container) => {
                     });
                     
                     if (totalFee > 0) {
-                        document.getElementById('t-amount').value = totalFee;
+                        const discount = student.discount || 0;
+                        const finalAmount = Math.round(totalFee * (1 - discount));
+                        document.getElementById('t-amount').value = finalAmount;
                     }
                     
                     const classSelect = document.getElementById('t-class');
