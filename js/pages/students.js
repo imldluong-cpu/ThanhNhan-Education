@@ -284,9 +284,9 @@ Router.register('students', async (container) => {
                             <select class="select" id="bulk-discount">
                                 <option value="">-- Giữ nguyên --</option>
                                 <option value="0">Không có ưu đãi</option>
-                                <option value="0.05">Ưu đãi 5% (2 môn / nhóm 3 HS)</option>
-                                <option value="0.10">Ưu đãi 10% (3 môn)</option>
-                                <option value="0.20">Ưu đãi 20% (nhóm 5 HS)</option>
+                                <option value="0.05">Ưu đãi 5% (Nhóm 2 HS hoặc 2 môn)</option>
+                                <option value="0.10">Ưu đãi 10% (Nhóm 3 HS hoặc từ 3 môn)</option>
+                                <option value="0.20">Ưu đãi 20% (Nhóm từ 5 HS)</option>
                             </select>
                         </div>
                         <div class="form-group">
@@ -520,10 +520,9 @@ Router.register('students', async (container) => {
                             <label class="form-label">Ưu đãi học phí</label>
                             <select class="select" id="s-discount" onchange="StudentsPage.calcTuition()">
                                 <option value="0">Không có ưu đãi</option>
-                                <option value="0.05">Ưu đãi HP 5% khi đăng ký 2 môn</option>
-                                <option value="0.10">Ưu đãi HP 10% khi đăng ký từ 3 môn</option>
-                                <option value="0.05">Ưu đãi nhóm 5% khi đăng ký từ 3 HS</option>
-                                <option value="0.20">Ưu đãi nhóm 20% khi đăng ký từ 5 HS</option>
+                                <option value="0.05">Ưu đãi 5% (Nhóm 2 HS hoặc 2 môn)</option>
+                                <option value="0.10">Ưu đãi 10% (Nhóm 3 HS hoặc từ 3 môn)</option>
+                                <option value="0.20">Ưu đãi 20% (Nhóm từ 5 HS)</option>
                             </select>
                         </div>
                         <div class="form-group">
@@ -734,9 +733,9 @@ Router.register('students', async (container) => {
                         <div class="form-group"><label class="form-label">Ưu đãi học phí</label>
                             <select class="select" id="s-discount">
                                 <option value="0" ${!s.discount ? 'selected' : ''}>Không có ưu đãi</option>
-                                <option value="0.05" ${s.discount === 0.05 ? 'selected' : ''}>Ưu đãi 5% (2 môn / nhóm 3 HS)</option>
-                                <option value="0.10" ${s.discount === 0.1 ? 'selected' : ''}>Ưu đãi 10% (3 môn)</option>
-                                <option value="0.20" ${s.discount === 0.2 ? 'selected' : ''}>Ưu đãi 20% (nhóm 5 HS)</option>
+                                <option value="0.05" ${s.discount === 0.05 ? 'selected' : ''}>Ưu đãi 5% (Nhóm 2 HS hoặc 2 môn)</option>
+                                <option value="0.10" ${s.discount === 0.1 ? 'selected' : ''}>Ưu đãi 10% (Nhóm 3 HS hoặc từ 3 môn)</option>
+                                <option value="0.20" ${s.discount === 0.2 ? 'selected' : ''}>Ưu đãi 20% (Nhóm từ 5 HS)</option>
                             </select>
                         </div>
                     </div>
