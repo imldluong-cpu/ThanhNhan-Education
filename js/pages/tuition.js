@@ -34,10 +34,21 @@ Router.register('tuition', async (container) => {
         if (activeYear) {
             list = list.filter(t => getAcademicYear(t.dueDate) === activeYear);
         }
+        
+        const todayDate = new Date(DB.today());
+        list.forEach(t => {
+            if (t.status === 'pending' && t.dueDate && new Date(t.dueDate) < todayDate) {
+                t.status = 'overdue';
+                // Update DB silently in background to keep data consistent
+                DB.updateTuition(t.id, { status: 'overdue' }).catch(()=>{});
+            }
+        });
+
         if (activeTab === 'pending') list = list.filter(t => t.status === 'pending');
         else if (activeTab === 'overdue') list = list.filter(t => t.status === 'overdue');
         else if (activeTab === 'paid') list = list.filter(t => t.status === 'paid');
         else if (activeTab === 'reminder') list = list.filter(t => t.status !== 'paid');
+        
         if (searchTerm) {
             const q = searchTerm.toLowerCase();
             list = list.filter(t => getStudentName(t.studentId).toLowerCase().includes(q));
