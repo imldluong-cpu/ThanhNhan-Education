@@ -293,7 +293,8 @@ Router.register('tuition', async (container) => {
                     student.classIds.forEach(cid => {
                         const cls = classes.find(c => c.id === cid);
                         if (cls) {
-                            totalFee += (cls.fee || 0);
+                            const fee = (student.customFees && student.customFees[cid] !== undefined) ? student.customFees[cid] : (cls.fee || 0);
+                            totalFee += fee;
                             classNames.push(cls.name);
                         }
                     });

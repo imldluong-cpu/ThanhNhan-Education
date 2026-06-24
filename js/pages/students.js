@@ -44,11 +44,18 @@ Router.register('students', async (container) => {
         }).filter(Boolean).join(', ') || '—';
     }
 
-    function renderClassCheckboxes(selectedIds) {
+    function renderClassCheckboxes(selectedIds, customFees = {}) {
         const ids = selectedIds || [];
         return `
-            <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px;" id="s-classes">
-                ${classes.map(c => `<label class="checkbox-label"><input type="checkbox" value="${c.id}" ${ids.includes(c.id) ? 'checked' : ''}> ${c.name}</label>`).join('')}
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:4px;" id="s-classes">
+                ${classes.map(c => `
+                    <div style="display:flex;align-items:center;gap:8px;background:var(--bg-glass);padding:8px;border-radius:6px;border:1px solid var(--border-color);">
+                        <label class="checkbox-label" style="margin:0;min-width:100px;">
+                            <input type="checkbox" class="edit-class-cb" value="${c.id}" ${ids.includes(c.id) ? 'checked' : ''} onchange="document.getElementById('edit-fee-${c.id}').style.display = this.checked ? 'block' : 'none'"> ${c.name}
+                        </label>
+                        <input type="number" class="input edit-class-fee" id="edit-fee-${c.id}" value="${customFees[c.id] !== undefined ? customFees[c.id] : (c.fee || 0)}" style="display:${ids.includes(c.id) ? 'block' : 'none'};flex:1;padding:4px 8px;font-size:13px;" placeholder="Học phí gốc">
+                    </div>
+                `).join('')}
             </div>
             <button type="button" class="btn btn-ghost btn-sm mt-2" onclick="StudentsPage.quickAddClass()" style="font-size:12px;">
                 <i data-lucide="plus" style="width:14px;height:14px;"></i> Tạo lớp mới
@@ -741,7 +748,7 @@ Router.register('students', async (container) => {
                     </div>
                     <div class="form-group">
                         <label class="form-label">Lớp học</label>
-                        ${renderClassCheckboxes(s.classIds)}
+                        ${renderClassCheckboxes(s.classIds, s.customFees)}
                     </div>
                     <div class="form-group"><label class="form-label">Ghi chú</label><textarea class="textarea" id="s-notes" rows="2">${s.notes || ''}</textarea></div>
                 `,
@@ -753,7 +760,15 @@ Router.register('students', async (container) => {
         async saveEdit(id) {
             const name = document.getElementById('s-name').value.trim();
             if (!name) { Toast.warning('Vui lòng nhập họ tên'); return; }
-            const classIds = Array.from(document.querySelectorAll('#s-classes input:checked')).map(cb => cb.value);
+            const classIds = [];
+            const customFees = {};
+            document.querySelectorAll('.edit-class-cb:checked').forEach(cb => {
+                classIds.push(cb.value);
+                const feeInput = document.getElementById('edit-fee-' + cb.value);
+                if (feeInput && feeInput.value) {
+                    customFees[cb.value] = parseInt(feeInput.value, 10) || 0;
+                }
+            });
             try {
                 await DB.updateStudent(id, { 
                     name, 
@@ -765,6 +780,7 @@ Router.register('students', async (container) => {
                     status: document.getElementById('s-status').value, 
                     discount: parseFloat(document.getElementById('s-discount').value) || 0,
                     classIds, 
+                    customFees,
                     notes: document.getElementById('s-notes').value || '' 
                 });
                 Modal.close();
