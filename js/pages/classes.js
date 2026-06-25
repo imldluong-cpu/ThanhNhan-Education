@@ -17,8 +17,7 @@ Router.register('classes', async (container) => {
         teachers = await DB.getTeachers();
 
         try {
-            const studentsSnap = await window.db.collection('students').where('status', '==', 'active').get();
-            students = studentsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+            students = await DB.getStudents();
         } catch(e) { console.warn("Cannot fetch students:", e); }
 
         if (canEdit) {
@@ -184,7 +183,7 @@ Router.register('classes', async (container) => {
         showStudents(classId) {
             const cls = classes.find(c => c.id === classId);
             if (!cls) return;
-            const classStudents = students.filter(s => (s.classIds || []).includes(classId));
+            const classStudents = students.filter(s => (s.classIds || []).includes(classId) && s.status !== 'inactive');
             let html = '<div class="table-container"><table><thead><tr><th>STT</th><th>Họ tên</th><th>Trạng thái</th><th>Trường</th><th>SĐT Phụ huynh</th></tr></thead><tbody>';
             if (classStudents.length === 0) {
                 html += '<tr><td colspan="5"><div class="empty-state">Lớp chưa có học viên nào</div></td></tr>';
