@@ -51,9 +51,9 @@ Router.register('students', async (container) => {
                 ${classes.map(c => `
                     <div style="display:flex;align-items:center;gap:8px;background:var(--bg-glass);padding:8px;border-radius:6px;border:1px solid var(--border-color);">
                         <label class="checkbox-label" style="margin:0;min-width:100px;">
-                            <input type="checkbox" class="edit-class-cb" value="${c.id}" ${ids.includes(c.id) ? 'checked' : ''} onchange="document.getElementById('edit-fee-${c.id}').style.display = this.checked ? 'block' : 'none'"> ${c.name}
+                            <input type="checkbox" class="edit-class-cb" value="${c.id}" ${ids.includes(c.id) ? 'checked' : ''} onchange="document.getElementById('edit-fee-${c.id}').style.display = this.checked ? 'block' : 'none'; StudentsPage.calcTuition();"> ${c.name}
                         </label>
-                        <input type="number" class="input edit-class-fee" id="edit-fee-${c.id}" value="${customFees[c.id] !== undefined ? customFees[c.id] : (c.fee || 0)}" style="display:${ids.includes(c.id) ? 'block' : 'none'};flex:1;padding:4px 8px;font-size:13px;" placeholder="Học phí gốc">
+                        <input type="number" class="input edit-class-fee" id="edit-fee-${c.id}" value="${customFees[c.id] !== undefined ? customFees[c.id] : (c.fee || 0)}" style="display:${ids.includes(c.id) ? 'block' : 'none'};flex:1;padding:4px 8px;font-size:13px;" placeholder="Học phí gốc" oninput="StudentsPage.calcTuition()">
                     </div>
                 `).join('')}
             </div>
@@ -618,15 +618,19 @@ Router.register('students', async (container) => {
 
         calcTuition() {
             let total = 0;
-            document.querySelectorAll('.subj-fee').forEach(inp => {
+            document.querySelectorAll('.subj-fee, .edit-class-fee').forEach(inp => {
                 if (inp.style.display !== 'none' && inp.value) {
                     total += parseInt(inp.value) || 0;
                 }
             });
-            const discountRate = parseFloat(document.getElementById('s-discount').value) || 0;
+            const discountSelect = document.getElementById('s-discount');
+            const discountRate = discountSelect ? parseFloat(discountSelect.value) || 0 : 0;
             const finalAmount = Math.round(total * (1 - discountRate));
-            document.getElementById('s-total').value = DB.formatCurrency(finalAmount);
-            document.getElementById('s-total').dataset.val = finalAmount;
+            const totalInput = document.getElementById('s-total');
+            if (totalInput) {
+                totalInput.value = DB.formatCurrency(finalAmount);
+                totalInput.dataset.val = finalAmount;
+            }
         },
 
         async saveNew() {
@@ -738,7 +742,7 @@ Router.register('students', async (container) => {
                             </select>
                         </div>
                         <div class="form-group"><label class="form-label">Ưu đãi học phí</label>
-                            <select class="select" id="s-discount">
+                            <select class="select" id="s-discount" onchange="StudentsPage.calcTuition()">
                                 <option value="0" ${!s.discount ? 'selected' : ''}>Không có ưu đãi</option>
                                 <option value="0.05" ${s.discount === 0.05 ? 'selected' : ''}>Ưu đãi 5% (Nhóm 2 HS hoặc 2 môn)</option>
                                 <option value="0.10" ${s.discount === 0.1 ? 'selected' : ''}>Ưu đãi 10% (Nhóm 3 HS hoặc từ 3 môn)</option>
@@ -750,11 +754,18 @@ Router.register('students', async (container) => {
                         <label class="form-label">Lớp học</label>
                         ${renderClassCheckboxes(s.classIds, s.customFees)}
                     </div>
+                    <div class="form-row" style="margin-top:16px;background:var(--primary-50);padding:12px;border-radius:8px;">
+                        <div class="form-group" style="margin-bottom:0;flex:1;">
+                            <label class="form-label">Thành tiền cần thu (VNĐ) <span style="font-weight:normal;color:var(--text-secondary);font-size:12px;">(Dự kiến)</span></label>
+                            <input type="text" class="input" id="s-total" readonly style="background:var(--bg-color);font-weight:bold;color:var(--primary-600);">
+                        </div>
+                    </div>
                     <div class="form-group"><label class="form-label">Ghi chú</label><textarea class="textarea" id="s-notes" rows="2">${s.notes || ''}</textarea></div>
                 `,
                 footer: `<button class="btn btn-secondary" onclick="Modal.close()">Hủy</button><button class="btn btn-primary" onclick="StudentsPage.saveEdit('${id}')">Cập nhật</button>`
             });
             if (window.lucide) lucide.createIcons();
+            setTimeout(() => StudentsPage.calcTuition(), 50);
         },
 
         async saveEdit(id) {
