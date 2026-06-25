@@ -61,9 +61,14 @@ Router.register('classes', async (container) => {
             grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1;"><i data-lucide="school"></i><h3>Không tìm thấy lớp học</h3><p>${canEdit ? 'Nhấn "Thêm lớp" để tạo lớp mới' : 'Bạn chưa được phân công lớp nào'}</p></div>`;
         } else {
             grid.innerHTML = filteredClasses.map(c => {
+                const classStudents = students.filter(s => (s.classIds || []).includes(c.id));
+                const activeStudents = classStudents.filter(s => s.status === 'active');
+                const pendingCount = classStudents.filter(s => s.status === 'pending').length;
+                let studentCountHtml = `Sĩ số: ${activeStudents.length} học viên`;
+                if (pendingCount > 0) studentCountHtml += ` <span style="font-weight:normal;color:var(--warning-600);">(${pendingCount} chờ lớp)</span>`;
+
                 let profitHtml = '';
                 if (canEdit) {
-                    const activeStudents = students.filter(s => (s.classIds || []).includes(c.id));
                     const expectedRev = activeStudents.length * (c.fee || 0);
                     
                     let expectedSal = 0;
@@ -135,7 +140,7 @@ Router.register('classes', async (container) => {
                             <div style="display:flex;align-items:center;gap:8px;"><i data-lucide="map-pin" style="width:16px;height:16px;color:var(--success-400);"></i> ${c.room || 'Chưa có phòng'}</div>
                             ${c.status === 'upcoming' && c.startDate ? `<div style="display:flex;align-items:center;gap:8px;"><i data-lucide="calendar-clock" style="width:16px;height:16px;color:var(--warning-500);"></i> <strong style="color:var(--warning-600);">Khai giảng: ${DB.formatDate(c.startDate)}</strong></div>` : ''}
                             ${!isTeacher ? `<div style="display:flex;align-items:center;gap:8px;"><i data-lucide="wallet" style="width:16px;height:16px;color:var(--warning-400);"></i> ${c.fee ? DB.formatCurrency(c.fee) + '/tháng' : 'Chưa cập nhật'}</div>` : ''}
-                            <div style="display:flex;align-items:center;gap:8px;"><i data-lucide="users" style="width:16px;height:16px;color:var(--info-400);"></i> <a href="javascript:void(0)" onclick="ClassesPage.showStudents('${c.id}')" style="color:var(--info-600);text-decoration:none;font-weight:600;">Sĩ số: ${students.filter(s => (s.classIds || []).includes(c.id)).length} học viên</a></div>
+                            <div style="display:flex;align-items:center;gap:8px;"><i data-lucide="users" style="width:16px;height:16px;color:var(--info-400);"></i> <a href="javascript:void(0)" onclick="ClassesPage.showStudents('${c.id}')" style="color:var(--info-600);text-decoration:none;font-weight:600;">${studentCountHtml}</a></div>
                         </div>
                         ${profitHtml}
                     </div>
@@ -179,14 +184,15 @@ Router.register('classes', async (container) => {
         showStudents(classId) {
             const cls = classes.find(c => c.id === classId);
             if (!cls) return;
-            const activeStudents = students.filter(s => (s.classIds || []).includes(classId));
-            let html = '<div class="table-container"><table><thead><tr><th>STT</th><th>Họ tên</th><th>Trường</th><th>SĐT Phụ huynh</th></tr></thead><tbody>';
-            if (activeStudents.length === 0) {
-                html += '<tr><td colspan="4"><div class="empty-state">Lớp chưa có học viên nào</div></td></tr>';
+            const classStudents = students.filter(s => (s.classIds || []).includes(classId));
+            let html = '<div class="table-container"><table><thead><tr><th>STT</th><th>Họ tên</th><th>Trạng thái</th><th>Trường</th><th>SĐT Phụ huynh</th></tr></thead><tbody>';
+            if (classStudents.length === 0) {
+                html += '<tr><td colspan="5"><div class="empty-state">Lớp chưa có học viên nào</div></td></tr>';
             } else {
-                activeStudents.sort((a, b) => a.name.localeCompare(b.name));
-                activeStudents.forEach((s, idx) => {
-                    html += `<tr><td>${idx+1}</td><td><strong>${s.name}</strong></td><td>${s.school || '—'}</td><td>${s.parentPhone || '—'}</td></tr>`;
+                classStudents.sort((a, b) => a.name.localeCompare(b.name));
+                classStudents.forEach((s, idx) => {
+                    const statusText = s.status === 'pending' ? '<span class="badge badge-warning">Chờ sắp lớp</span>' : '<span class="badge badge-success">Đang học</span>';
+                    html += `<tr><td>${idx+1}</td><td><strong>${s.name}</strong></td><td>${statusText}</td><td>${s.school || '—'}</td><td>${s.parentPhone || '—'}</td></tr>`;
                 });
             }
             html += '</tbody></table></div>';
