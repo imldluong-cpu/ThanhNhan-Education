@@ -360,6 +360,19 @@ const DB = {
     },
 
     // === UTILITY ===
+    roundTuition(amount) {
+        if (!amount) return 0;
+        let base = Math.floor(amount / 10000) * 10000;
+        let th = Math.floor((amount % 10000) / 1000);
+        
+        if (th < 5) th = 0;
+        else if (th === 5) th = 5;
+        else if (th === 6 || th === 7) th = 5;
+        // if th === 8 or 9, it remains unchanged
+        
+        return base + (th * 1000);
+    },
+
     formatCurrency(amount) {
         return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount || 0);
     },

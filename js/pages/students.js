@@ -625,7 +625,8 @@ Router.register('students', async (container) => {
             });
             const discountSelect = document.getElementById('s-discount');
             const discountRate = discountSelect ? parseFloat(discountSelect.value) || 0 : 0;
-            const finalAmount = Math.round(total * (1 - discountRate));
+            let finalAmount = Math.round(total * (1 - discountRate));
+            finalAmount = DB.roundTuition(finalAmount);
             const totalInput = document.getElementById('s-total');
             if (totalInput) {
                 totalInput.value = DB.formatCurrency(finalAmount);

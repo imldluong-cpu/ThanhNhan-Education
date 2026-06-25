@@ -312,7 +312,8 @@ Router.register('tuition', async (container) => {
                     
                     if (totalFee > 0) {
                         const discount = student.discount || 0;
-                        const finalAmount = Math.round(totalFee * (1 - discount));
+                        let finalAmount = Math.round(totalFee * (1 - discount));
+                        finalAmount = DB.roundTuition(finalAmount);
                         document.getElementById('t-amount').value = finalAmount;
                     }
                     
