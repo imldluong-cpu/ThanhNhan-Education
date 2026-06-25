@@ -16,10 +16,12 @@ Router.register('classes', async (container) => {
         }
         teachers = await DB.getTeachers();
 
-        if (canEdit) {
+        try {
             const studentsSnap = await window.db.collection('students').where('status', '==', 'active').get();
             students = studentsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-            
+        } catch(e) { console.warn("Cannot fetch students:", e); }
+
+        if (canEdit) {
             tuitions = await DB.getTuitions();
             teacherAttendance = await DB.getTeacherAttendance(DB.currentMonth());
         }
@@ -133,6 +135,7 @@ Router.register('classes', async (container) => {
                             <div style="display:flex;align-items:center;gap:8px;"><i data-lucide="map-pin" style="width:16px;height:16px;color:var(--success-400);"></i> ${c.room || 'Chưa có phòng'}</div>
                             ${c.status === 'upcoming' && c.startDate ? `<div style="display:flex;align-items:center;gap:8px;"><i data-lucide="calendar-clock" style="width:16px;height:16px;color:var(--warning-500);"></i> <strong style="color:var(--warning-600);">Khai giảng: ${DB.formatDate(c.startDate)}</strong></div>` : ''}
                             ${!isTeacher ? `<div style="display:flex;align-items:center;gap:8px;"><i data-lucide="wallet" style="width:16px;height:16px;color:var(--warning-400);"></i> ${c.fee ? DB.formatCurrency(c.fee) + '/tháng' : 'Chưa cập nhật'}</div>` : ''}
+                            <div style="display:flex;align-items:center;gap:8px;"><i data-lucide="users" style="width:16px;height:16px;color:var(--info-400);"></i> <a href="javascript:void(0)" onclick="ClassesPage.showStudents('${c.id}')" style="color:var(--info-600);text-decoration:none;font-weight:600;">Sĩ số: ${students.filter(s => (s.classIds || []).includes(c.id)).length} học viên</a></div>
                         </div>
                         ${profitHtml}
                     </div>
@@ -171,6 +174,29 @@ Router.register('classes', async (container) => {
         filter(text) {
             searchText = text;
             renderCards();
+        },
+
+        showStudents(classId) {
+            const cls = classes.find(c => c.id === classId);
+            if (!cls) return;
+            const activeStudents = students.filter(s => (s.classIds || []).includes(classId));
+            let html = '<div class="table-container"><table><thead><tr><th>STT</th><th>Họ tên</th><th>Trường</th><th>SĐT Phụ huynh</th></tr></thead><tbody>';
+            if (activeStudents.length === 0) {
+                html += '<tr><td colspan="4"><div class="empty-state">Lớp chưa có học viên nào</div></td></tr>';
+            } else {
+                activeStudents.sort((a, b) => a.name.localeCompare(b.name));
+                activeStudents.forEach((s, idx) => {
+                    html += `<tr><td>${idx+1}</td><td><strong>${s.name}</strong></td><td>${s.school || '—'}</td><td>${s.parentPhone || '—'}</td></tr>`;
+                });
+            }
+            html += '</tbody></table></div>';
+            
+            Modal.show({
+                title: `Danh sách học viên: ${cls.name}`,
+                size: 'lg',
+                content: html,
+                footer: `<button class="btn btn-secondary" onclick="Modal.close()">Đóng</button>`
+            });
         },
 
         suggestFee(name) {
