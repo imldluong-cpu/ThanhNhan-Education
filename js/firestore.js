@@ -8,7 +8,13 @@ const DB = {
         const snap = await window.db.collection('students').get();
         const year = window.currentAcademicYear || '2026 - 2027';
         return snap.docs
-            .map(d => ({ academicYear: '2025 - 2026', ...d.data(), id: d.id }))
+            .map(d => {
+                let data = d.data();
+                if (data.academicYear && data.academicYear.indexOf(' - ') === -1) {
+                    data.academicYear = data.academicYear.replace('-', ' - ');
+                }
+                return { academicYear: '2025 - 2026', ...data, id: d.id };
+            })
             .filter(d => d.academicYear === year)
             .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
     },
@@ -53,7 +59,13 @@ const DB = {
         const snap = await window.db.collection('classes').get();
         const year = window.currentAcademicYear || '2026 - 2027';
         return snap.docs
-            .map(d => ({ academicYear: '2025 - 2026', ...d.data(), id: d.id }))
+            .map(d => {
+                let data = d.data();
+                if (data.academicYear && data.academicYear.indexOf(' - ') === -1) {
+                    data.academicYear = data.academicYear.replace('-', ' - ');
+                }
+                return { academicYear: '2025 - 2026', ...data, id: d.id };
+            })
             .filter(d => d.academicYear === year)
             .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
     },
@@ -292,7 +304,13 @@ const DB = {
         const snap = await window.db.collection('schedules').get();
         const year = window.currentAcademicYear || '2026 - 2027';
         return snap.docs
-            .map(d => ({ academicYear: '2025 - 2026', ...d.data(), id: d.id }))
+            .map(d => {
+                let data = d.data();
+                if (data.academicYear && data.academicYear.indexOf(' - ') === -1) {
+                    data.academicYear = data.academicYear.replace('-', ' - ');
+                }
+                return { academicYear: '2025 - 2026', ...data, id: d.id };
+            })
             .filter(d => d.academicYear === year);
     },
 
