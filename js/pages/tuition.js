@@ -28,8 +28,8 @@ Router.register('tuition', async (container) => {
         if (isNaN(d.getTime())) return 'Khác';
         const year = d.getFullYear();
         const month = d.getMonth() + 1;
-        if (month >= 7) return `${year} - ${year + 1}`;
-        return `${year - 1} - ${year}`;
+        if (month >= 7) return `${year}-${year + 1}`;
+        return `${year - 1}-${year}`;
     }
     
     let currentYearStr = getAcademicYear(DB.today());
