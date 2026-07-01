@@ -6,9 +6,9 @@ const DB = {
     // === STUDENTS ===
     async getStudents() {
         const snap = await window.db.collection('students').get();
-        const year = window.currentAcademicYear || '2026-2027';
+        const year = window.currentAcademicYear || '2026 - 2027';
         return snap.docs
-            .map(d => ({ academicYear: '2025-2026', ...d.data(), id: d.id }))
+            .map(d => ({ academicYear: '2025 - 2026', ...d.data(), id: d.id }))
             .filter(d => d.academicYear === year)
             .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
     },
@@ -22,13 +22,13 @@ const DB = {
         data.createdAt = firebase.firestore.FieldValue.serverTimestamp();
         data.status = data.status || 'active';
         data.classIds = data.classIds || [];
-        data.academicYear = window.currentAcademicYear || '2026-2027';
+        data.academicYear = window.currentAcademicYear || '2026 - 2027';
         return await window.db.collection('students').add(data);
     },
 
     async addStudentsBatch(studentsArray) {
         const batch = window.db.batch();
-        const year = window.currentAcademicYear || '2026-2027';
+        const year = window.currentAcademicYear || '2026 - 2027';
         studentsArray.forEach(data => {
             data.createdAt = firebase.firestore.FieldValue.serverTimestamp();
             data.status = data.status || 'active';
@@ -51,9 +51,9 @@ const DB = {
     // === CLASSES ===
     async getClasses() {
         const snap = await window.db.collection('classes').get();
-        const year = window.currentAcademicYear || '2026-2027';
+        const year = window.currentAcademicYear || '2026 - 2027';
         return snap.docs
-            .map(d => ({ academicYear: '2025-2026', ...d.data(), id: d.id }))
+            .map(d => ({ academicYear: '2025 - 2026', ...d.data(), id: d.id }))
             .filter(d => d.academicYear === year)
             .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
     },
@@ -67,7 +67,7 @@ const DB = {
         data.createdAt = firebase.firestore.FieldValue.serverTimestamp();
         data.status = data.status || 'active';
         data.teacherIds = data.teacherIds || [];
-        data.academicYear = window.currentAcademicYear || '2026-2027';
+        data.academicYear = window.currentAcademicYear || '2026 - 2027';
         const ref = await window.db.collection('classes').add(data);
         return { id: ref.id, ...data };
     },
@@ -290,21 +290,21 @@ const DB = {
     // === SCHEDULE ===
     async getSchedules() {
         const snap = await window.db.collection('schedules').get();
-        const year = window.currentAcademicYear || '2026-2027';
+        const year = window.currentAcademicYear || '2026 - 2027';
         return snap.docs
-            .map(d => ({ academicYear: '2025-2026', ...d.data(), id: d.id }))
+            .map(d => ({ academicYear: '2025 - 2026', ...d.data(), id: d.id }))
             .filter(d => d.academicYear === year);
     },
 
     async addSchedule(data) {
         data.createdAt = firebase.firestore.FieldValue.serverTimestamp();
-        data.academicYear = window.currentAcademicYear || '2026-2027';
+        data.academicYear = window.currentAcademicYear || '2026 - 2027';
         return await window.db.collection('schedules').add(data);
     },
 
     async addSchedulesBatch(schedulesArray) {
         const batch = window.db.batch();
-        const year = window.currentAcademicYear || '2026-2027';
+        const year = window.currentAcademicYear || '2026 - 2027';
         schedulesArray.forEach(data => {
             data.createdAt = firebase.firestore.FieldValue.serverTimestamp();
             data.academicYear = year;

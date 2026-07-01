@@ -2,7 +2,12 @@
 // HEADER COMPONENT
 // ============================================
 
-window.currentAcademicYear = localStorage.getItem('academicYear') || '2026-2027';
+let storedYear = localStorage.getItem('academicYear') || '2026 - 2027';
+if (storedYear.indexOf(' - ') === -1 && storedYear.indexOf('-') > 0) {
+    storedYear = storedYear.replace('-', ' - ');
+    localStorage.setItem('academicYear', storedYear);
+}
+window.currentAcademicYear = storedYear;
 
 const Header = {
     render() {
@@ -15,7 +20,7 @@ const Header = {
             year: 'numeric'
         });
 
-        const years = ['2023-2024', '2024-2025', '2025-2026', '2026-2027', '2027-2028'];
+        const years = ['2023 - 2024', '2024 - 2025', '2025 - 2026', '2026 - 2027', '2027 - 2028'];
 
         header.innerHTML = `
             <div class="header-left">

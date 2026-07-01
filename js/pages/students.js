@@ -372,7 +372,7 @@ Router.register('students', async (container) => {
             Modal.show({ title: 'Lấy học viên từ năm cũ', content: `<div class="empty-state"><div class="spinner"></div></div>` });
             
             const snap = await window.db.collection('students').get();
-            const year = window.currentAcademicYear || '2026-2027';
+            const year = window.currentAcademicYear || '2026 - 2027';
             const oldStudents = snap.docs
                 .map(d => ({ academicYear: '2025-2026', ...d.data(), id: d.id }))
                 .filter(d => d.academicYear !== year);
@@ -425,7 +425,7 @@ Router.register('students', async (container) => {
             try {
                 await DB.addStudentsBatch(newData);
                 Modal.close();
-                Toast.success(`Đã chuyển ${newData.length} học viên sang năm ${window.currentAcademicYear || '2026-2027'}`);
+                Toast.success(`Đã chuyển ${newData.length} học viên sang năm ${window.currentAcademicYear || '2026 - 2027'}`);
                 students = await DB.getStudents();
                 Router.navigate(Router.currentPage);
             } catch(e) { Toast.error('Lỗi', e.message); }

@@ -9,11 +9,14 @@ Router.register('tuition', async (container) => {
         students = await DB.getStudents();
         classes = await DB.getClasses();
         
-        // Migrate existing tuitions to 2026-2027 if due in June 2026 or later
+        // Migrate existing tuitions to 2026 - 2027 if due in June 2026 or later
         tuitions.forEach(t => {
             if (!t.academicYear && t.dueDate && t.dueDate >= '2026-06-01') {
-                t.academicYear = '2026-2027';
-                DB.updateTuition(t.id, { academicYear: '2026-2027' }).catch(()=>{});
+                t.academicYear = '2026 - 2027';
+                DB.updateTuition(t.id, { academicYear: '2026 - 2027' }).catch(()=>{});
+            } else if (t.academicYear && t.academicYear.indexOf(' - ') === -1) {
+                t.academicYear = t.academicYear.replace('-', ' - ');
+                DB.updateTuition(t.id, { academicYear: t.academicYear }).catch(()=>{});
             }
         });
     } catch(e) { console.warn(e); }
@@ -28,8 +31,8 @@ Router.register('tuition', async (container) => {
         if (isNaN(d.getTime())) return 'Khác';
         const year = d.getFullYear();
         const month = d.getMonth() + 1;
-        if (month >= 7) return `${year}-${year + 1}`;
-        return `${year - 1}-${year}`;
+        if (month >= 7) return `${year} - ${year + 1}`;
+        return `${year - 1} - ${year}`;
     }
     
     let currentYearStr = getAcademicYear(DB.today());
