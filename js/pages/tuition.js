@@ -59,16 +59,29 @@ Router.register('tuition', async (container) => {
         
         const todayDate = new Date(DB.today());
         list.forEach(t => {
-            if (t.status === 'pending' && t.dueDate && new Date(t.dueDate) < todayDate) {
-                t.status = 'overdue';
-                // Update DB silently in background to keep data consistent
-                DB.updateTuition(t.id, { status: 'overdue' }).catch(()=>{});
+            if (t.status === 'pending' && t.dueDate) {
+                const due = new Date(t.dueDate);
+                if (due < todayDate) {
+                    t.status = 'overdue';
+                    DB.updateTuition(t.id, { status: 'overdue' }).catch(()=>{});
+                    t._displayStatus = 'overdue';
+                } else {
+                    const diffTime = due.getTime() - todayDate.getTime();
+                    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                    if (diffDays > 7) {
+                        t._displayStatus = 'upcoming';
+                    } else {
+                        t._displayStatus = 'pending';
+                    }
+                }
+            } else {
+                t._displayStatus = t.status;
             }
         });
 
-        if (activeTab === 'pending') list = list.filter(t => t.status === 'pending');
-        else if (activeTab === 'overdue') list = list.filter(t => t.status === 'overdue');
-        else if (activeTab === 'paid') list = list.filter(t => t.status === 'paid');
+        if (activeTab === 'pending') list = list.filter(t => t._displayStatus === 'pending');
+        else if (activeTab === 'overdue') list = list.filter(t => t._displayStatus === 'overdue');
+        else if (activeTab === 'paid') list = list.filter(t => t._displayStatus === 'paid');
         else if (activeTab === 'reminder') list = list.filter(t => t.status !== 'paid');
         
         if (searchTerm) {
@@ -173,7 +186,7 @@ Router.register('tuition', async (container) => {
                     <td>${DB.formatCurrency(t.amount)}</td>
                     <td>${DB.formatDate(t.dueDate)}</td>
                     <td>${t.paidDate ? DB.formatDate(t.paidDate) : '—'}</td>
-                    <td><span class="badge badge-${t.status === 'paid' ? 'success' : t.status === 'overdue' ? 'danger' : 'warning'}">${t.status === 'paid' ? 'Đã đóng' : t.status === 'overdue' ? 'Quá hạn' : 'Chưa đóng'}</span></td>
+                    <td><span class="badge badge-${t._displayStatus === 'paid' ? 'success' : t._displayStatus === 'overdue' ? 'danger' : t._displayStatus === 'upcoming' ? 'info' : 'warning'}">${t._displayStatus === 'paid' ? 'Đã đóng' : t._displayStatus === 'overdue' ? 'Quá hạn' : t._displayStatus === 'upcoming' ? 'Chưa đến hạn' : 'Chưa đóng'}</span></td>
                     <td><div class="table-actions">
                         ${t.status !== 'paid' ? `<button class="btn btn-success btn-sm" onclick="TuitionPage.markPaid('${t.id}')">Đã đóng</button>` : ''}
                         <button class="btn-icon" onclick="TuitionPage.edit('${t.id}')"><i data-lucide="pencil"></i></button>
