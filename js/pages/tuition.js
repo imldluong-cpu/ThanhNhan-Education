@@ -8,12 +8,21 @@ Router.register('tuition', async (container) => {
         tuitions = await DB.getTuitions();
         students = await DB.getStudents();
         classes = await DB.getClasses();
+        
+        // Migrate existing tuitions to 2026-2027 if due in June 2026 or later
+        tuitions.forEach(t => {
+            if (!t.academicYear && t.dueDate && t.dueDate >= '2026-06-01') {
+                t.academicYear = '2026-2027';
+                DB.updateTuition(t.id, { academicYear: '2026-2027' }).catch(()=>{});
+            }
+        });
     } catch(e) { console.warn(e); }
 
     let activeTab = 'all';
     let searchTerm = '';
     
-    function getAcademicYear(dateStr) {
+    function getAcademicYear(dateStr, t = null) {
+        if (t && t.academicYear) return t.academicYear;
         if (!dateStr) return 'Khác';
         const d = new Date(dateStr);
         if (isNaN(d.getTime())) return 'Khác';
@@ -27,12 +36,15 @@ Router.register('tuition', async (container) => {
     let activeYear = currentYearStr;
 
     function getStudentName(id) { return (students.find(s => s.id === id) || {}).name || '—'; }
-    function getClassName(id) { return (classes.find(c => c.id === id) || {}).name || '—'; }
+    function getClassName(id) {
+        if (id === 'Nhiều môn') return 'Nhiều môn';
+        return (classes.find(c => c.id === id) || {}).name || '—';
+    }
 
     function getFiltered() {
         let list = tuitions;
         if (activeYear) {
-            list = list.filter(t => getAcademicYear(t.dueDate) === activeYear);
+            list = list.filter(t => getAcademicYear(t.dueDate, t) === activeYear);
         }
         
         const todayDate = new Date(DB.today());
@@ -63,7 +75,7 @@ Router.register('tuition', async (container) => {
         const filtered = getFiltered();
 
         const yearSet = new Set();
-        tuitions.forEach(t => yearSet.add(getAcademicYear(t.dueDate)));
+        tuitions.forEach(t => yearSet.add(getAcademicYear(t.dueDate, t)));
         if (!yearSet.has(currentYearStr)) yearSet.add(currentYearStr);
         const years = Array.from(yearSet).sort().reverse();
         

@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tài Liệu Tham Khảo | Thành Nhân Education</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        .page-header {
+            background: linear-gradient(135deg, rgba(30, 58, 138, 0.9) 0%, rgba(59, 130, 246, 0.8) 100%);
+            padding: 120px 0 60px;
+            color: white;
+            text-align: center;
+        }
+        .doc-list {
+            margin-top: 2rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+        .doc-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: var(--white);
+            padding: 1.5rem;
+            border-radius: var(--radius-lg);
+            border: 1px solid #e2e8f0;
+            transition: var(--transition);
+        }
+        .doc-item:hover {
+            box-shadow: var(--shadow-md);
+            border-color: var(--primary-blue);
+        }
+        .doc-info {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+        .doc-icon {
+            background: #eff6ff;
+            color: var(--primary-blue);
+            padding: 1rem;
+            border-radius: var(--radius-md);
+        }
+        .doc-details h4 {
+            color: var(--text-main);
+            margin-bottom: 0.25rem;
+        }
+        .doc-details span {
+            font-size: 0.875rem;
+            color: var(--text-muted);
+        }
+        .doc-meta {
+            display: flex;
+            gap: 1rem;
+            font-size: 0.875rem;
+            color: var(--text-muted);
+            align-items: center;
+        }
+        .download-btn {
+            background: var(--primary-blue);
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: var(--radius-md);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            transition: var(--transition);
+            border: none;
+            cursor: pointer;
+        }
+        .download-btn:hover {
+            background: #1e3a8a;
+            transform: translateY(-2px);
+        }
+
+        @media (max-width: 768px) {
+            .doc-item {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 1.5rem;
+            }
+            .doc-meta {
+                width: 100%;
+                justify-content: space-between;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <header class="header scrolled" id="header" style="background: rgba(255,255,255,0.95); box-shadow: var(--shadow-sm);">
+        <div class="container nav-container">
+            <a href="index.html" class="logo" style="color: var(--primary-blue);">
+                <i data-lucide="graduation-cap"></i>
+                Thành Nhân Edu
+            </a>
+            <button class="mobile-menu-btn" id="mobile-menu-btn" style="color: var(--text-main);">
+                <i data-lucide="menu"></i>
+            </button>
+            <nav class="nav-links" id="nav-links">
+                <a href="index.html#ve-trung-tam" style="color: var(--text-main);">Về trung tâm</a>
+                <a href="index.html#doi-ngu" style="color: var(--text-main);">Đội ngũ</a>
+                <a href="index.html#chieu-sinh" style="color: var(--text-main);">Chiêu sinh</a>
+                <a href="index.html#gia-su" style="color: var(--text-main);">Gia sư</a>
+                <a href="tin-tuc.html" style="color: var(--text-main);">Tin tức</a>
+                <a href="tai-lieu.html" class="active" style="color: var(--text-main);">Tài liệu</a>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Page Header -->
+    <div class="page-header">
+        <div class="container">
+            <h1>Tài Liệu Tham Khảo</h1>
+            <p style="margin-top: 1rem; opacity: 0.9;">Tải xuống tài liệu học tập, đề thi thử và giáo trình miễn phí dành cho học viên.</p>
+        </div>
+    </div>
+
+    <!-- Documents Content -->
+    <section class="section bg-alt">
+        <div class="container" style="max-width: 900px;">
+            <!-- Category Tabs -->
+            <div style="display: flex; gap: 1rem; margin-bottom: 2rem; overflow-x: auto; padding-bottom: 0.5rem;">
+                <button class="btn btn-primary" style="white-space: nowrap;">Tất cả</button>
+                <button class="btn btn-outline" style="white-space: nowrap;">Đề thi Đại học</button>
+                <button class="btn btn-outline" style="white-space: nowrap;">Tài liệu môn Toán</button>
+                <button class="btn btn-outline" style="white-space: nowrap;">Tài liệu Tiếng Anh</button>
+            </div>
+
+            <div class="doc-list">
+                <!-- Document 1 -->
+                <div class="doc-item">
+                    <div class="doc-info">
+                        <div class="doc-icon">
+                            <i data-lucide="file-text"></i>
+                        </div>
+                        <div class="doc-details">
+                            <h4>Đề thi thử THPT Quốc gia 2026 - Môn Toán (Lần 1)</h4>
+                            <span>PDF • 2.5 MB</span>
+                        </div>
+                    </div>
+                    <div class="doc-meta">
+                        <span><i data-lucide="download" style="width: 14px; display:inline-block; vertical-align:middle;"></i> 1.2k lượt tải</span>
+                        <button class="download-btn">
+                            Tải xuống
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Document 2 -->
+                <div class="doc-item">
+                    <div class="doc-info">
+                        <div class="doc-icon" style="background: #fef2f2; color: var(--primary-red);">
+                            <i data-lucide="file-archive"></i>
+                        </div>
+                        <div class="doc-details">
+                            <h4>Bộ từ vựng IELTS cốt lõi (Cập nhật 2026)</h4>
+                            <span>ZIP • 15 MB</span>
+                        </div>
+                    </div>
+                    <div class="doc-meta">
+                        <span><i data-lucide="download" style="width: 14px; display:inline-block; vertical-align:middle;"></i> 856 lượt tải</span>
+                        <button class="download-btn">
+                            Tải xuống
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Document 3 -->
+                <div class="doc-item">
+                    <div class="doc-info">
+                        <div class="doc-icon">
+                            <i data-lucide="file"></i>
+                        </div>
+                        <div class="doc-details">
+                            <h4>Tóm tắt công thức Vật Lý 12</h4>
+                            <span>DOCX • 1.1 MB</span>
+                        </div>
+                    </div>
+                    <div class="doc-meta">
+                        <span><i data-lucide="download" style="width: 14px; display:inline-block; vertical-align:middle;"></i> 3.4k lượt tải</span>
+                        <button class="download-btn">
+                            Tải xuống
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Scripts -->
+    <script>
+        lucide.createIcons();
+        document.getElementById('mobile-menu-btn').addEventListener('click', () => {
+            document.getElementById('nav-links').classList.toggle('active');
+        });
+    </script>
+</body>
+</html>
