@@ -80,6 +80,7 @@ Router.register('tuition', async (container) => {
         });
 
         if (activeTab === 'pending') list = list.filter(t => t._displayStatus === 'pending');
+        else if (activeTab === 'upcoming') list = list.filter(t => t._displayStatus === 'upcoming');
         else if (activeTab === 'overdue') list = list.filter(t => t._displayStatus === 'overdue');
         else if (activeTab === 'paid') list = list.filter(t => t._displayStatus === 'paid');
         else if (activeTab === 'reminder') list = list.filter(t => t.status !== 'paid');
@@ -209,6 +210,7 @@ Router.register('tuition', async (container) => {
         <div class="tabs">
             <button class="tab-item active" onclick="TuitionPage.switchTab('all', this)">Tất cả</button>
             <button class="tab-item" onclick="TuitionPage.switchTab('pending', this)">Chưa đóng</button>
+            <button class="tab-item" onclick="TuitionPage.switchTab('upcoming', this)">Sắp đến hạn</button>
             <button class="tab-item" onclick="TuitionPage.switchTab('overdue', this)">Quá hạn</button>
             <button class="tab-item" onclick="TuitionPage.switchTab('paid', this)">Đã đóng</button>
             <button class="tab-item" onclick="TuitionPage.switchTab('reminder', this)">📞 Nhắc học phí</button>
