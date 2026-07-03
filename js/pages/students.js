@@ -686,27 +686,78 @@ Router.register('students', async (container) => {
                     notes: document.getElementById('s-notes').value || '' 
                 });
 
-                // Add tuition
+                Modal.close();
+                students = await DB.getStudents();
+                renderTable();
+
+                // Prompt to create tuition
                 const finalAmount = parseInt(document.getElementById('s-total').dataset.val) || 0;
                 if (finalAmount > 0) {
                     const discountText = document.getElementById('s-discount').options[document.getElementById('s-discount').selectedIndex].text;
                     const discountNote = discountText !== 'Không có ưu đãi' ? ` (${discountText})` : '';
-                    await DB.addTuition({
-                        studentId: student.id, // wait, addStudent doesn't return id? Let's check firestore.js
-                        studentName: name,
-                        classId: 'Nhiều môn',
-                        amount: finalAmount,
-                        dueDate: DB.today(), // Default due today
-                        status: 'pending',
-                        note: `ĐK môn: ${classNames.join(', ')}${discountNote}`
-                    });
+                    StudentsPage.promptGenerateTuition(student.id, name, classNames, finalAmount, discountNote);
+                } else {
+                    Toast.success('Đã thêm học viên', name);
                 }
-
-                Modal.close();
-                Toast.success('Đã thêm học viên', name);
-                students = await DB.getStudents();
-                renderTable();
             } catch(e) { Toast.error('Lỗi', e.message); }
+        },
+
+        promptGenerateTuition(studentId, studentName, classNames, amount, discountNote) {
+            const currentMonth = DB.currentMonth();
+            Modal.show({
+                title: 'Tạo học phí cho Học viên',
+                content: `
+                    <div class="alert alert-success" style="margin-bottom:16px;background:var(--success-50);color:var(--success-700);border:1px solid var(--success-200);padding:12px;border-radius:6px;display:flex;gap:8px;">
+                        <i data-lucide="check-circle" style="color:var(--success-500);"></i> 
+                        <div>Đã lưu thông tin học viên <strong>${studentName}</strong> thành công!</div>
+                    </div>
+                    <p style="margin-bottom:12px;font-size:14px;">Bạn có muốn tạo phiếu thu học phí ngay cho học viên này không?</p>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Số tiền (đã giảm)</label>
+                            <input type="text" class="input" value="${DB.formatCurrency(amount)}" disabled style="background:var(--bg-glass);font-weight:bold;color:var(--primary-600);">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Hạn đóng</label>
+                            <input type="date" class="input" id="p-due-date" value="${currentMonth}-15">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Ghi chú</label>
+                        <input type="text" class="input" id="p-note" value="ĐK môn: ${classNames.join(', ')}${discountNote}">
+                    </div>
+                `,
+                footer: `
+                    <button class="btn btn-secondary" onclick="Modal.close()">Không tạo</button>
+                    <button class="btn btn-primary" onclick="StudentsPage.confirmGenerateTuition('${studentId}', '${studentName.replace(/'/g, "\\'")}', ${amount})"><i data-lucide="coins"></i> Tạo phiếu thu</button>
+                `
+            });
+            if (window.lucide) lucide.createIcons();
+        },
+
+        async confirmGenerateTuition(studentId, studentName, amount) {
+            const dueDate = document.getElementById('p-due-date').value;
+            const note = document.getElementById('p-note').value;
+            if (!dueDate) return;
+
+            try {
+                await window.db.collection('tuitions').add({
+                    studentId: studentId,
+                    studentName: studentName,
+                    classId: 'Nhiều môn',
+                    amount: amount,
+                    dueDate: dueDate,
+                    status: new Date(dueDate) < new Date() ? 'overdue' : 'pending',
+                    reminderSent: false,
+                    note: note,
+                    academicYear: window.currentAcademicYear || '2026 - 2027',
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                Modal.close();
+                Toast.success('Đã tạo học phí thành công!');
+            } catch(e) {
+                Toast.error('Lỗi', e.message);
+            }
         },
 
         // === EDIT STUDENT ===

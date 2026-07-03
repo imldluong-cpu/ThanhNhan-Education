@@ -146,6 +146,7 @@ Router.register('classes', async (container) => {
                     <div class="card-footer">
                         <button class="btn btn-ghost btn-sm" onclick="Router.navigate('attendance')"><i data-lucide="clipboard-check"></i> Điểm danh</button>
                         <button class="btn btn-ghost btn-sm" onclick="Router.navigate('schedule')"><i data-lucide="calendar-days"></i> Lịch học</button>
+                        ${!isTeacher ? `<button class="btn btn-primary btn-sm" onclick="ClassesPage.showGenerateTuition('${c.id}')"><i data-lucide="coins"></i> Phát hành học phí</button>` : ''}
                     </div>
                 </div>
             `}).join('');
@@ -234,6 +235,109 @@ Router.register('classes', async (container) => {
                 else if (grade === 12) fee = 675000;
             }
             if (fee > 0) feeInput.value = fee;
+        },
+
+        showGenerateTuition(classId) {
+            const cls = classes.find(c => c.id === classId);
+            if (!cls) return;
+            
+            const currentMonth = DB.currentMonth();
+            
+            Modal.show({
+                title: `Phát hành Học phí: ${cls.name}`,
+                content: `
+                    <div class="form-group">
+                        <label class="form-label">Tháng thu học phí</label>
+                        <input type="month" class="input" id="gen-month" value="${currentMonth}">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Hạn đóng</label>
+                        <input type="date" class="input" id="gen-due-date" value="${currentMonth}-15">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Ghi chú (Tùy chọn)</label>
+                        <input type="text" class="input" id="gen-note" placeholder="VD: Học phí tháng ${currentMonth.split('-')[1]}">
+                    </div>
+                    <div class="alert alert-info">
+                        Hệ thống sẽ tự động tính toán số tiền cho từng học viên đang học trong lớp (bao gồm giảm giá, nhiều môn) và tạo hàng loạt hóa đơn chưa đóng.
+                    </div>
+                `,
+                footer: `
+                    <button class="btn btn-secondary" onclick="Modal.close()">Hủy</button>
+                    <button class="btn btn-primary" onclick="ClassesPage.generateTuition('${classId}')">Tạo tự động</button>
+                `
+            });
+        },
+
+        async generateTuition(classId) {
+            const cls = classes.find(c => c.id === classId);
+            if (!cls) return;
+            
+            const monthStr = document.getElementById('gen-month').value;
+            const dueDate = document.getElementById('gen-due-date').value;
+            const note = document.getElementById('gen-note').value;
+            
+            if (!monthStr || !dueDate) { Toast.warning('Thiếu thông tin'); return; }
+            
+            const classStudents = students.filter(s => s.status === 'active' && (s.classIds || []).includes(classId));
+            if (classStudents.length === 0) { Toast.warning('Lớp chưa có học viên đang học'); return; }
+            
+            Modal.show({ title: 'Đang xử lý...', content: '<div class="empty-state"><div class="spinner"></div></div>' });
+            
+            try {
+                const existingSnap = await window.db.collection('tuitions').where('dueDate', '==', dueDate).get();
+                const existingStudentIds = new Set(existingSnap.docs.map(d => d.data().studentId));
+                
+                let successCount = 0;
+                let skipCount = 0;
+                
+                for (const student of classStudents) {
+                    if (existingStudentIds.has(student.id)) {
+                        skipCount++;
+                        continue;
+                    }
+                    
+                    let totalFee = 0;
+                    student.classIds.forEach(cid => {
+                        const c = classes.find(cc => cc.id === cid);
+                        if (c) {
+                            const fee = (student.customFees && student.customFees[cid] !== undefined) ? student.customFees[cid] : (c.fee || 0);
+                            totalFee += fee;
+                        }
+                    });
+                    
+                    if (totalFee > 0) {
+                        const discount = student.discount || 0;
+                        let finalAmount = Math.round(totalFee * (1 - discount));
+                        finalAmount = DB.roundTuition(finalAmount);
+                        
+                        const actualClassId = student.classIds.length > 1 ? 'Nhiều môn' : classId;
+                        
+                        await window.db.collection('tuitions').add({
+                            studentId: student.id,
+                            studentName: student.name,
+                            classId: actualClassId,
+                            amount: finalAmount,
+                            dueDate: dueDate,
+                            status: new Date(dueDate) < new Date() ? 'overdue' : 'pending',
+                            reminderSent: false,
+                            note: note || `Học phí tháng ${monthStr.split('-')[1]}`,
+                            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                        });
+                        successCount++;
+                    }
+                }
+                
+                Modal.close();
+                if (successCount > 0) {
+                    Toast.success(`Đã phát hành ${successCount} hóa đơn học phí thành công!` + (skipCount > 0 ? ` (Bỏ qua ${skipCount} học viên đã có)` : ''));
+                } else {
+                    Toast.info('Không có hóa đơn mới nào được tạo', skipCount > 0 ? `Tất cả ${skipCount} học viên đều đã có hóa đơn cho hạn đóng này.` : '');
+                }
+            } catch (e) {
+                Modal.close();
+                Toast.error('Lỗi', e.message);
+            }
         },
 
         showAdd() {
