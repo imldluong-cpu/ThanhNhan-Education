@@ -284,8 +284,9 @@ img {
 
 .about-stats {
     display: flex;
-    gap: 2rem;
-    margin-top: 2rem;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-top: 2.5rem;
 }
 
 .stat-item {

@@ -8,10 +8,20 @@ Router.register('attendance', async (container) => {
     try {
         classes = Auth.isTeacher() ? await DB.getClassesByTeacher(window.currentUser.id) : await DB.getClasses();
         schedules = await DB.getSchedules();
+        allStudents = await DB.getStudents();
+        await loadDailySummary();
     } catch(e) { console.warn(e); }
 
     let selectedClassId = '', selectedDate = DB.today();
-    let students = [], attendance = [];
+    let students = [], attendance = [], allStudents = [], dailyAttendance = [];
+
+    async function loadDailySummary() {
+        if (!selectedDate) return;
+        try {
+            const snap = await window.db.collection('attendance').where('date', '==', selectedDate).get();
+            dailyAttendance = snap.docs.map(d => d.data());
+        } catch(e) { console.warn('Load summary error:', e); }
+    }
 
     function getValidClassesForDate(dateStr) {
         if (!dateStr) return [];
@@ -48,11 +58,41 @@ Router.register('attendance', async (container) => {
         const classSelect = document.getElementById('att-class-select');
         if (classSelect) {
             const currentVal = classSelect.value;
-            classSelect.innerHTML = `<option value="">Chọn lớp</option>${validClasses.map(c => `<option value="${c.id}" ${c.id === currentVal ? 'selected' : ''}>${c.name}</option>`).join('')}`;
+            classSelect.innerHTML = `<option value="">Chọn lớp</option>${validClasses.map(c => {
+                const classStudentsCount = allStudents.filter(s => s.status === 'active' && (s.classIds || []).includes(c.id)).length;
+                const attRecord = dailyAttendance.find(a => a.classId === c.id);
+                let statusText = '(Chưa ĐD)';
+                if (attRecord && attRecord.records) {
+                    const presentCount = attRecord.records.filter(r => r.status === 'present').length;
+                    statusText = `(${presentCount}/${classStudentsCount})`;
+                }
+                return `<option value="${c.id}" ${c.id === currentVal ? 'selected' : ''}>${c.name} ${statusText}</option>`;
+            }).join('')}`;
             // If the selected class is no longer valid for this date, deselect it
             if (currentVal && !validClasses.find(c => c.id === currentVal)) {
                 selectedClassId = '';
                 classSelect.value = '';
+            }
+        }
+
+        const summaryArea = document.getElementById('att-summary');
+        if (summaryArea) {
+            if (validClasses.length === 0) {
+                summaryArea.innerHTML = '';
+            } else {
+                let summaryHtml = '<div style="display:flex;gap:8px;flex-wrap:wrap;padding:8px 0;">';
+                validClasses.forEach(c => {
+                    const classStudentsCount = allStudents.filter(s => s.status === 'active' && (s.classIds || []).includes(c.id)).length;
+                    const attRecord = dailyAttendance.find(a => a.classId === c.id);
+                    if (attRecord && attRecord.records) {
+                        const presentCount = attRecord.records.filter(r => r.status === 'present').length;
+                        summaryHtml += `<span class="badge badge-success" style="cursor:pointer;" onclick="AttendancePage.selectClass('${c.id}')">${c.name}: ${presentCount}/${classStudentsCount}</span>`;
+                    } else {
+                        summaryHtml += `<span class="badge badge-warning" style="cursor:pointer;" onclick="AttendancePage.selectClass('${c.id}')">${c.name}: Chưa ĐD</span>`;
+                    }
+                });
+                summaryHtml += '</div>';
+                summaryArea.innerHTML = summaryHtml;
             }
         }
 
@@ -100,11 +140,12 @@ Router.register('attendance', async (container) => {
         </div>
         <div class="filter-bar">
             <input type="date" class="input" style="max-width:180px;" value="${selectedDate}" onchange="AttendancePage.selectDate(this.value)">
-            <select class="select" id="att-class-select" style="max-width:250px;" onchange="AttendancePage.selectClass(this.value)">
+            <select class="select" id="att-class-select" style="max-width:300px;" onchange="AttendancePage.selectClass(this.value)">
                 <option value="">Chọn lớp</option>
                 ${getValidClassesForDate(selectedDate).map(c => `<option value="${c.id}">${c.name}</option>`).join('')}
             </select>
         </div>
+        <div id="att-summary" style="margin-bottom:var(--space-4);"></div>
         <div id="att-area"></div>
     `;
     render();
@@ -129,6 +170,7 @@ Router.register('attendance', async (container) => {
                 selectedClassId = ''; // Reset if class doesn't study on this day
             }
             
+            await loadDailySummary();
             await loadData();
             localRecords = {};
             attendance.forEach(r => { localRecords[r.studentId] = r.status; });
@@ -180,6 +222,8 @@ Router.register('attendance', async (container) => {
                 const absent = records.filter(r => r.status === 'absent').length;
                 const late = records.filter(r => r.status === 'late').length;
                 Toast.success('Đã lưu điểm danh', `✓ ${present} có mặt, ✗ ${absent} vắng, ⏰ ${late} trễ`);
+                await loadDailySummary();
+                render();
             } catch(e) { Toast.error('Lỗi lưu', e.message); }
         }
     };

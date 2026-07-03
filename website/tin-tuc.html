@@ -74,8 +74,8 @@
     <!-- Header -->
     <header class="header scrolled" id="header" style="background: rgba(255,255,255,0.95); box-shadow: var(--shadow-sm);">
         <div class="container nav-container">
-            <a href="index.html" class="logo" style="color: var(--primary-blue);">
-                <i data-lucide="graduation-cap"></i>
+            <a href="index.html" class="logo" style="display: flex; align-items: center; color: var(--primary-blue);">
+                <img src="assets/images/logo.png" alt="Thành Nhân Edu Logo" style="height: 40px; margin-right: 10px;">
                 Thành Nhân Edu
             </a>
             <button class="mobile-menu-btn" id="mobile-menu-btn" style="color: var(--text-main);">
@@ -88,6 +88,7 @@
                 <a href="index.html#gia-su" style="color: var(--text-main);">Gia sư</a>
                 <a href="tin-tuc.html" class="active" style="color: var(--text-main);">Tin tức</a>
                 <a href="tai-lieu.html" style="color: var(--text-main);">Tài liệu</a>
+                <a href="https://zalo.me/0388877543" target="_blank" class="btn btn-primary" style="color: white;">Liên hệ ngay</a>
             </nav>
         </div>
     </header>
@@ -103,57 +104,64 @@
     <!-- News Content -->
     <section class="section bg-alt">
         <div class="container">
-            <!-- Search & Filter (UI Placeholder) -->
-            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
-                <input type="text" placeholder="Tìm kiếm tin tức..." style="padding: 0.75rem 1rem; border-radius: var(--radius-md); border: 1px solid #cbd5e1; width: 100%; max-width: 400px; outline: none;">
-                <select style="padding: 0.75rem 1rem; border-radius: var(--radius-md); border: 1px solid #cbd5e1; outline: none; background: white;">
-                    <option>Mới nhất</option>
-                    <option>Phổ biến nhất</option>
-                    <option>Tuyển sinh Đại Học</option>
-                    <option>Thông báo nội bộ</option>
-                </select>
-            </div>
-
-            <div class="news-grid">
-                <!-- Auto-fetched simulation -->
-                <div class="news-card">
-                    <div class="news-img">
-                        <img src="https://images.unsplash.com/photo-1523050854058-8df90110c9f1?q=80&w=600&auto=format&fit=crop" alt="News 1">
-                    </div>
-                    <div class="news-content">
-                        <div class="news-date"><i data-lucide="calendar" style="width: 16px;"></i> 20/07/2026 - VNExpress</div>
-                        <h3 class="news-title"><a href="#">Bộ GD&ĐT công bố cấu trúc định dạng đề thi tốt nghiệp THPT từ năm 2026</a></h3>
-                        <p class="news-excerpt">Đề thi tốt nghiệp THPT từ năm 2026 sẽ có nhiều thay đổi nhằm đánh giá năng lực toàn diện của học sinh, chú trọng vào khả năng vận dụng kiến thức vào thực tế...</p>
-                        <a href="#" class="btn btn-outline" style="padding: 0.5rem 1rem; font-size: 0.875rem;">Đọc tiếp</a>
-                    </div>
-                </div>
-
-                <div class="news-card">
-                    <div class="news-img">
-                        <img src="https://images.unsplash.com/photo-1434030216411-0b793f4b4173?q=80&w=600&auto=format&fit=crop" alt="News 2">
-                    </div>
-                    <div class="news-content">
-                        <div class="news-date"><i data-lucide="calendar" style="width: 16px;"></i> 18/07/2026 - Dân Trí</div>
-                        <h3 class="news-title"><a href="#">Nhiều trường Đại học công bố phương thức xét tuyển sớm</a></h3>
-                        <p class="news-excerpt">Các trường ĐH top đầu đã bắt đầu công bố đề án tuyển sinh cho năm học mới, trong đó mở rộng tỷ lệ xét tuyển bằng chứng chỉ IELTS kết hợp học bạ...</p>
-                        <a href="#" class="btn btn-outline" style="padding: 0.5rem 1rem; font-size: 0.875rem;">Đọc tiếp</a>
-                    </div>
-                </div>
-
-                <div class="news-card">
-                    <div class="news-img">
-                        <img src="https://images.unsplash.com/photo-1546410531-bb4caa6b424d?q=80&w=600&auto=format&fit=crop" alt="News 3">
-                    </div>
-                    <div class="news-content">
-                        <div class="news-date"><i data-lucide="calendar" style="width: 16px;"></i> 15/07/2026 - Thành Nhân Edu</div>
-                        <h3 class="news-title"><a href="#">Thông báo lịch nghỉ hè 2026 dành cho học viên</a></h3>
-                        <p class="news-excerpt">Trung tâm xin thông báo đến quý phụ huynh và các em học sinh lịch nghỉ hè chính thức và các chương trình ngoại khóa đặc biệt trong hè này...</p>
-                        <a href="#" class="btn btn-outline" style="padding: 0.5rem 1rem; font-size: 0.875rem;">Đọc tiếp</a>
-                    </div>
-                </div>
+            <div style="text-align: center; margin-top: 2rem; display: flex; justify-content: center;">
+                <!-- Nhúng Facebook Page Plugin -->
+                <iframe src="https://www.facebook.com/plugins/page.php?href=https%3A%2F%2Fwww.facebook.com%2Ftrungtamthanhnhaneducation&tabs=timeline&width=500&height=800&small_header=false&adapt_container_width=true&hide_cover=false&show_facepile=true&appId" 
+                        width="500" height="800" 
+                        style="border:none;overflow:hidden;max-width:100%; border-radius: 8px; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);" 
+                        scrolling="no" frameborder="0" allowfullscreen="true" 
+                        allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share">
+                </iframe>
             </div>
         </div>
     </section>
+
+    <!-- Footer / Contact -->
+    <footer class="footer" id="lien-he">
+        <div class="container">
+            <div class="footer-grid">
+                <div class="footer-col">
+                    <a href="index.html" class="logo" style="color: var(--white); margin-bottom: 1rem; display: flex; align-items: center;">
+                        <img src="assets/images/logo.png" alt="Thành Nhân Edu Logo" style="height: 40px; margin-right: 10px;">
+                        Thành Nhân Edu
+                    </a>
+                    <p style="color: #94a3b8; margin-top: 1rem;">Khơi nguồn tri thức - Chắp cánh tương lai. Đồng hành cùng học sinh trên chặng đường chinh phục ước mơ.</p>
+                </div>
+                
+                <div class="footer-col">
+                    <h4>Liên kết nhanh</h4>
+                    <ul>
+                        <li><a href="index.html#ve-trung-tam">Về chúng tôi</a></li>
+                        <li><a href="index.html#doi-ngu">Đội ngũ giáo viên</a></li>
+                        <li><a href="index.html#chieu-sinh">Lịch khai giảng</a></li>
+                        <li><a href="tin-tuc.html">Tin tức giáo dục</a></li>
+                    </ul>
+                </div>
+                
+                <div class="footer-col">
+                    <h4>Thông tin liên hệ</h4>
+                    <ul class="footer-contact">
+                        <li>
+                            <i data-lucide="map-pin"></i>
+                            56 Nguyễn Văn Trỗi, P. Ninh Kiều, TP. Cần Thơ
+                        </li>
+                        <li>
+                            <i data-lucide="phone"></i>
+                            0388 877 543
+                        </li>
+                        <li>
+                            <i data-lucide="mail"></i>
+                            Edu.thanhnhan@gmail.com
+                        </li>
+                    </ul>
+                </div>
+            </div>
+            
+            <div class="footer-bottom">
+                <p>&copy; 2026 Thành Nhân Education. All rights reserved.</p>
+            </div>
+        </div>
+    </footer>
 
     <!-- Scripts -->
     <script>

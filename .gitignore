@@ -9,3 +9,6 @@ desktop.ini
 
 # Server script (local only)
 start-server.ps1
+
+# Local Netlify folder
+.netlify

@@ -84,4 +84,124 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById(targetId).classList.add('active');
         });
     });
+
+    // 6. Firebase Integration
+    const firebaseConfig = {
+        apiKey: "AIzaSyB0X4HHNv-TqJAsyE9XKRXIxzB7yRO6v84",
+        authDomain: "thanhnhaneducation-29a2f.firebaseapp.com",
+        projectId: "thanhnhaneducation-29a2f",
+        storageBucket: "thanhnhaneducation-29a2f.firebasestorage.app",
+        messagingSenderId: "849842230265",
+        appId: "1:849842230265:web:b4f852137e83633318a328"
+    };
+
+    if (window.firebase) {
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+        
+        async function fetchClassesData() {
+            try {
+                // Fetch Teachers
+                const teachersSnap = await db.collection('users').where('role', '==', 'teacher').get();
+                const teachers = {};
+                teachersSnap.forEach(doc => {
+                    teachers[doc.id] = doc.data();
+                });
+
+                // Fetch Students to calculate class sizes
+                const studentsSnap = await db.collection('students').get();
+                const students = [];
+                studentsSnap.forEach(doc => {
+                    students.push({ id: doc.id, ...doc.data() });
+                });
+
+                // Fetch Classes
+                const classesSnap = await db.collection('classes').get();
+                const activeClasses = [];
+                const upcomingClasses = [];
+                
+                classesSnap.forEach(doc => {
+                    let data = doc.data();
+                    
+                    // Đồng bộ định dạng năm học giống phần mềm quản lý
+                    if (data.academicYear && data.academicYear.indexOf(' - ') === -1) {
+                        data.academicYear = data.academicYear.replace('-', ' - ');
+                    }
+                    if (!data.academicYear) data.academicYear = '2025 - 2026';
+                    
+                    // Lọc chỉ lấy năm học hiện tại
+                    if (data.academicYear === '2026 - 2027') {
+                        if (data.status === 'active') activeClasses.push({ id: doc.id, ...data });
+                        else if (data.status === 'upcoming') upcomingClasses.push({ id: doc.id, ...data });
+                    }
+                });
+                
+                function formatCurrency(amount) {
+                    return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount || 0);
+                }
+                
+                function formatDate(dateStr) {
+                    if (!dateStr) return '';
+                    const d = new Date(dateStr);
+                    return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+                }
+                
+                function getTeacherNames(teacherIds) {
+                    if (!teacherIds || teacherIds.length === 0) return 'Chưa phân công';
+                    return teacherIds.map(id => teachers[id] ? (teachers[id].displayName || teachers[id].email) : '').filter(Boolean).join(', ') || 'Chưa phân công';
+                }
+
+                function renderClassCard(c, isUpcoming = false) {
+                    const classStudents = students.filter(s => (s.classIds || []).includes(c.id) && s.status === 'active');
+                    const studentCount = classStudents.length;
+                    
+                    const badgeHtml = isUpcoming ? `<div class="class-badge upcoming">Mới</div>` : '';
+                    const startDateHtml = isUpcoming && c.startDate ? `<li><i data-lucide="clock"></i> Khai giảng: <strong>${formatDate(c.startDate)}</strong></li>` : '';
+                    
+                    return `
+                        <div class="class-card">
+                            ${badgeHtml}
+                            <h3 class="class-title">${c.name}</h3>
+                            <ul class="class-details">
+                                ${startDateHtml}
+                                <li><i data-lucide="book-open"></i> Môn: ${c.subject || 'Đang cập nhật'}</li>
+                                <li><i data-lucide="user"></i> GV: ${getTeacherNames(c.teacherIds)}</li>
+                                <li><i data-lucide="users"></i> Sĩ số: ${studentCount} học viên</li>
+                                <li><i data-lucide="wallet"></i> Học phí: ${c.fee ? formatCurrency(c.fee) + '/tháng' : 'Theo bảng giá'}</li>
+                            </ul>
+                            <a href="https://zalo.me/0388877543" target="_blank" class="btn ${isUpcoming ? 'btn-primary' : 'btn-outline'}">${isUpcoming ? 'Giữ chỗ ngay' : 'Đăng ký bổ sung'}</a>
+                        </div>
+                    `;
+                }
+
+                const gridActive = document.getElementById('grid-lop-dang-day');
+                const gridUpcoming = document.getElementById('grid-lop-sap-mo');
+
+                if (gridActive) {
+                    if (activeClasses.length > 0) {
+                        gridActive.innerHTML = activeClasses.map(c => renderClassCard(c, false)).join('');
+                    } else {
+                        gridActive.innerHTML = '<div style="grid-column: 1/-1; text-align: center; color: var(--text-muted);">Hiện chưa có lớp nào đang dạy.</div>';
+                    }
+                }
+                
+                if (gridUpcoming) {
+                    if (upcomingClasses.length > 0) {
+                        gridUpcoming.innerHTML = upcomingClasses.map(c => renderClassCard(c, true)).join('');
+                    } else {
+                        gridUpcoming.innerHTML = '<div style="grid-column: 1/-1; text-align: center; color: var(--text-muted);">Hiện chưa có lớp nào chuẩn bị khai giảng.</div>';
+                    }
+                }
+                
+                lucide.createIcons();
+                
+            } catch (error) {
+                console.error("Lỗi khi tải dữ liệu từ Firebase:", error);
+                document.getElementById('grid-lop-dang-day').innerHTML = '<div style="grid-column: 1/-1; text-align: center; color: var(--primary-red);">Lỗi kết nối dữ liệu. Vui lòng thử lại sau.</div>';
+                document.getElementById('grid-lop-sap-mo').innerHTML = '<div style="grid-column: 1/-1; text-align: center; color: var(--primary-red);">Lỗi kết nối dữ liệu. Vui lòng thử lại sau.</div>';
+            }
+        }
+        
+        fetchClassesData();
+    }
 });

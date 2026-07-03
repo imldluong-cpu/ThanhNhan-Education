@@ -21,8 +21,8 @@
     <!-- Header Navigation -->
     <header class="header" id="header">
         <div class="container nav-container">
-            <a href="#" class="logo">
-                <i data-lucide="graduation-cap"></i>
+            <a href="#" class="logo" style="display: flex; align-items: center;">
+                <img src="assets/images/logo.png" alt="Thành Nhân Edu Logo" style="height: 40px; margin-right: 10px;">
                 Thành Nhân Edu
             </a>
             
@@ -37,7 +37,7 @@
                 <a href="#gia-su">Gia sư</a>
                 <a href="tin-tuc.html">Tin tức</a>
                 <a href="tai-lieu.html">Tài liệu</a>
-                <a href="#lien-he" class="btn btn-primary" style="color: white;">Liên hệ ngay</a>
+                <a href="https://zalo.me/0388877543" target="_blank" class="btn btn-primary" style="color: white;">Liên hệ ngay</a>
             </nav>
         </div>
     </header>
@@ -65,20 +65,20 @@
                 </div>
                 <div class="about-content">
                     <h2 class="section-title" style="text-align: left; margin-bottom: 1.5rem;">Về Thành Nhân Education</h2>
-                    <p>Thành Nhân Education được thành lập với sứ mệnh mang đến môi trường giáo dục chuyên nghiệp, năng động và hiệu quả. Chúng tôi không chỉ truyền đạt kiến thức mà còn rèn luyện kỹ năng tự học, tư duy logic cho từng học viên.</p>
-                    <p>Cơ sở vật chất hiện đại, không gian học tập thân thiện cùng phương pháp cá nhân hóa giúp học sinh tiếp thu bài học một cách tự nhiên nhất.</p>
+                    <p>Thành Nhân Education là trung tâm dạy thêm các môn Toán, Ngữ Văn, Tiếng Anh, Lý, Hóa, Sinh,... cho học sinh từ lớp 6 đến lớp 12, được thành lập với sứ mệnh mang đến môi trường giáo dục chuyên nghiệp, năng động và hiệu quả. Khác với mô hình dạy đại trà, chúng tôi tổ chức lớp học sĩ số nhỏ, mỗi giáo viên phụ trách đúng khối lớp và bộ môn chuyên sâu của mình.</p>
+                    <p>Bên cạnh các lớp học văn hóa phổ thông, Thành Nhân triển khai các khóa học ngắn hạn về Tiếng Anh giao tiếp phù hợp cho cả học sinh lẫn người đi làm. Học phí được công khai, minh bạch, rõ ràng theo từng khối lớp, có chính sách ưu đãi cho nhóm và học nhiều môn. Để tìm hiểu thêm hoặc đăng ký, phụ huynh và học viên có thể liên hệ trực tiếp qua số 0388 877 543 hoặc fanpage Thành Nhân Education.</p>
                     
                     <div class="about-stats">
                         <div class="stat-item">
-                            <h4>5+</h4>
+                            <h4>3+</h4>
                             <span>Năm kinh nghiệm</span>
                         </div>
                         <div class="stat-item">
-                            <h4>500+</h4>
-                            <span>Học viên đạt điểm cao</span>
+                            <h4>100+</h4>
+                            <span>Học viên</span>
                         </div>
                         <div class="stat-item">
-                            <h4>50+</h4>
+                            <h4>15+</h4>
                             <span>Giáo viên giỏi</span>
                         </div>
                     </div>
@@ -146,50 +146,18 @@
             <div class="tab-contents animate-on-scroll">
                 <!-- Lớp đang dạy -->
                 <div class="tab-content active" id="lop-dang-day">
-                    <div class="class-grid">
-                        <div class="class-card">
-                            <h3 class="class-title">Toán 12 - Luyện thi THPT QG</h3>
-                            <ul class="class-details">
-                                <li><i data-lucide="calendar"></i> Thứ 2 - Thứ 4 (18:00 - 20:00)</li>
-                                <li><i data-lucide="user"></i> GV: Nguyễn Văn A</li>
-                                <li><i data-lucide="users"></i> Sĩ số: 15/20</li>
-                            </ul>
-                            <a href="#lien-he" class="btn btn-outline">Đăng ký bổ sung</a>
-                        </div>
-                        <div class="class-card">
-                            <h3 class="class-title">Tiếng Anh Giao Tiếp Cơ Bản</h3>
-                            <ul class="class-details">
-                                <li><i data-lucide="calendar"></i> Thứ 3 - Thứ 5 (19:00 - 21:00)</li>
-                                <li><i data-lucide="user"></i> GV: Trần Thị B</li>
-                                <li><i data-lucide="users"></i> Sĩ số: 10/15</li>
-                            </ul>
-                            <a href="#lien-he" class="btn btn-outline">Đăng ký bổ sung</a>
+                    <div class="class-grid" id="grid-lop-dang-day">
+                        <div style="grid-column: 1/-1; text-align: center; padding: 2rem;">
+                            <p style="color: var(--text-muted); font-size: 1.1rem;">Đang tải dữ liệu lớp học...</p>
                         </div>
                     </div>
                 </div>
                 
                 <!-- Lớp chuẩn bị khai giảng -->
                 <div class="tab-content" id="lop-sap-mo">
-                    <div class="class-grid">
-                        <div class="class-card">
-                            <div class="class-badge upcoming">Mới</div>
-                            <h3 class="class-title">Lớp IELTS Cấp Tốc</h3>
-                            <ul class="class-details">
-                                <li><i data-lucide="clock"></i> Khai giảng: 15/09/2026</li>
-                                <li><i data-lucide="calendar"></i> T7 - CN (08:00 - 11:00)</li>
-                                <li><i data-lucide="target"></i> Mục tiêu: 6.5+</li>
-                            </ul>
-                            <a href="#lien-he" class="btn btn-primary">Giữ chỗ ngay</a>
-                        </div>
-                        <div class="class-card">
-                            <div class="class-badge upcoming">Mới</div>
-                            <h3 class="class-title">Vật Lý 10 - Nền tảng</h3>
-                            <ul class="class-details">
-                                <li><i data-lucide="clock"></i> Khai giảng: 20/09/2026</li>
-                                <li><i data-lucide="calendar"></i> Thứ 6 (18:00 - 20:00)</li>
-                                <li><i data-lucide="book-open"></i> Bám sát SGK mới</li>
-                            </ul>
-                            <a href="#lien-he" class="btn btn-primary">Giữ chỗ ngay</a>
+                    <div class="class-grid" id="grid-lop-sap-mo">
+                        <div style="grid-column: 1/-1; text-align: center; padding: 2rem;">
+                            <p style="color: var(--text-muted); font-size: 1.1rem;">Đang tải dữ liệu lớp học...</p>
                         </div>
                     </div>
                 </div>
@@ -198,8 +166,8 @@
                 <div class="tab-content" id="hoc-phi">
                     <div class="pricing-grid">
                         <div class="pricing-card">
-                            <h4>Lớp Cơ Bản</h4>
-                            <div class="price">500.000đ<span>/tháng</span></div>
+                            <h4>Lớp Tiêu Chuẩn</h4>
+                            <div class="price"><span style="font-size: 1.2rem; font-weight: 500; color: var(--text-muted); margin-right: 0.5rem; display: inline-block; vertical-align: middle;">Chỉ từ</span>500.000đ<span>/tháng</span></div>
                             <ul class="class-details" style="text-align: left; margin-top: 1rem;">
                                 <li><i data-lucide="check" style="color: green"></i> 2 buổi/tuần</li>
                                 <li><i data-lucide="check" style="color: green"></i> Kiểm tra định kỳ 1 tháng/lần</li>
@@ -207,12 +175,11 @@
                             </ul>
                         </div>
                         <div class="pricing-card popular">
-                            <h4>Lớp Luyện Thi VIP</h4>
-                            <div class="price">800.000đ<span>/tháng</span></div>
+                            <h4>Lớp VIP 1:1</h4>
+                            <div class="price"><span style="font-size: 1.2rem; font-weight: 500; color: var(--text-muted); margin-right: 0.5rem; display: inline-block; vertical-align: middle;">Chỉ từ</span>1.300.000đ<span>/tháng</span></div>
                             <ul class="class-details" style="text-align: left; margin-top: 1rem;">
-                                <li><i data-lucide="check" style="color: green"></i> 3 buổi/tuần</li>
-                                <li><i data-lucide="check" style="color: green"></i> Hỗ trợ giải đáp online 24/7</li>
-                                <li><i data-lucide="check" style="color: green"></i> Sĩ số max 10 học viên</li>
+                                <li><i data-lucide="check" style="color: green"></i> Kèm riêng 1 Thầy - 1 Trò</li>
+                                <li><i data-lucide="check" style="color: green"></i> Lịch học linh hoạt</li>
                                 <li><i data-lucide="check" style="color: green"></i> Cam kết điểm đầu ra</li>
                             </ul>
                         </div>
@@ -261,7 +228,7 @@
                             </div>
                         </li>
                     </ul>
-                    <a href="#lien-he" class="btn btn-primary" style="margin-top: 1rem;">Đăng ký tìm gia sư</a>
+                    <a href="https://zalo.me/0388877543" target="_blank" class="btn btn-primary" style="margin-top: 1rem;">Đăng ký tìm gia sư</a>
                 </div>
                 <div class="about-image">
                     <img src="https://images.unsplash.com/photo-1577896851231-70ef18881754?q=80&w=800&auto=format&fit=crop" alt="Gia sư 1 kèm 1">
@@ -300,8 +267,8 @@
         <div class="container">
             <div class="footer-grid">
                 <div class="footer-col">
-                    <a href="#" class="logo" style="color: var(--white); margin-bottom: 1rem;">
-                        <i data-lucide="graduation-cap"></i>
+                    <a href="#" class="logo" style="color: var(--white); margin-bottom: 1rem; display: flex; align-items: center;">
+                        <img src="assets/images/logo.png" alt="Thành Nhân Edu Logo" style="height: 40px; margin-right: 10px;">
                         Thành Nhân Edu
                     </a>
                     <p style="color: #94a3b8; margin-top: 1rem;">Khơi nguồn tri thức - Chắp cánh tương lai. Đồng hành cùng học sinh trên chặng đường chinh phục ước mơ.</p>
@@ -322,15 +289,15 @@
                     <ul class="footer-contact">
                         <li>
                             <i data-lucide="map-pin"></i>
-                            123 Đường Học Tập, Quận Tri Thức, TP.HCM
+                            56 Nguyễn Văn Trỗi, P. Ninh Kiều, TP. Cần Thơ
                         </li>
                         <li>
                             <i data-lucide="phone"></i>
-                            0909 123 456
+                            0388 877 543
                         </li>
                         <li>
                             <i data-lucide="mail"></i>
-                            lienhe@thanhnhan.edu.vn
+                            Edu.thanhnhan@gmail.com
                         </li>
                     </ul>
                 </div>
@@ -341,6 +308,10 @@
             </div>
         </div>
     </footer>
+
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
 
     <!-- Scripts -->
     <script src="js/main.js"></script>
