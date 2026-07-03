@@ -403,6 +403,12 @@ Router.register('tuition', async (container) => {
                     </div>
                     <div class="form-group"><label class="form-label">Trạng thái</label>
                         <select class="select" id="t-status"><option value="pending" ${t.status === 'pending' ? 'selected' : ''}>Chưa đóng</option><option value="overdue" ${t.status === 'overdue' ? 'selected' : ''}>Quá hạn</option><option value="paid" ${t.status === 'paid' ? 'selected' : ''}>Đã đóng</option></select></div>
+                    <div class="form-group" id="t-paid-date-group" style="${t.status === 'paid' ? '' : 'display:none;'}"><label class="form-label">Ngày đóng</label><input type="date" class="input" id="t-paid-date" value="${t.paidDate || DB.today()}"></div>
+                    <script>
+                        document.getElementById('t-status').addEventListener('change', function() {
+                            document.getElementById('t-paid-date-group').style.display = this.value === 'paid' ? 'block' : 'none';
+                        });
+                    </script>
                 `,
                 footer: `<button class="btn btn-secondary" onclick="Modal.close()">Hủy</button><button class="btn btn-primary" onclick="TuitionPage.saveEdit('${id}')">Cập nhật</button>`
             });
@@ -411,8 +417,13 @@ Router.register('tuition', async (container) => {
         async saveEdit(id) {
             try {
                 const status = document.getElementById('t-status').value;
+                let paidDate = '';
+                if (status === 'paid') {
+                    const inputPaidDate = document.getElementById('t-paid-date');
+                    paidDate = (inputPaidDate && inputPaidDate.value) ? inputPaidDate.value : DB.today();
+                }
                 const oldT = tuitions.find(x => x.id === id);
-                await DB.updateTuition(id, { studentId: document.getElementById('t-student').value, studentName: getStudentName(document.getElementById('t-student').value), amount: parseInt(document.getElementById('t-amount').value) || 0, dueDate: document.getElementById('t-due').value, status, paidDate: status === 'paid' ? DB.today() : '' });
+                await DB.updateTuition(id, { studentId: document.getElementById('t-student').value, studentName: getStudentName(document.getElementById('t-student').value), amount: parseInt(document.getElementById('t-amount').value) || 0, dueDate: document.getElementById('t-due').value, status, paidDate });
                 
                 if (status === 'paid' && oldT && oldT.status !== 'paid') {
                     const studentName = getStudentName(document.getElementById('t-student').value);
