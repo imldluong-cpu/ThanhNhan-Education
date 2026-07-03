@@ -285,7 +285,7 @@ Router.register('classes', async (container) => {
             Modal.show({ title: 'Đang xử lý...', content: '<div class="empty-state"><div class="spinner"></div></div>' });
             
             try {
-                const existingSnap = await window.db.collection('tuitions').where('dueDate', '==', dueDate).get();
+                const existingSnap = await window.db.collection('tuition').where('dueDate', '==', dueDate).get();
                 const existingStudentIds = new Set(existingSnap.docs.map(d => d.data().studentId));
                 
                 let successCount = 0;
@@ -313,7 +313,7 @@ Router.register('classes', async (container) => {
                         
                         const actualClassId = student.classIds.length > 1 ? 'Nhiều môn' : classId;
                         
-                        await window.db.collection('tuitions').add({
+                        await DB.addTuition({
                             studentId: student.id,
                             studentName: student.name,
                             classId: actualClassId,
@@ -321,8 +321,7 @@ Router.register('classes', async (container) => {
                             dueDate: dueDate,
                             status: new Date(dueDate) < new Date() ? 'overdue' : 'pending',
                             reminderSent: false,
-                            note: note || `Học phí tháng ${monthStr.split('-')[1]}`,
-                            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                            note: note || `Học phí tháng ${monthStr.split('-')[1]}`
                         });
                         successCount++;
                     }

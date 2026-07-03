@@ -741,7 +741,7 @@ Router.register('students', async (container) => {
             if (!dueDate) return;
 
             try {
-                await window.db.collection('tuitions').add({
+                await DB.addTuition({
                     studentId: studentId,
                     studentName: studentName,
                     classId: 'Nhiều môn',
@@ -749,9 +749,7 @@ Router.register('students', async (container) => {
                     dueDate: dueDate,
                     status: new Date(dueDate) < new Date() ? 'overdue' : 'pending',
                     reminderSent: false,
-                    note: note,
-                    academicYear: window.currentAcademicYear || '2026 - 2027',
-                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                    note: note
                 });
                 Modal.close();
                 Toast.success('Đã tạo học phí thành công!');
