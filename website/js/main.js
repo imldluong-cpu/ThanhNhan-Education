@@ -59,13 +59,85 @@ document.addEventListener('DOMContentLoaded', () => {
         entries.forEach(entry => {
             if (entry.isIntersecting) {
                 entry.target.classList.add('is-visible');
-                observer.unobserve(entry.target); // Chỉ animate 1 lần
+
+                // Staggered animation for child cards
+                const cards = entry.target.querySelectorAll('.teacher-card, .course-card, .stat-item, .feature-icon');
+                cards.forEach((card, i) => {
+                    card.style.transitionDelay = `${i * 0.12}s`;
+                    card.style.opacity = '0';
+                    card.style.transform = 'perspective(800px) rotateX(10deg) translateY(30px)';
+                    requestAnimationFrame(() => {
+                        card.style.transition = 'opacity 0.6s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1)';
+                        card.style.opacity = '1';
+                        card.style.transform = 'perspective(800px) rotateX(0) translateY(0)';
+                    });
+                });
+
+                observer.unobserve(entry.target);
             }
         });
     }, observerOptions);
 
     document.querySelectorAll('.animate-on-scroll').forEach(element => {
         observer.observe(element);
+    });
+
+    // 5. Advanced 3D Effects
+    // 5a. Mouse Parallax for Hero Collage
+    const heroCollage = document.querySelector('.hero-collage');
+    const heroSection = document.querySelector('.hero');
+    if (heroCollage && heroSection) {
+        // Keep the scroll parallax
+        window.addEventListener('scroll', () => {
+            const scrollY = window.scrollY;
+            const heroHeight = heroSection.offsetHeight;
+            if (scrollY < heroHeight) {
+                const parallaxY = scrollY * 0.3;
+                const parallaxScale = 1 + (scrollY * 0.0002);
+                heroCollage.style.transform = `translateY(${parallaxY}px) scale(${parallaxScale})`;
+            }
+        }, { passive: true });
+
+        // Add mouse move parallax for individual images
+        const collageImages = document.querySelectorAll('.collage-img');
+        heroSection.addEventListener('mousemove', (e) => {
+            const xAxis = (window.innerWidth / 2 - e.pageX) / 25;
+            const yAxis = (window.innerHeight / 2 - e.pageY) / 25;
+            
+            collageImages.forEach((img, index) => {
+                const depth = (index % 3) + 1; // Different depths for different layers
+                img.style.transform = `translate(${xAxis / depth}px, ${yAxis / depth}px)`;
+            });
+        });
+        
+        heroSection.addEventListener('mouseleave', () => {
+            collageImages.forEach((img) => {
+                img.style.transform = `translate(0px, 0px)`;
+            });
+        });
+    }
+
+    // 5b. 3D Tilt Effect for Cards
+    const cards3D = document.querySelectorAll('.teacher-card, .course-card');
+    cards3D.forEach(card => {
+        card.addEventListener('mousemove', (e) => {
+            const rect = card.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            
+            const centerX = rect.width / 2;
+            const centerY = rect.height / 2;
+            
+            // Calculate rotation (-10 to 10 degrees)
+            const rotateX = ((y - centerY) / centerY) * -10;
+            const rotateY = ((x - centerX) / centerX) * 10;
+            
+            card.style.transform = `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) scale3d(1.02, 1.02, 1.02)`;
+        });
+        
+        card.addEventListener('mouseleave', () => {
+            card.style.transform = 'perspective(1000px) rotateX(0deg) rotateY(0deg) scale3d(1, 1, 1)';
+        });
     });
 
     // 5. Tabs cho phần Chiêu Sinh

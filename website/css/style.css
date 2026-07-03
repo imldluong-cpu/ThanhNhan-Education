@@ -74,7 +74,7 @@ img {
 
 .section-title {
     text-align: center;
-    font-size: 2.5rem;
+    font-size: clamp(1.4rem, 5vw, 2.5rem);
     font-weight: 700;
     color: var(--primary-blue);
     margin-bottom: 3rem;
@@ -217,12 +217,77 @@ img {
 .hero {
     height: 100vh;
     min-height: 600px;
-    background: linear-gradient(135deg, rgba(30, 58, 138, 0.9) 0%, rgba(59, 130, 246, 0.8) 100%), url('../assets/hero-bg.jpg') center/cover no-repeat;
     display: flex;
     align-items: center;
     color: var(--white);
     position: relative;
     padding-top: 80px;
+    overflow: hidden;
+}
+
+/* Photo Collage Background */
+.hero-collage {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 0;
+    background: #1a1a2e;
+}
+
+.collage-img {
+    position: absolute;
+    left: var(--x);
+    top: var(--y);
+    width: var(--w);
+    transform: rotate(var(--rot));
+    border-radius: 6px;
+    overflow: hidden;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+    border: 3px solid rgba(255,255,255,0.15);
+    animation: collageIn 0.8s ease var(--delay) both;
+    transition: transform 0.4s ease, box-shadow 0.4s ease;
+}
+
+.collage-img:hover {
+    transform: rotate(0deg) scale(1.05);
+    box-shadow: 0 8px 30px rgba(0,0,0,0.6);
+    z-index: 5;
+}
+
+.collage-img img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+@keyframes collageIn {
+    from {
+        opacity: 0;
+        transform: rotate(var(--rot)) scale(0.7);
+    }
+    to {
+        opacity: 1;
+        transform: rotate(var(--rot)) scale(1);
+    }
+}
+
+/* Dark Overlay */
+.hero-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(135deg, rgba(30, 58, 138, 0.75) 0%, rgba(59, 130, 246, 0.6) 100%);
+    z-index: 1;
+}
+
+.hero .container {
+    position: relative;
+    z-index: 2;
 }
 
 .hero-content {
@@ -232,7 +297,7 @@ img {
 }
 
 .hero h1 {
-    font-size: 3.5rem;
+    font-size: clamp(1.8rem, 6vw, 3.5rem);
     font-weight: 800;
     margin-bottom: 1.5rem;
     line-height: 1.2;
@@ -352,6 +417,7 @@ img {
     width: 100%;
     height: 100%;
     object-fit: cover;
+    object-position: top;
 }
 
 .teacher-info {
@@ -572,7 +638,7 @@ img {
 }
 
 .split-card h3 {
-    font-size: 2rem;
+    font-size: clamp(1.4rem, 5vw, 2rem);
     color: var(--primary-blue);
     margin-bottom: 1rem;
 }
@@ -653,21 +719,73 @@ img {
 
 .animate-on-scroll {
     opacity: 0;
-    transform: translateY(30px);
-    transition: opacity 0.6s ease-out, transform 0.6s ease-out;
+    transform: perspective(1000px) rotateX(8deg) translateY(60px) scale(0.95);
+    transition: opacity 0.8s cubic-bezier(0.22, 1, 0.36, 1), transform 0.8s cubic-bezier(0.22, 1, 0.36, 1);
+    transform-origin: center top;
 }
 .animate-on-scroll.is-visible {
     opacity: 1;
-    transform: translateY(0);
+    transform: perspective(1000px) rotateX(0deg) translateY(0) scale(1);
+}
+
+/* 3D Tilt on Cards */
+.teacher-card,
+.course-card {
+    transform-style: preserve-3d;
+    transition: transform 0.1s linear, box-shadow 0.4s ease; /* Fast transform for JS mouse tracking */
+    will-change: transform;
+}
+
+.teacher-card:hover,
+.course-card:hover {
+    box-shadow: 0 20px 40px rgba(0,0,0,0.15);
+    z-index: 10;
+}
+
+/* Add inner glare effect */
+.teacher-card::after,
+.course-card::after {
+    content: "";
+    position: absolute;
+    top: 0; left: 0; width: 100%; height: 100%;
+    background: linear-gradient(135deg, rgba(255,255,255,0.4) 0%, rgba(255,255,255,0) 50%);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    pointer-events: none;
+    mix-blend-mode: overlay;
+}
+.teacher-card:hover::after,
+.course-card:hover::after {
+    opacity: 1;
+}
+
+/* Parallax hero collage on scroll/mouse */
+.hero-collage {
+    transition: transform 0.1s linear;
+    will-change: transform;
+}
+.collage-img {
+    transition: transform 0.2s ease-out; /* Smooth mouse tracking */
+    will-change: transform;
+}
+
+/* Section 3D entrance variants */
+.animate-on-scroll[class*="about"] {
+    transform: perspective(1000px) rotateY(-5deg) translateX(-40px);
+}
+.animate-on-scroll[class*="about"].is-visible {
+    transform: perspective(1000px) rotateY(0deg) translateX(0);
+}
+
+/* Smooth page-level perspective */
+.section {
+    transform-style: preserve-3d;
 }
 
 /* Responsive */
 @media (max-width: 992px) {
     .about-grid, .tutoring-grid, .split-section {
         grid-template-columns: 1fr;
-    }
-    .hero h1 {
-        font-size: 2.5rem;
     }
 }
 
@@ -694,5 +812,14 @@ img {
     }
     .header.scrolled .mobile-menu-btn {
         color: var(--text-main);
+    }
+}
+
+@media (max-width: 480px) {
+    .container {
+        padding: 0 1rem;
+    }
+    .hero h1 {
+        white-space: nowrap;
     }
 }

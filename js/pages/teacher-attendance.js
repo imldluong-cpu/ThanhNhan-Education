@@ -141,6 +141,7 @@ Router.register('teacher-attendance', async (container) => {
                 <td class="text-sm">${r.note || ''}</td>
                 <td>
                     <div class="table-actions">
+                        ${isOwner ? `<button class="btn-icon" title="Sửa lương/ca" onclick="TAPage.editRecord('${r.id}')"><i data-lucide="pencil"></i></button>` : ''}
                         ${isOwner ? `<button class="btn-icon" title="Phạt vi phạm" onclick="TAPage.showPenalty('${r.id}')"><i data-lucide="alert-triangle" style="color:var(--danger-500);"></i></button>` : ''}
                         <button class="btn-icon" title="Xóa" onclick="TAPage.removeRecord('${r.id}')"><i data-lucide="trash-2"></i></button>
                     </div>
@@ -496,6 +497,58 @@ Router.register('teacher-attendance', async (container) => {
                 });
                 Modal.close();
                 Toast.success('Đã thêm');
+                records = await DB.getTeacherAttendance(selectedMonth);
+                render();
+            } catch(e) { Toast.error('Lỗi', e.message); }
+        },
+
+        editRecord(id) {
+            const r = (Auth.isOwner() ? records : getMyRecords()).find(x => x.id === id);
+            if (!r) return;
+            const classListHtml = classes.map(c => `<option value="${c.id}" ${c.id === r.classId ? 'selected' : ''}>${c.name}</option>`).join('');
+            
+            Modal.show({
+                title: 'Sửa chấm công',
+                content: `
+                    <div class="form-group"><label class="form-label">Giáo viên *</label>
+                        <select class="select" id="ta-edit-teacher" disabled><option value="${r.teacherId}">${getTeacherName(r.teacherId)}</option></select></div>
+                    <div class="form-row">
+                        <div class="form-group"><label class="form-label">Ngày</label><input type="date" class="input" id="ta-edit-date" value="${r.date || ''}"></div>
+                        <div class="form-group"><label class="form-label">Ca</label>
+                            <select class="select" id="ta-edit-shift"><option value="morning" ${r.shift === 'morning' ? 'selected' : ''}>Sáng</option><option value="afternoon" ${r.shift === 'afternoon' ? 'selected' : ''}>Chiều</option><option value="evening" ${r.shift === 'evening' ? 'selected' : ''}>Tối</option><option value="custom" ${r.shift === 'custom' ? 'selected' : ''}>Tùy chỉnh</option></select></div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group"><label class="form-label">Giờ vào</label><input type="time" class="input" id="ta-edit-start" value="${r.startTime || ''}"></div>
+                        <div class="form-group"><label class="form-label">Giờ ra</label><input type="time" class="input" id="ta-edit-end" value="${r.endTime || ''}"></div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group"><label class="form-label">Số giờ</label><input type="number" step="0.1" class="input" id="ta-edit-hours" value="${r.hours || 0}"></div>
+                        <div class="form-group"><label class="form-label">Lương (đ)</label><input type="number" class="input" id="ta-edit-salary" value="${r.salary || 0}"></div>
+                    </div>
+                    <div class="form-group"><label class="form-label">Lớp (Tất cả lớp)</label>
+                        <select class="select" id="ta-edit-class"><option value="">Chọn</option>${classListHtml}</select></div>
+                    <div class="form-group"><label class="form-label">Ghi chú</label><input type="text" class="input" id="ta-edit-note" value="${r.note || ''}"></div>
+                `,
+                footer: `<button class="btn btn-secondary" onclick="Modal.close()">Hủy</button><button class="btn btn-primary" onclick="TAPage.saveEditRecord('${id}')">Cập nhật</button>`
+            });
+        },
+
+        async saveEditRecord(id) {
+            const date = document.getElementById('ta-edit-date').value;
+            const shift = document.getElementById('ta-edit-shift').value;
+            const startTime = document.getElementById('ta-edit-start').value;
+            const endTime = document.getElementById('ta-edit-end').value;
+            const hours = parseFloat(document.getElementById('ta-edit-hours').value) || 0;
+            const salary = parseInt(document.getElementById('ta-edit-salary').value) || 0;
+            const classId = document.getElementById('ta-edit-class').value;
+            const note = document.getElementById('ta-edit-note').value;
+
+            try {
+                await DB.updateTeacherAttendanceRecord(id, {
+                    date, shift, startTime, endTime, hours, salary, classId, note, month: date.substring(0, 7)
+                });
+                Modal.close();
+                Toast.success('Cập nhật thành công');
                 records = await DB.getTeacherAttendance(selectedMonth);
                 render();
             } catch(e) { Toast.error('Lỗi', e.message); }

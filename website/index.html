@@ -44,9 +44,79 @@
 
     <!-- Hero Section -->
     <section class="hero" id="trang-chu">
+        <!-- Photo Collage Background -->
+        <div class="hero-collage">
+            <!-- Row 1 -->
+            <div class="collage-img" style="--x: -1%; --y: -2%; --w: 22%; --rot: -3deg; --delay: 0s;">
+                <img src="assets/images/hero-5.jpg" alt="">
+            </div>
+            <div class="collage-img" style="--x: 18%; --y: 1%; --w: 20%; --rot: 2deg; --delay: 0.05s;">
+                <img src="assets/images/hero-6.jpg" alt="">
+            </div>
+            <div class="collage-img" style="--x: 36%; --y: -1%; --w: 18%; --rot: -2deg; --delay: 0.1s;">
+                <img src="assets/images/hero-2.jpg" alt="">
+            </div>
+            <div class="collage-img" style="--x: 52%; --y: 2%; --w: 21%; --rot: 3deg; --delay: 0.15s;">
+                <img src="assets/images/hero-7.jpg" alt="">
+            </div>
+            <div class="collage-img" style="--x: 72%; --y: -2%; --w: 19%; --rot: -4deg; --delay: 0.2s;">
+                <img src="assets/images/hero-3.jpg" alt="">
+            </div>
+            <!-- Row 2 -->
+            <div class="collage-img" style="--x: 3%; --y: 22%; --w: 20%; --rot: 4deg; --delay: 0.08s;">
+                <img src="assets/images/hero-10.jpg" alt="">
+            </div>
+            <div class="collage-img" style="--x: 22%; --y: 25%; --w: 22%; --rot: -3deg; --delay: 0.12s;">
+                <img src="assets/images/trung-tam.jpg" alt="">
+            </div>
+            <div class="collage-img" style="--x: 42%; --y: 20%; --w: 19%; --rot: 2deg; --delay: 0.18s;">
+                <img src="assets/images/hero-8.jpg" alt="">
+            </div>
+            <div class="collage-img" style="--x: 60%; --y: 24%; --w: 21%; --rot: -2deg; --delay: 0.22s;">
+                <img src="assets/images/hero-4.jpg" alt="">
+            </div>
+            <div class="collage-img" style="--x: 80%; --y: 20%; --w: 20%; --rot: 3deg; --delay: 0.28s;">
+                <img src="assets/images/gia-su.jpg" alt="">
+            </div>
+            <!-- Row 3 -->
+            <div class="collage-img" style="--x: -2%; --y: 48%; --w: 21%; --rot: -2deg; --delay: 0.1s;">
+                <img src="assets/images/hero-9.jpg" alt="">
+            </div>
+            <div class="collage-img" style="--x: 17%; --y: 52%; --w: 20%; --rot: 3deg; --delay: 0.15s;">
+                <img src="assets/images/hero-1.jpg" alt="">
+            </div>
+            <div class="collage-img" style="--x: 35%; --y: 48%; --w: 22%; --rot: -4deg; --delay: 0.2s;">
+                <img src="assets/images/hero-6.jpg" alt="">
+            </div>
+            <div class="collage-img" style="--x: 55%; --y: 50%; --w: 19%; --rot: 2deg; --delay: 0.25s;">
+                <img src="assets/images/hero-10.jpg" alt="">
+            </div>
+            <div class="collage-img" style="--x: 74%; --y: 46%; --w: 24%; --rot: -3deg; --delay: 0.3s;">
+                <img src="assets/images/hero-5.jpg" alt="">
+            </div>
+            <!-- Row 4 -->
+            <div class="collage-img" style="--x: 5%; --y: 74%; --w: 20%; --rot: 3deg; --delay: 0.12s;">
+                <img src="assets/images/hero-7.jpg" alt="">
+            </div>
+            <div class="collage-img" style="--x: 24%; --y: 76%; --w: 21%; --rot: -2deg; --delay: 0.18s;">
+                <img src="assets/images/hero-8.jpg" alt="">
+            </div>
+            <div class="collage-img" style="--x: 44%; --y: 72%; --w: 18%; --rot: 4deg; --delay: 0.22s;">
+                <img src="assets/images/hero-3.jpg" alt="">
+            </div>
+            <div class="collage-img" style="--x: 62%; --y: 75%; --w: 20%; --rot: -3deg; --delay: 0.28s;">
+                <img src="assets/images/hero-9.jpg" alt="">
+            </div>
+            <div class="collage-img" style="--x: 80%; --y: 72%; --w: 21%; --rot: 2deg; --delay: 0.32s;">
+                <img src="assets/images/trung-tam.jpg" alt="">
+            </div>
+        </div>
+        <!-- Dark Overlay -->
+        <div class="hero-overlay"></div>
+        <!-- Content -->
         <div class="container">
             <div class="hero-content">
-                <h1>Hành trình tri thức,<br>Tương lai tươi sáng</h1>
+                <h1>Vững kiến thức,<br>Chắc tương lai</h1>
                 <p>Khơi dậy tiềm năng và xây dựng nền tảng vững chắc cho học sinh với đội ngũ giáo viên tận tâm, phương pháp giảng dạy hiện đại tại Thành Nhân Education.</p>
                 <div class="hero-buttons">
                     <a href="#chieu-sinh" class="btn btn-primary">Xem lịch khai giảng</a>
@@ -61,7 +131,7 @@
         <div class="container">
             <div class="about-grid animate-on-scroll">
                 <div class="about-image">
-                    <img src="https://images.unsplash.com/photo-1524178232363-1fb2b075b655?q=80&w=800&auto=format&fit=crop" alt="Không gian học tập">
+                    <img src="assets/images/trung-tam.jpg" alt="Không gian học tập">
                 </div>
                 <div class="about-content">
                     <h2 class="section-title" style="text-align: left; margin-bottom: 1.5rem;">Về Thành Nhân Education</h2>
@@ -96,36 +166,48 @@
                 <!-- Teacher 1 -->
                 <div class="teacher-card">
                     <div class="teacher-img">
-                        <img src="https://images.unsplash.com/photo-1568602471122-7832951cc4c5?q=80&w=400&auto=format&fit=crop" alt="Thầy Nguyễn Văn A">
+                        <img src="assets/images/teacher-vu.jpg" alt="Thầy Danh Tuấn Vũ" style="object-position: center 15%;">
                     </div>
                     <div class="teacher-info">
-                        <h4>Thầy Nguyễn Văn A</h4>
+                        <h4>Thầy Danh Tuấn Vũ</h4>
                         <span>Giáo viên Toán học</span>
-                        <p>Thạc sĩ phương pháp giảng dạy Toán học. Hơn 10 năm kinh nghiệm luyện thi Đại học khối A, A1.</p>
+                        <p>Thạc sĩ ngành xác suất thống kê toán K21, hơn 9 năm kinh nghiệm dạy kèm Toán 6 - 12.</p>
                     </div>
                 </div>
                 
                 <!-- Teacher 2 -->
                 <div class="teacher-card">
                     <div class="teacher-img">
-                        <img src="https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?q=80&w=400&auto=format&fit=crop" alt="Cô Trần Thị B">
+                        <img src="assets/images/bao-khuyen.jpg" alt="Cô Lưu Ngọc Bảo Khuyên" style="object-position: center 35%;">
                     </div>
                     <div class="teacher-info">
-                        <h4>Cô Trần Thị B</h4>
-                        <span>Giáo viên Tiếng Anh</span>
-                        <p>IELTS 8.5. Từng là du học sinh Anh. Giúp học sinh nắm bắt từ vựng và ngữ pháp một cách tự nhiên.</p>
+                        <h4>Cô Lưu Ngọc Bảo Khuyên</h4>
+                        <span>Giáo viên Anh Văn</span>
+                        <p>Phụ trách giảng dạy các lớp Anh Văn 6 - 12. Có hơn 3 năm kinh nghiệm giảng dạy, với phương pháp dễ hiểu, cá nhân hóa với từng học sinh.</p>
                     </div>
                 </div>
                 
                 <!-- Teacher 3 -->
                 <div class="teacher-card">
-                    <div class="teacher-img">
-                        <img src="https://images.unsplash.com/photo-1580894732444-8ecded7900cd?q=80&w=400&auto=format&fit=crop" alt="Thầy Lê Văn C">
+                    <div class="teacher-img" style="background-color: white;">
+                        <img src="assets/images/tu-ngan.jpg" alt="Cô Trần Tú Ngân" style="object-fit: contain; transform: scale(0.85); object-position: center;">
                     </div>
                     <div class="teacher-info">
-                        <h4>Thầy Lê Văn C</h4>
-                        <span>Giáo viên Vật Lý</span>
-                        <p>Có nhiều năm nghiên cứu chuyên sâu, truyền cảm hứng bằng những thí nghiệm thực tế hấp dẫn.</p>
+                        <h4>Cô Trần Tú Ngân</h4>
+                        <span>Giáo viên Ngữ Văn</span>
+                        <p>Phụ trách giảng dạy các lớp Ngữ Văn 6 - 12. Có phương pháp giảng dạy khoa học, giúp học sinh nắm vững kiến thức, tự tin chinh phục các kỳ thi và nâng cao điểm số.</p>
+                    </div>
+                </div>
+
+                <!-- Teacher 4 -->
+                <div class="teacher-card">
+                    <div class="teacher-img">
+                        <img src="assets/images/thuy-duy.jpg" alt="Cô Danh Thị Thúy Duy" style="object-position: center 45%;">
+                    </div>
+                    <div class="teacher-info">
+                        <h4>Cô Danh Thị Thúy Duy</h4>
+                        <span>Giáo viên Vật lý</span>
+                        <p>Cử nhân sư phạm Vật lý. Có nhiều năm nghiên cứu chuyên sâu. Hiện tại đang học cao học ngành Vật lý Lý thuyết và Vật lý Toán.</p>
                     </div>
                 </div>
             </div>
@@ -231,7 +313,7 @@
                     <a href="https://zalo.me/0388877543" target="_blank" class="btn btn-primary" style="margin-top: 1rem;">Đăng ký tìm gia sư</a>
                 </div>
                 <div class="about-image">
-                    <img src="https://images.unsplash.com/photo-1577896851231-70ef18881754?q=80&w=800&auto=format&fit=crop" alt="Gia sư 1 kèm 1">
+                    <img src="assets/images/gia-su.jpg" alt="Gia sư 1 kèm 1">
                 </div>
             </div>
         </div>
@@ -271,7 +353,7 @@
                         <img src="assets/images/logo.png" alt="Thành Nhân Edu Logo" style="height: 40px; margin-right: 10px;">
                         Thành Nhân Edu
                     </a>
-                    <p style="color: #94a3b8; margin-top: 1rem;">Khơi nguồn tri thức - Chắp cánh tương lai. Đồng hành cùng học sinh trên chặng đường chinh phục ước mơ.</p>
+                    <p style="color: #94a3b8; margin-top: 1rem;">Vững kiến thức - Chắc tương lai.<br>Đồng hành cùng học sinh trên chặng đường chinh phục ước mơ.</p>
                 </div>
                 
                 <div class="footer-col">
@@ -298,6 +380,10 @@
                         <li>
                             <i data-lucide="mail"></i>
                             Edu.thanhnhan@gmail.com
+                        </li>
+                        <li>
+                            <i data-lucide="file-text"></i>
+                            MST: 1801755276
                         </li>
                     </ul>
                 </div>
