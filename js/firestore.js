@@ -123,6 +123,25 @@ const DB = {
         }
     },
 
+    async saveAttendanceBatch(updatesList) {
+        const batch = window.db.batch();
+        for (const data of updatesList) {
+            const existing = await this.getAttendance(data.classId, data.date);
+            if (existing.length > 0) {
+                const ref = window.db.collection('attendance').doc(existing[0].id);
+                batch.update(ref, {
+                    records: data.records,
+                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+            } else {
+                const ref = window.db.collection('attendance').doc();
+                data.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+                batch.set(ref, data);
+            }
+        }
+        return await batch.commit();
+    },
+
     // === GRADES ===
     async getGrades(classId) {
         const snap = await window.db.collection('grades')

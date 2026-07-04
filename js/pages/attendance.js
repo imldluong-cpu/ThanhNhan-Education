@@ -1,8 +1,9 @@
 // ============================================
-// ATTENDANCE PAGE - Filter classes by schedule
+// ATTENDANCE PAGE
 // ============================================
 
 Router.register('attendance', async (container) => {
+    const isManager = Auth.hasAnyRole('owner', 'admin', 'staff');
     const canEdit = Auth.hasAnyRole('owner', 'admin', 'staff', 'teacher');
     let classes = [], schedules = [];
     try {
@@ -14,6 +15,10 @@ Router.register('attendance', async (container) => {
 
     let selectedClassId = '', selectedDate = DB.today();
     let students = [], attendance = [], allStudents = [], dailyAttendance = [];
+    
+    // Global state for Monthly Grid
+    window.globalGridRecords = {}; 
+    window.globalGridClassDates = {};
 
     async function loadDailySummary() {
         if (!selectedDate) return;
@@ -43,20 +48,130 @@ Router.register('attendance', async (container) => {
         } catch(e) { console.warn('Load attendance error:', e); }
     }
 
-    function getStatus(studentId) {
+    function getStatusObj(studentId) {
         const record = attendance.find(r => r.studentId === studentId);
-        return record ? record.status : '';
+        return record || { status: '', reason: '' };
     }
 
-    function render() {
+    async function renderMonthlyGrid() {
+        const area = document.getElementById('att-area');
+        
+        const classSelect = document.getElementById('att-class-select');
+        if (classSelect) classSelect.style.display = 'none';
+        
+        const summaryArea = document.getElementById('att-summary');
+        if (summaryArea) summaryArea.style.display = 'none';
+
+        if (!selectedDate) return;
+        const [y, m, d] = selectedDate.split('-');
+        const monthPrefix = `${y}-${m}`;
+
+        const validClasses = getValidClassesForDate(selectedDate);
+        if (validClasses.length === 0) {
+            area.innerHTML = '<div class="card"><div class="card-body"><div class="empty-state"><p>Không có lớp nào học trong ngày này</p></div></div></div>';
+            return;
+        }
+
+        area.innerHTML = '<div class="text-center" style="padding: 40px;"><div class="spinner"></div><p style="margin-top:10px;color:var(--text-muted);">Đang tải dữ liệu điểm danh tháng...</p></div>';
+
+        let html = '';
+        const allMonthDates = []; 
+        const daysInMonth = new Date(y, m, 0).getDate();
+        for (let i = 1; i <= daysInMonth; i++) {
+            allMonthDates.push(`${y}-${m}-${String(i).padStart(2, '0')}`);
+        }
+
+        window.globalGridRecords = {}; 
+        window.globalGridClassDates = {};
+
+        for (const cls of validClasses) {
+            const classDays = schedules.filter(s => s.classId === cls.id).map(s => Number(s.dayOfWeek));
+            const classDates = allMonthDates.filter(dateStr => {
+                const dateObj = new Date(dateStr.split('-')[0], dateStr.split('-')[1]-1, dateStr.split('-')[2]);
+                const day = dateObj.getDay();
+                const firestoreDay = day === 0 ? 8 : day + 1;
+                return classDays.includes(firestoreDay);
+            });
+            window.globalGridClassDates[cls.id] = classDates;
+
+            const classStudents = allStudents.filter(s => s.status === 'active' && (s.classIds || []).includes(cls.id));
+            if (classStudents.length === 0) continue;
+
+            const monthAttendance = await DB.getAttendanceByDateRange(cls.id, `${monthPrefix}-01`, `${monthPrefix}-31`);
+            
+            globalGridRecords[cls.id] = {};
+            classStudents.forEach(s => globalGridRecords[cls.id][s.id] = {});
+            
+            monthAttendance.forEach(record => {
+                const date = record.date;
+                (record.records || []).forEach(r => {
+                    if (globalGridRecords[cls.id][r.studentId]) {
+                        globalGridRecords[cls.id][r.studentId][date] = { status: r.status, reason: r.reason || '' };
+                    }
+                });
+            });
+
+            html += `<div class="card" style="margin-bottom: 20px;">
+                <div class="card-header"><h3 style="margin:0;">Lớp ${cls.name}</h3></div>
+                <div class="card-body" style="overflow-x: auto; padding: 0;">
+                    <table class="table" style="min-width: max-content; margin: 0; border-collapse: collapse;">
+                        <thead>
+                            <tr style="background: var(--bg-color);">
+                                <th style="position: sticky; left: 0; background: var(--bg-color); z-index: 2; border-right: 1px solid var(--border-color);">Học viên</th>
+                                ${classDates.map(dateStr => {
+                                    const dateD = dateStr.split('-')[2];
+                                    const isSelected = dateStr === selectedDate;
+                                    return `<th style="text-align:center; min-width: 60px; ${isSelected ? 'background: var(--primary-light); color: var(--primary-color);' : ''}">${dateD}/${m}</th>`;
+                                }).join('')}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${classStudents.map(student => `
+                                <tr>
+                                    <td style="position: sticky; left: 0; background: white; z-index: 1; font-weight: 500; border-right: 1px solid var(--border-color);">${student.name}</td>
+                                    ${classDates.map(dateStr => {
+                                        const rec = globalGridRecords[cls.id][student.id][dateStr];
+                                        const status = rec ? rec.status : '';
+                                        const reason = rec ? rec.reason : '';
+                                        let icon = '<div style="width:24px;height:24px;border-radius:4px;border:1px solid var(--border-color);margin:0 auto;background:#f8f9fa;"></div>';
+                                        if (status === 'present') { icon = '<div style="width:24px;height:24px;border-radius:4px;background:var(--success);color:white;margin:0 auto;display:flex;align-items:center;justify-content:center;font-size:12px;">✓</div>'; }
+                                        else if (status === 'absent_excused') { icon = '<div style="width:24px;height:24px;border-radius:4px;background:var(--warning);color:white;margin:0 auto;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:bold;">VCP</div>'; }
+                                        else if (status === 'absent_unexcused') { icon = '<div style="width:24px;height:24px;border-radius:4px;background:var(--danger);color:white;margin:0 auto;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:bold;">VKP</div>'; }
+                                        
+                                        const isSelected = dateStr === selectedDate;
+                                        return `<td id="cell-${cls.id}-${student.id}-${dateStr}" style="text-align:center; cursor:pointer; padding: 4px; ${isSelected ? 'background: #f0f7ff;' : ''}" title="${reason}" onclick="AttendancePage.cycleGridStatus('${cls.id}', '${student.id}', '${dateStr}')">
+                                            ${icon}
+                                        </td>`;
+                                    }).join('')}
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            </div>`;
+        }
+
+        if (html === '') {
+            html = '<div class="card"><div class="card-body"><div class="empty-state"><p>Không có dữ liệu học viên trong các lớp ngày này</p></div></div></div>';
+        } else {
+            html += `<div style="position: sticky; bottom: 20px; text-align: center; margin-top: 20px;">
+                <button class="btn btn-primary btn-lg" style="box-shadow: 0 4px 12px rgba(13,110,253,0.3); padding: 12px 32px;" onclick="AttendancePage.saveAllGrid()"><i data-lucide="save"></i> Lưu điểm danh toàn bộ Tháng</button>
+            </div>`;
+        }
+        
+        area.innerHTML = html;
+        if (window.lucide) lucide.createIcons();
+    }
+
+    function renderDailyView() {
         const area = document.getElementById('att-area');
         if (!area) return;
 
         const validClasses = getValidClassesForDate(selectedDate);
         
-        // Update the class select dropdown dynamically based on date
         const classSelect = document.getElementById('att-class-select');
         if (classSelect) {
+            classSelect.style.display = 'inline-block';
             const currentVal = classSelect.value;
             classSelect.innerHTML = `<option value="">Chọn lớp</option>${validClasses.map(c => {
                 const classStudentsCount = allStudents.filter(s => s.status === 'active' && (s.classIds || []).includes(c.id)).length;
@@ -68,7 +183,6 @@ Router.register('attendance', async (container) => {
                 }
                 return `<option value="${c.id}" ${c.id === currentVal ? 'selected' : ''}>${c.name} ${statusText}</option>`;
             }).join('')}`;
-            // If the selected class is no longer valid for this date, deselect it
             if (currentVal && !validClasses.find(c => c.id === currentVal)) {
                 selectedClassId = '';
                 classSelect.value = '';
@@ -77,6 +191,7 @@ Router.register('attendance', async (container) => {
 
         const summaryArea = document.getElementById('att-summary');
         if (summaryArea) {
+            summaryArea.style.display = 'block';
             if (validClasses.length === 0) {
                 summaryArea.innerHTML = '';
             } else {
@@ -109,22 +224,28 @@ Router.register('attendance', async (container) => {
         area.innerHTML = `
             <div class="card">
                 <div class="card-body">
-                    <div class="attendance-grid">
+                    <div class="attendance-grid" style="display: grid; gap: 12px;">
                         ${students.map(s => {
-                            const status = getStatus(s.id);
-                            return `<div class="attendance-item">
-                                <div class="att-student-name">${s.name}</div>
-                                <div class="att-buttons">
-                                    <button class="status-btn ${status === 'present' ? 'active-present' : ''}" onclick="AttendancePage.setStatus('${s.id}', 'present')" title="Có mặt">✓</button>
-                                    <button class="status-btn ${status === 'absent' ? 'active-absent' : ''}" onclick="AttendancePage.setStatus('${s.id}', 'absent')" title="Vắng">✗</button>
-                                    <button class="status-btn ${status === 'late' ? 'active-late' : ''}" onclick="AttendancePage.setStatus('${s.id}', 'late')" title="Trễ">⏰</button>
+                            const rec = localRecords[s.id] || { status: '', reason: '' };
+                            const status = rec.status;
+                            return `<div class="attendance-item" id="att-item-${s.id}" style="padding: 12px; border: 1px solid var(--border-color); border-radius: 8px; display: flex; flex-direction: column; gap: 8px;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+                                    <div class="att-student-name" style="font-weight: 500;">${s.name}</div>
+                                    <div class="att-buttons" style="display: flex; gap: 4px;">
+                                        <button class="status-btn ${status === 'present' ? 'active-present' : ''}" style="width: auto; padding: 4px 12px; font-size: 13px;" onclick="AttendancePage.setStatus('${s.id}', 'present')" title="Có mặt">Có mặt</button>
+                                        <button class="status-btn ${status === 'absent_excused' ? 'active-absent' : ''}" style="width: auto; padding: 4px 12px; font-size: 13px;" onclick="AttendancePage.setStatus('${s.id}', 'absent_excused')" title="Vắng có phép">V. Có phép</button>
+                                        <button class="status-btn ${status === 'absent_unexcused' ? 'active-absent' : ''}" style="width: auto; padding: 4px 12px; font-size: 13px;" onclick="AttendancePage.setStatus('${s.id}', 'absent_unexcused')" title="Vắng không phép">V. Không phép</button>
+                                    </div>
+                                </div>
+                                <div class="att-reason-display" style="font-size: 13px; color: var(--danger); ${rec.reason ? 'display:block;' : 'display:none;'}">
+                                    <i data-lucide="info" style="width: 14px; height: 14px; vertical-align: middle;"></i> Lý do: <span class="reason-text">${rec.reason}</span>
                                 </div>
                             </div>`;
                         }).join('')}
                     </div>
                     ${canEdit ? `
                         <div style="margin-top:var(--space-6);display:flex;justify-content:center;gap:var(--space-3);">
-                            <button class="btn btn-secondary btn-lg" onclick="AttendancePage.markAllPresent()"><i data-lucide="check-square"></i> Điểm danh cả lớp</button>
+                            <button class="btn btn-secondary btn-lg" onclick="AttendancePage.markAllPresent()"><i data-lucide="check-square"></i> Cả lớp có mặt</button>
                             <button class="btn btn-primary btn-lg" onclick="AttendancePage.save()"><i data-lucide="save"></i> Lưu điểm danh</button>
                         </div>
                     ` : ''}
@@ -134,97 +255,203 @@ Router.register('attendance', async (container) => {
         if (window.lucide) lucide.createIcons();
     }
 
+    function render() {
+        if (isManager) {
+            renderMonthlyGrid();
+        } else {
+            renderDailyView();
+        }
+    }
+
     container.innerHTML = `
         <div class="page-header">
-            <div><h1 class="page-title"><i data-lucide="check-square"></i> Điểm danh học viên</h1></div>
+            <div><h1 class="page-title"><i data-lucide="check-square"></i> ${isManager ? 'Điểm danh Tổng quan Tháng' : 'Điểm danh học viên'}</h1></div>
         </div>
         <div class="filter-bar">
             <input type="date" class="input" style="max-width:180px;" value="${selectedDate}" onchange="AttendancePage.selectDate(this.value)">
-            <select class="select" id="att-class-select" style="max-width:300px;" onchange="AttendancePage.selectClass(this.value)">
+            <select class="select" id="att-class-select" style="max-width:300px; display:none;" onchange="AttendancePage.selectClass(this.value)">
                 <option value="">Chọn lớp</option>
-                ${getValidClassesForDate(selectedDate).map(c => `<option value="${c.id}">${c.name}</option>`).join('')}
             </select>
         </div>
-        <div id="att-summary" style="margin-bottom:var(--space-4);"></div>
+        <div id="att-summary" style="margin-bottom:var(--space-4); display:none;"></div>
         <div id="att-area"></div>
     `;
-    render();
-
+    
+    // Initial call requires careful ordering
     let localRecords = {};
+    if (isManager) {
+        renderMonthlyGrid();
+    } else {
+        renderDailyView();
+    }
 
     window.AttendancePage = {
         async selectClass(id) {
             selectedClassId = id;
             await loadData();
             localRecords = {};
-            attendance.forEach(r => { localRecords[r.studentId] = r.status; });
-            render();
+            attendance.forEach(r => { localRecords[r.studentId] = { status: r.status, reason: r.reason || '' }; });
+            renderDailyView();
         },
 
         async selectDate(date) {
             selectedDate = date;
-            
-            // Re-evaluate valid classes for the new date
-            const validClasses = getValidClassesForDate(selectedDate);
-            if (selectedClassId && !validClasses.find(c => c.id === selectedClassId)) {
-                selectedClassId = ''; // Reset if class doesn't study on this day
+            if (isManager) {
+                renderMonthlyGrid();
+            } else {
+                const validClasses = getValidClassesForDate(selectedDate);
+                if (selectedClassId && !validClasses.find(c => c.id === selectedClassId)) {
+                    selectedClassId = ''; 
+                }
+                await loadDailySummary();
+                await loadData();
+                localRecords = {};
+                attendance.forEach(r => { localRecords[r.studentId] = { status: r.status, reason: r.reason || '' }; });
+                renderDailyView();
             }
-            
-            await loadDailySummary();
-            await loadData();
-            localRecords = {};
-            attendance.forEach(r => { localRecords[r.studentId] = r.status; });
-            render();
         },
 
-        setStatus(studentId, status) {
-            if (localRecords[studentId] === status) {
+        async setStatus(studentId, status) {
+            let reason = '';
+            if (status === 'absent_excused' || status === 'absent_unexcused') {
+                const res = await Swal.fire({
+                    title: status === 'absent_excused' ? 'Lý do vắng có phép' : 'Lý do vắng không phép',
+                    input: 'text',
+                    inputPlaceholder: 'Nhập lý do vắng...',
+                    showCancelButton: true,
+                    confirmButtonText: 'Lưu',
+                    cancelButtonText: 'Hủy'
+                });
+                if (!res.isConfirmed || !res.value.trim()) {
+                    if (res.isConfirmed) Toast.warning('Vui lòng nhập lý do vắng');
+                    return; // Cancelled or empty
+                }
+                reason = res.value.trim();
+            }
+
+            if (localRecords[studentId] && localRecords[studentId].status === status) {
                 delete localRecords[studentId];
             } else {
-                localRecords[studentId] = status;
+                localRecords[studentId] = { status, reason };
             }
-            const items = document.querySelectorAll('.attendance-item');
-            items.forEach(item => {
+
+            // Update UI for this item
+            const item = document.getElementById(`att-item-${studentId}`);
+            if (item) {
                 const btns = item.querySelectorAll('.status-btn');
-                const name = item.querySelector('.att-student-name').textContent;
-                const student = students.find(s => s.name === name);
-                if (student && student.id === studentId) {
-                    btns.forEach(btn => {
-                        btn.classList.remove('active-present', 'active-absent', 'active-late');
-                    });
-                    const st = localRecords[studentId];
-                    if (st === 'present') btns[0].classList.add('active-present');
-                    else if (st === 'absent') btns[1].classList.add('active-absent');
-                    else if (st === 'late') btns[2].classList.add('active-late');
+                btns.forEach(btn => btn.classList.remove('active-present', 'active-absent'));
+                const st = localRecords[studentId] ? localRecords[studentId].status : null;
+                if (st === 'present') btns[0].classList.add('active-present');
+                else if (st === 'absent_excused') btns[1].classList.add('active-absent');
+                else if (st === 'absent_unexcused') btns[2].classList.add('active-absent');
+                
+                const reasonDiv = item.querySelector('.att-reason-display');
+                if (reasonDiv) {
+                    if (st === 'absent_excused' || st === 'absent_unexcused') {
+                        reasonDiv.style.display = 'block';
+                        reasonDiv.querySelector('.reason-text').textContent = localRecords[studentId].reason;
+                    } else {
+                        reasonDiv.style.display = 'none';
+                    }
                 }
-            });
+            }
+        },
+
+        async cycleGridStatus(classId, studentId, date) {
+            if (!canEdit) return;
+            const rec = globalGridRecords[classId][studentId][date] || { status: '', reason: '' };
+            let nextStatus = '';
+            let reason = '';
+            
+            if (rec.status === '') nextStatus = 'present';
+            else if (rec.status === 'present') nextStatus = 'absent_excused';
+            else if (rec.status === 'absent_excused') nextStatus = 'absent_unexcused';
+            else if (rec.status === 'absent_unexcused') nextStatus = '';
+
+            if (nextStatus === 'absent_excused' || nextStatus === 'absent_unexcused') {
+                const res = await Swal.fire({
+                    title: nextStatus === 'absent_excused' ? 'Lý do vắng có phép' : 'Lý do vắng không phép',
+                    input: 'text',
+                    inputPlaceholder: 'Nhập lý do vắng...',
+                    showCancelButton: true,
+                    confirmButtonText: 'Lưu',
+                    cancelButtonText: 'Bỏ qua'
+                });
+                if (!res.isConfirmed || !res.value.trim()) {
+                    if (res.isConfirmed) Toast.warning('Vui lòng nhập lý do vắng');
+                    return; // abort cycle
+                }
+                reason = res.value.trim();
+            }
+
+            globalGridRecords[classId][studentId][date] = { status: nextStatus, reason };
+            
+            // Re-render cell
+            const cell = document.getElementById(`cell-${classId}-${studentId}-${date}`);
+            if (cell) {
+                let icon = '<div style="width:24px;height:24px;border-radius:4px;border:1px solid var(--border-color);margin:0 auto;background:#f8f9fa;"></div>';
+                if (nextStatus === 'present') { icon = '<div style="width:24px;height:24px;border-radius:4px;background:var(--success);color:white;margin:0 auto;display:flex;align-items:center;justify-content:center;font-size:12px;">✓</div>'; }
+                else if (nextStatus === 'absent_excused') { icon = '<div style="width:24px;height:24px;border-radius:4px;background:var(--warning);color:white;margin:0 auto;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:bold;">VCP</div>'; }
+                else if (nextStatus === 'absent_unexcused') { icon = '<div style="width:24px;height:24px;border-radius:4px;background:var(--danger);color:white;margin:0 auto;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:bold;">VKP</div>'; }
+                cell.innerHTML = icon;
+                cell.title = reason;
+            }
         },
 
         markAllPresent() {
             students.forEach(s => {
-                localRecords[s.id] = 'present';
+                localRecords[s.id] = { status: 'present', reason: '' };
             });
-            const items = document.querySelectorAll('.attendance-item');
-            items.forEach(item => {
-                const btns = item.querySelectorAll('.status-btn');
-                btns.forEach(btn => btn.classList.remove('active-present', 'active-absent', 'active-late'));
-                btns[0].classList.add('active-present');
-            });
+            renderDailyView();
         },
 
         async save() {
             if (!selectedClassId) return;
-            const records = Object.entries(localRecords).map(([studentId, status]) => ({ studentId, status }));
+            const records = Object.entries(localRecords).map(([studentId, data]) => ({ studentId, status: data.status, reason: data.reason }));
             if (records.length === 0) { Toast.warning('Chưa điểm danh ai'); return; }
             try {
                 await DB.saveAttendance({ classId: selectedClassId, date: selectedDate, records });
                 const present = records.filter(r => r.status === 'present').length;
-                const absent = records.filter(r => r.status === 'absent').length;
-                const late = records.filter(r => r.status === 'late').length;
-                Toast.success('Đã lưu điểm danh', `✓ ${present} có mặt, ✗ ${absent} vắng, ⏰ ${late} trễ`);
+                const absentE = records.filter(r => r.status === 'absent_excused').length;
+                const absentU = records.filter(r => r.status === 'absent_unexcused').length;
+                Toast.success('Đã lưu điểm danh', `✓ ${present} có mặt, ✗ ${absentE+absentU} vắng`);
                 await loadDailySummary();
-                render();
+                renderDailyView();
             } catch(e) { Toast.error('Lỗi lưu', e.message); }
+        },
+
+        async saveAllGrid() {
+            if (!canEdit) return;
+            try {
+                Toast.info('Đang lưu dữ liệu...', 'Vui lòng đợi...');
+                const updates = [];
+                for (const classId in globalGridRecords) {
+                    const classDates = globalGridClassDates[classId] || [];
+                    for (const dateStr of classDates) {
+                        const records = [];
+                        for (const studentId in globalGridRecords[classId]) {
+                            const rec = globalGridRecords[classId][studentId][dateStr];
+                            if (rec && rec.status) {
+                                records.push({ studentId, status: rec.status, reason: rec.reason || '' });
+                            }
+                        }
+                        if (records.length > 0) {
+                            updates.push({ classId, date: dateStr, records });
+                        }
+                    }
+                }
+                if (updates.length === 0) {
+                    Toast.warning('Không có dữ liệu nào để lưu');
+                    return;
+                }
+                
+                await DB.saveAttendanceBatch(updates);
+                Toast.success('Đã lưu toàn bộ điểm danh', `Cập nhật thành công ${updates.length} bản ghi ngày.`);
+            } catch(e) {
+                console.error(e);
+                Toast.error('Lỗi lưu dữ liệu', e.message);
+            }
         }
     };
 });
+
