@@ -508,13 +508,31 @@ Router.register('classes', async (container) => {
                     notes: document.getElementById('c-notes').value || ''
                 });
 
-                // Auto-activate pending students if class is active
+                // Auto-activate or revert students
                 if (status === 'active') {
                     const pendingStudents = students.filter(s => (s.classIds || []).includes(id) && s.status === 'pending');
                     if (pendingStudents.length > 0) {
                         Toast.info('Hệ thống đang tự động cập nhật trạng thái học viên...');
                         for (const ps of pendingStudents) {
                             await DB.updateStudent(ps.id, { status: 'active' });
+                        }
+                    }
+                } else {
+                    const activeStudents = students.filter(s => (s.classIds || []).includes(id) && s.status === 'active');
+                    if (activeStudents.length > 0) {
+                        const otherActiveClasses = classes.filter(c => c.id !== id && c.status === 'active');
+                        let studentsToRevert = [];
+                        for (const s of activeStudents) {
+                            const hasOtherActiveClass = otherActiveClasses.some(c => (s.classIds || []).includes(c.id));
+                            if (!hasOtherActiveClass) {
+                                studentsToRevert.push(s);
+                            }
+                        }
+                        if (studentsToRevert.length > 0) {
+                            Toast.info('Hệ thống đang tự động chuyển học viên về chờ sắp lớp...');
+                            for (const ps of studentsToRevert) {
+                                await DB.updateStudent(ps.id, { status: 'pending' });
+                            }
                         }
                     }
                 }
