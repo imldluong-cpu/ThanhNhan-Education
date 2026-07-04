@@ -507,6 +507,17 @@ Router.register('classes', async (container) => {
                     startDate: status === 'upcoming' ? startDate : '',
                     notes: document.getElementById('c-notes').value || ''
                 });
+
+                // Auto-activate pending students if class is active
+                if (status === 'active') {
+                    const pendingStudents = students.filter(s => (s.classIds || []).includes(id) && s.status === 'pending');
+                    if (pendingStudents.length > 0) {
+                        Toast.info('Hệ thống đang tự động cập nhật trạng thái học viên...');
+                        for (const ps of pendingStudents) {
+                            await DB.updateStudent(ps.id, { status: 'active' });
+                        }
+                    }
+                }
                 Modal.close();
                 Toast.success('Thành công', 'Đã cập nhật lớp');
                 classes = isTeacher ? await DB.getClassesByTeacher(window.currentUser.id) : await DB.getClasses();
