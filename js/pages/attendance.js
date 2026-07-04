@@ -6,15 +6,14 @@ Router.register('attendance', async (container) => {
     const isManager = Auth.hasAnyRole('owner', 'admin', 'staff');
     const canEdit = Auth.hasAnyRole('owner', 'admin', 'staff', 'teacher');
     let classes = [], schedules = [];
+    let selectedClassId = '', selectedDate = DB.today();
+    let students = [], attendance = [], allStudents = [], dailyAttendance = [];
     try {
         classes = Auth.isTeacher() ? await DB.getClassesByTeacher(window.currentUser.id) : await DB.getClasses();
         schedules = await DB.getSchedules();
         allStudents = await DB.getStudents();
         await loadDailySummary();
     } catch(e) { console.warn(e); }
-
-    let selectedClassId = '', selectedDate = DB.today();
-    let students = [], attendance = [], allStudents = [], dailyAttendance = [];
     
     // Global state for Monthly Grid
     window.globalGridRecords = {}; 
