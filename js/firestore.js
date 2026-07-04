@@ -98,7 +98,13 @@ const DB = {
             .where('classId', '==', classId)
             .where('date', '==', date)
             .get();
-        return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        // Sort by updatedAt descending to always get the latest if duplicates exist
+        return docs.sort((a, b) => {
+            const timeA = a.updatedAt ? (a.updatedAt.toMillis ? a.updatedAt.toMillis() : 0) : 0;
+            const timeB = b.updatedAt ? (b.updatedAt.toMillis ? b.updatedAt.toMillis() : 0) : 0;
+            return timeB - timeA;
+        });
     },
 
     async getAttendanceByDateRange(classId, startDate, endDate) {
