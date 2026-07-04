@@ -46,8 +46,23 @@ Router.register('tuition', async (container) => {
     let activeYear = currentYearStr;
 
     function getStudentName(id) { return (students.find(s => s.id === id) || {}).name || '—'; }
-    function getClassName(id) {
-        if (id === 'Nhiều môn') return 'Nhiều môn';
+    function getClassName(id, t) {
+        if (id === 'Nhiều môn') {
+            if (t && t.note && t.note.includes(' - ')) {
+                const parts = t.note.split(' - ');
+                if (parts.length > 1) {
+                    return 'Nhiều môn: ' + parts.slice(1).join(' - ');
+                }
+            }
+            if (t && t.studentId) {
+                const student = students.find(s => s.id === t.studentId);
+                if (student && student.classIds && student.classIds.length > 1) {
+                    const names = student.classIds.map(cid => (classes.find(c => c.id === cid) || {}).name).filter(Boolean);
+                    if (names.length > 0) return 'Nhiều môn: ' + names.join(', ');
+                }
+            }
+            return 'Nhiều môn';
+        }
         return (classes.find(c => c.id === id) || {}).name || '—';
     }
 
@@ -175,7 +190,7 @@ Router.register('tuition', async (container) => {
                         <div class="reminder-info">
                             <div class="reminder-avatar" style="background:${statusColor}22;color:${statusColor}">${getStudentName(t.studentId).charAt(0)}</div>
                             <div class="reminder-details">
-                                <h4>${getStudentName(t.studentId)} <span style="font-size:12px;font-weight:normal;color:var(--text-secondary);">(${getClassName(t.classId)})</span></h4>
+                                <h4>${getStudentName(t.studentId)} <span style="font-size:12px;font-weight:normal;color:var(--text-secondary);">(${getClassName(t.classId, t)})</span></h4>
                                 <p>${DB.formatCurrency(t.amount)} — Hạn: ${DB.formatDate(t.dueDate)} <span style="color:${statusColor};font-weight:600;">(${statusText})</span> ${t.reminderSent ? '(Đã nhắc)' : ''}</p>
                             </div>
                         </div>
@@ -197,7 +212,7 @@ Router.register('tuition', async (container) => {
             } else {
                 content += filtered.map(t => `<tr>
                     <td><strong>${getStudentName(t.studentId)}</strong></td>
-                    <td>${getClassName(t.classId)}</td>
+                    <td>${getClassName(t.classId, t)}</td>
                     <td>${DB.formatCurrency(t.amount)}</td>
                     <td>${DB.formatDate(t.dueDate)}</td>
                     <td>${t.paidDate ? DB.formatDate(t.paidDate) : '—'}</td>
@@ -470,7 +485,7 @@ Router.register('tuition', async (container) => {
             if (!t) return;
             
             const studentName = getStudentName(t.studentId);
-            const className = getClassName(t.classId);
+            const className = getClassName(t.classId, t);
             const amountFormatted = DB.formatCurrency(t.amount).replace(' ₫', '');
             
             const d = new Date();
