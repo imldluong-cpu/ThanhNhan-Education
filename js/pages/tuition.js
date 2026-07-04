@@ -48,18 +48,16 @@ Router.register('tuition', async (container) => {
     function getStudentName(id) { return (students.find(s => s.id === id) || {}).name || '—'; }
     function getClassName(id, t) {
         if (id === 'Nhiều môn') {
-            if (t && t.note && t.note.includes(' - ')) {
+            if (t && t.note && t.note.includes(' - ') && t.note.startsWith('Học phí')) {
                 const parts = t.note.split(' - ');
                 if (parts.length > 1) {
                     return 'Nhiều môn: ' + parts.slice(1).join(' - ');
                 }
             }
             if (t && t.studentId) {
-                const student = students.find(s => s.id === t.studentId);
-                if (student && student.classIds && student.classIds.length > 1) {
-                    const names = student.classIds.map(cid => (classes.find(c => c.id === cid) || {}).name).filter(Boolean);
-                    if (names.length > 0) return 'Nhiều môn: ' + names.join(', ');
-                }
+                // Reliable fallback: check all classes to see if this student is enrolled
+                const names = classes.filter(c => c.studentIds && c.studentIds.includes(t.studentId)).map(c => c.name);
+                if (names.length > 0) return 'Nhiều môn: ' + names.join(', ');
             }
             return 'Nhiều môn';
         }
