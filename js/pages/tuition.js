@@ -237,29 +237,34 @@ Router.register('tuition', async (container) => {
         },
 
         markPaid(id) {
-            Modal.confirm({
+            const today = DB.today();
+            Modal.show({
                 title: 'Xác nhận thanh toán',
-                message: 'Đánh dấu khoản thu này là "Đã đóng" và tự động tạo phiếu thu cho tháng tiếp theo?',
-                confirmText: 'Xác nhận & Tạo tháng sau',
-                middleBtnText: 'Chỉ xác nhận',
-                cancelText: 'Hủy',
-                danger: false
-            });
-            Modal.bindConfirm(async () => {
-                await TuitionPage._processPaid(id, true);
-            });
-            Modal.bindMiddle(async () => {
-                await TuitionPage._processPaid(id, false);
+                content: `
+                    <p style="margin-bottom:12px;">Đánh dấu khoản thu này là "Đã đóng" và tự động tạo phiếu thu cho tháng tiếp theo?</p>
+                    <div class="form-group">
+                        <label class="form-label">Ngày đóng học phí</label>
+                        <input type="date" class="input" id="tuition-paid-date" value="${today}">
+                    </div>
+                `,
+                footer: `
+                    <button class="btn btn-secondary" onclick="Modal.close()">Hủy</button>
+                    <button class="btn btn-secondary" onclick="TuitionPage._processPaid('${id}', false)">Chỉ xác nhận</button>
+                    <button class="btn btn-primary" onclick="TuitionPage._processPaid('${id}', true)">Xác nhận & Tạo tháng sau</button>
+                `
             });
         },
 
         async _processPaid(id, createNext) {
             try {
-                await DB.updateTuition(id, { status: 'paid', paidDate: DB.today() });
+                const dateInput = document.getElementById('tuition-paid-date');
+                const paidDateStr = dateInput ? dateInput.value : DB.today();
+                
+                await DB.updateTuition(id, { status: 'paid', paidDate: paidDateStr });
                 const t = tuitions.find(x => x.id === id);
                 if (t) { 
                     t.status = 'paid'; 
-                    t.paidDate = DB.today(); 
+                    t.paidDate = paidDateStr; 
                     
                     // Auto-sync with Finance
                     await DB.addFinanceRecord({
@@ -267,7 +272,7 @@ Router.register('tuition', async (container) => {
                         category: 'Học phí',
                         description: `Thu học phí: ${t.studentName || getStudentName(t.studentId)} ${t.note ? '(' + t.note + ')' : ''}`,
                         amount: t.amount,
-                        date: DB.today(),
+                        date: paidDateStr,
                         createdBy: window.currentUser ? window.currentUser.id : 'system'
                     });
                 }
