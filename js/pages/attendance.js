@@ -9,10 +9,15 @@ Router.register('attendance', async (container) => {
     let selectedClassId = '', selectedDate = DB.today();
     let students = [], attendance = [], allStudents = [], dailyAttendance = [];
     try {
-        classes = Auth.isTeacher() ? await DB.getClassesByTeacher(window.currentUser.id) : await DB.getClasses();
-        schedules = await DB.getSchedules();
-        allStudents = await DB.getStudents();
-        await loadDailySummary();
+        const pClasses = Auth.isTeacher() ? DB.getClassesByTeacher(window.currentUser.id) : DB.getClasses();
+        const pSchedules = DB.getSchedules();
+        const pStudents = DB.getStudents();
+        const pDaily = (async () => {
+            if (!selectedDate) return;
+            const snap = await window.db.collection('attendance').where('date', '==', selectedDate).get();
+            dailyAttendance = snap.docs.map(d => d.data());
+        })();
+        [classes, schedules, allStudents] = await Promise.all([pClasses, pSchedules, pStudents, pDaily]);
     } catch(e) { console.warn(e); }
     
     // Global state for Monthly Grid
@@ -84,12 +89,14 @@ Router.register('attendance', async (container) => {
         window.globalGridRecords = {}; 
         window.globalGridClassDates = {};
 
-        const fetchPromises = [];
         const classesToRender = [];
+        
+        // Single DB query for the entire month
+        const allMonthAttendance = await DB.getAttendanceByMonth(`${monthPrefix}-01`, `${monthPrefix}-31`);
 
         for (const cls of allActiveClasses) {
             const classDays = schedules.filter(s => s.classId === cls.id).map(s => Number(s.dayOfWeek));
-            if (classDays.length === 0) continue; // Skip classes with no schedule
+            if (classDays.length === 0) continue; 
             
             const classDates = allMonthDates.filter(dateStr => {
                 const dateObj = new Date(dateStr.split('-')[0], dateStr.split('-')[1]-1, dateStr.split('-')[2]);
@@ -104,14 +111,11 @@ Router.register('attendance', async (container) => {
             if (classStudents.length === 0) continue;
 
             classesToRender.push({ cls, classDates, classStudents });
-            fetchPromises.push(DB.getAttendanceByDateRange(cls.id, `${monthPrefix}-01`, `${monthPrefix}-31`));
         }
-
-        const fetchResults = await Promise.all(fetchPromises);
 
         for (let i = 0; i < classesToRender.length; i++) {
             const { cls, classDates, classStudents } = classesToRender[i];
-            const monthAttendance = fetchResults[i];
+            const monthAttendance = allMonthAttendance.filter(a => a.classId === cls.id);
             
             globalGridRecords[cls.id] = {};
             classStudents.forEach(s => globalGridRecords[cls.id][s.id] = {});

@@ -116,6 +116,14 @@ const DB = {
         return snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (b.date || '').localeCompare(a.date || ''));
     },
 
+    async getAttendanceByMonth(startDate, endDate) {
+        const snap = await window.db.collection('attendance')
+            .where('date', '>=', startDate)
+            .where('date', '<=', endDate)
+            .get();
+        return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    },
+
     async saveAttendance(data) {
         const existing = await this.getAttendance(data.classId, data.date);
         if (existing.length > 0) {
