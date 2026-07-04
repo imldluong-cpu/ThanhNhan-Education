@@ -457,6 +457,7 @@ Router.register('teacher-attendance', async (container) => {
                     </div>
                     <div class="form-group"><label class="form-label">Lớp (Tất cả lớp)</label>
                         <select class="select" id="ta-class"><option value="">Chọn</option>${classListHtml}</select></div>
+                    <div class="form-group"><label style="display:flex;align-items:center;gap:8px;cursor:pointer;"><input type="checkbox" id="ta-first-session"> Buổi dạy đầu tiên (50% lương)</label></div>
                     <div class="form-group"><label class="form-label">Ghi chú</label><input type="text" class="input" id="ta-note"></div>
                 `,
                 footer: `<button class="btn btn-secondary" onclick="Modal.close()">Hủy</button><button class="btn btn-primary" onclick="TAPage.saveRecord()">Lưu</button>`
@@ -488,9 +489,14 @@ Router.register('teacher-attendance', async (container) => {
                 salary = classConf.perShift || 0;
             }
 
+            const isFirstSession = document.getElementById('ta-first-session') ? document.getElementById('ta-first-session').checked : false;
+            if (isFirstSession) {
+                salary = salary * 0.5;
+            }
+
             try {
                 await DB.addTeacherAttendanceRecord({
-                    teacherId, date, shift, startTime, endTime, hours, salary,
+                    teacherId, date, shift, startTime, endTime, hours, salary, isFirstSession,
                     classId: document.getElementById('ta-class').value,
                     note: document.getElementById('ta-note').value,
                     month: date.substring(0, 7)
@@ -527,10 +533,22 @@ Router.register('teacher-attendance', async (container) => {
                     </div>
                     <div class="form-group"><label class="form-label">Lớp (Tất cả lớp)</label>
                         <select class="select" id="ta-edit-class"><option value="">Chọn</option>${classListHtml}</select></div>
+                    <div class="form-group"><label style="display:flex;align-items:center;gap:8px;cursor:pointer;"><input type="checkbox" id="ta-edit-first-session" ${r.isFirstSession ? 'checked' : ''} onchange="TAPage.toggleFirstSessionEdit()"> Buổi dạy đầu tiên (50% lương)</label></div>
                     <div class="form-group"><label class="form-label">Ghi chú</label><input type="text" class="input" id="ta-edit-note" value="${r.note || ''}"></div>
                 `,
                 footer: `<button class="btn btn-secondary" onclick="Modal.close()">Hủy</button><button class="btn btn-primary" onclick="TAPage.saveEditRecord('${id}')">Cập nhật</button>`
             });
+        },
+
+        toggleFirstSessionEdit() {
+            const isChecked = document.getElementById('ta-edit-first-session').checked;
+            const salaryInput = document.getElementById('ta-edit-salary');
+            let current = parseFloat(salaryInput.value) || 0;
+            if (isChecked) {
+                salaryInput.value = current * 0.5;
+            } else {
+                salaryInput.value = current * 2;
+            }
         },
 
         async saveEditRecord(id) {
@@ -542,10 +560,11 @@ Router.register('teacher-attendance', async (container) => {
             const salary = parseInt(document.getElementById('ta-edit-salary').value) || 0;
             const classId = document.getElementById('ta-edit-class').value;
             const note = document.getElementById('ta-edit-note').value;
+            const isFirstSession = document.getElementById('ta-edit-first-session') ? document.getElementById('ta-edit-first-session').checked : false;
 
             try {
                 await DB.updateTeacherAttendanceRecord(id, {
-                    date, shift, startTime, endTime, hours, salary, classId, note, month: date.substring(0, 7)
+                    date, shift, startTime, endTime, hours, salary, classId, note, isFirstSession, month: date.substring(0, 7)
                 });
                 Modal.close();
                 Toast.success('Cập nhật thành công');
