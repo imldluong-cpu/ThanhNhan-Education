@@ -532,10 +532,12 @@ Router.register('tuition', async (container) => {
                                     <p style="margin: 0;">Ngân hàng TMCP Kỹ thương Việt Nam</p>
                                 </div>
                             </div>
-                            <div style="width: 30%; text-align: center; border-left: 1px solid #000; padding-left: 5px;">
+                            <div style="width: 30%; text-align: center; border-left: 1px solid #000; padding-left: 5px; position: relative;">
                                 <strong style="font-size: 14px;">Người lập</strong>
-                                <br><br><br><br>
-                                <strong class="invoice-editable" contenteditable="true" style="font-size: 14px; outline: none;">Lê Duy Lương</strong>
+                                <div style="height: 70px; margin-top: 10px; display: flex; align-items: center; justify-content: center;">
+                                    <img src="assets/images/signature.png" style="max-height: 80px; max-width: 100px; object-fit: contain; mix-blend-mode: multiply;" onerror="this.style.display='none'">
+                                </div>
+                                <strong class="invoice-editable" contenteditable="true" style="font-size: 14px; outline: none; display: block; margin-top: 5px;">Lê Duy Lương</strong>
                             </div>
                         </div>
                         
