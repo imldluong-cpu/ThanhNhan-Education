@@ -89,6 +89,20 @@ Router.register('tuition', async (container) => {
             const q = searchTerm.toLowerCase();
             list = list.filter(t => getStudentName(t.studentId).toLowerCase().includes(q));
         }
+
+        const statusWeight = {
+            'overdue': 1,
+            'pending': 2,
+            'paid': 3,
+            'upcoming': 4
+        };
+
+        list.sort((a, b) => {
+            const weightA = statusWeight[a._displayStatus] || 99;
+            const weightB = statusWeight[b._displayStatus] || 99;
+            return weightA - weightB;
+        });
+
         return list;
     }
 
