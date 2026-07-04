@@ -176,9 +176,9 @@ Router.register('attendance', async (container) => {
                                         const status = rec ? rec.status : '';
                                         const reason = rec ? rec.reason : '';
                                         let icon = '<div style="width:26px;height:26px;border-radius:50%;border:1.5px dashed var(--border-color);margin:0 auto;background:#fafafa;"></div>';
-                                        if (status === 'present') { icon = '<div style="width:26px;height:26px;border-radius:50%;background:var(--success);color:white;margin:0 auto;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:bold;">✓</div>'; }
-                                        else if (status === 'absent_excused') { icon = '<div style="width:26px;height:26px;border-radius:50%;background:var(--warning);color:white;margin:0 auto;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:bold;">CP</div>'; }
-                                        else if (status === 'absent_unexcused') { icon = '<div style="width:26px;height:26px;border-radius:50%;background:var(--danger);color:white;margin:0 auto;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:bold;">KP</div>'; }
+                                        if (status === 'present') { icon = '<div style="width:26px;height:26px;border-radius:50%;background:var(--success-500);color:white;margin:0 auto;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:bold;">✓</div>'; }
+                                        else if (status === 'absent_excused') { icon = '<div style="width:26px;height:26px;border-radius:50%;background:var(--warning-500);color:white;margin:0 auto;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:bold;">CP</div>'; }
+                                        else if (status === 'absent_unexcused') { icon = '<div style="width:26px;height:26px;border-radius:50%;background:var(--danger-500);color:white;margin:0 auto;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:bold;">KP</div>'; }
                                         
                                         const isToday = dateStr === DB.today();
                                         return `<td id="cell-${cls.id}-${student.id}-${dateStr}" style="text-align:center; cursor:pointer; padding: 4px; ${isToday ? 'background: #f0f7ff;' : ''}" title="${reason ? 'Lý do: ' + reason : ''}" onclick="AttendancePage.cycleGridStatus('${cls.id}', '${student.id}', '${dateStr}')">
@@ -430,20 +430,44 @@ Router.register('attendance', async (container) => {
             else if (rec.status === 'absent_excused') nextStatus = 'absent_unexcused';
             else if (rec.status === 'absent_unexcused') nextStatus = '';
 
-            if (nextStatus === 'absent_excused' || nextStatus === 'absent_unexcused') {
+            if (nextStatus === 'absent_excused') {
                 const res = await Swal.fire({
-                    title: nextStatus === 'absent_excused' ? 'Lý do vắng có phép' : 'Lý do vắng không phép',
+                    title: 'Lý do vắng có phép',
                     input: 'text',
                     inputPlaceholder: 'Nhập lý do vắng...',
                     showCancelButton: true,
                     confirmButtonText: 'Lưu',
-                    cancelButtonText: 'Bỏ qua'
+                    cancelButtonText: 'Bỏ qua (Chuyển sang KP)',
+                    customClass: { cancelButton: 'btn btn-secondary' }
                 });
-                if (!res.isConfirmed || !res.value.trim()) {
-                    if (res.isConfirmed) Toast.warning('Vui lòng nhập lý do vắng');
-                    return; // abort cycle
+                if (!res.isConfirmed) {
+                    nextStatus = 'absent_unexcused';
+                } else if (!res.value.trim()) {
+                    Toast.warning('Vui lòng nhập lý do vắng');
+                    return;
+                } else {
+                    reason = res.value.trim();
                 }
-                reason = res.value.trim();
+            }
+
+            if (nextStatus === 'absent_unexcused') {
+                const res = await Swal.fire({
+                    title: 'Lý do vắng không phép',
+                    input: 'text',
+                    inputPlaceholder: 'Nhập lý do vắng...',
+                    showCancelButton: true,
+                    confirmButtonText: 'Lưu',
+                    cancelButtonText: 'Bỏ qua (Xóa trạng thái)',
+                    customClass: { cancelButton: 'btn btn-secondary' }
+                });
+                if (!res.isConfirmed) {
+                    nextStatus = '';
+                } else if (!res.value.trim()) {
+                    Toast.warning('Vui lòng nhập lý do vắng');
+                    return;
+                } else {
+                    reason = res.value.trim();
+                }
             }
 
             globalGridRecords[classId][studentId][date] = { status: nextStatus, reason };
@@ -452,9 +476,9 @@ Router.register('attendance', async (container) => {
             const cell = document.getElementById(`cell-${classId}-${studentId}-${date}`);
             if (cell) {
                 let icon = '<div style="width:26px;height:26px;border-radius:50%;border:1.5px dashed var(--border-color);margin:0 auto;background:#fafafa;"></div>';
-                if (nextStatus === 'present') { icon = '<div style="width:26px;height:26px;border-radius:50%;background:var(--success);color:white;margin:0 auto;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:bold;">✓</div>'; }
-                else if (nextStatus === 'absent_excused') { icon = '<div style="width:26px;height:26px;border-radius:50%;background:var(--warning);color:white;margin:0 auto;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:bold;">CP</div>'; }
-                else if (nextStatus === 'absent_unexcused') { icon = '<div style="width:26px;height:26px;border-radius:50%;background:var(--danger);color:white;margin:0 auto;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:bold;">KP</div>'; }
+                if (nextStatus === 'present') { icon = '<div style="width:26px;height:26px;border-radius:50%;background:var(--success-500);color:white;margin:0 auto;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:bold;">✓</div>'; }
+                else if (nextStatus === 'absent_excused') { icon = '<div style="width:26px;height:26px;border-radius:50%;background:var(--warning-500);color:white;margin:0 auto;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:bold;">CP</div>'; }
+                else if (nextStatus === 'absent_unexcused') { icon = '<div style="width:26px;height:26px;border-radius:50%;background:var(--danger-500);color:white;margin:0 auto;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:bold;">KP</div>'; }
                 cell.innerHTML = icon;
                 cell.title = reason ? 'Lý do: ' + reason : '';
             }
