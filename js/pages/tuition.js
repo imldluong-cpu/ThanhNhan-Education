@@ -55,9 +55,11 @@ Router.register('tuition', async (container) => {
                 }
             }
             if (t && t.studentId) {
-                // Reliable fallback: check all classes to see if this student is enrolled
-                const names = classes.filter(c => c.studentIds && c.studentIds.includes(t.studentId)).map(c => c.name);
-                if (names.length > 0) return 'Nhiều môn: ' + names.join(', ');
+                const student = students.find(s => s.id === t.studentId);
+                if (student && student.classIds && student.classIds.length > 0) {
+                    const names = student.classIds.map(cid => (classes.find(c => c.id === cid) || {}).name).filter(Boolean);
+                    if (names.length > 0) return 'Nhiều môn: ' + names.join(', ');
+                }
             }
             return 'Nhiều môn';
         }
