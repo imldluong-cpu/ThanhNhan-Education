@@ -487,15 +487,16 @@ Router.register('tuition', async (container) => {
                         <button class="btn btn-primary" onclick="window.print()"><i data-lucide="printer"></i> In / Lưu PDF</button>
                     </div>
 
-                    <div id="invoice-print-area" style="width: 100%; max-width: 210mm; background: white; padding: 20mm; box-sizing: border-box; margin: 0 auto; color: black; font-family: 'Times New Roman', serif; font-size: 16px; line-height: 1.5; border: 1px solid #eee;">
-                        <div style="text-align: center; margin-bottom: 20px;">
-                            <img src="assets/images/logo.png" style="height: 60px;" alt="Logo" onerror="this.style.display='none'">
+                    <div style="overflow-x: auto; padding-bottom: 15px; margin: 0 -20px; padding-left: 20px; padding-right: 20px;">
+                    <div id="invoice-print-area" style="width: 148mm; flex-shrink: 0; background: white; padding: 15mm; box-sizing: border-box; margin: 0 auto; color: black; font-family: 'Times New Roman', serif; font-size: 14px; line-height: 1.5; border: 1px solid #eee;">
+                        <div style="text-align: center; margin-bottom: 15px;">
+                            <img src="assets/images/logo.png" style="height: 50px;" alt="Logo" onerror="this.style.display='none'">
                         </div>
                         
-                        <h2 style="text-align: center; margin: 0; font-size: 24px; font-weight: bold;">PHIẾU THU HỌC PHÍ</h2>
-                        <p style="text-align: center; margin: 5px 0 20px 0;">Tháng <span class="invoice-editable" contenteditable="true" style="border-bottom: 1px dotted #ccc; min-width: 50px; display: inline-block; text-align: center;">${monthStr}</span>/<span class="invoice-editable" contenteditable="true" style="border-bottom: 1px dotted #ccc; min-width: 50px; display: inline-block; text-align: center;">${yearStr}</span></p>
+                        <h2 style="text-align: center; margin: 0; font-size: 20px; font-weight: bold;">PHIẾU THU HỌC PHÍ</h2>
+                        <p style="text-align: center; margin: 5px 0 15px 0;">Tháng <span class="invoice-editable" contenteditable="true" style="border-bottom: 1px dotted #ccc; min-width: 40px; display: inline-block; text-align: center;">${monthStr}</span>/<span class="invoice-editable" contenteditable="true" style="border-bottom: 1px dotted #ccc; min-width: 40px; display: inline-block; text-align: center;">${yearStr}</span></p>
                         
-                        <div style="margin-bottom: 20px;">
+                        <div style="margin-bottom: 15px;">
                             <div style="display: flex; margin-bottom: 8px;">
                                 <strong style="width: 120px;">Học viên:</strong>
                                 <span class="invoice-editable" contenteditable="true" style="flex: 1; border-bottom: 1px dotted #ccc; outline: none;">${studentName}</span>
@@ -516,57 +517,58 @@ Router.register('tuition', async (container) => {
                             </div>
                         </div>
                         
-                        <div style="text-align: right; font-style: italic; margin-bottom: 20px;">
-                            Ngày <span class="invoice-editable" contenteditable="true" style="border-bottom: 1px dotted #ccc; min-width: 30px; display: inline-block; text-align: center; outline: none;">${currentDay}</span>
-                            tháng <span class="invoice-editable" contenteditable="true" style="border-bottom: 1px dotted #ccc; min-width: 30px; display: inline-block; text-align: center; outline: none;">${currentMonth}</span>
-                            năm <span class="invoice-editable" contenteditable="true" style="border-bottom: 1px dotted #ccc; min-width: 50px; display: inline-block; text-align: center; outline: none;">${currentYear}</span>
+                        <div style="text-align: right; font-style: italic; margin-bottom: 15px;">
+                            Ngày <span class="invoice-editable" contenteditable="true" style="border-bottom: 1px dotted #ccc; min-width: 25px; display: inline-block; text-align: center; outline: none;">${currentDay}</span>
+                            tháng <span class="invoice-editable" contenteditable="true" style="border-bottom: 1px dotted #ccc; min-width: 25px; display: inline-block; text-align: center; outline: none;">${currentMonth}</span>
+                            năm <span class="invoice-editable" contenteditable="true" style="border-bottom: 1px dotted #ccc; min-width: 40px; display: inline-block; text-align: center; outline: none;">${currentYear}</span>
                         </div>
                         
-                        <div style="display: flex; justify-content: space-between; margin-bottom: 30px; border-bottom: 1px solid #000; padding-bottom: 20px;">
-                            <div style="width: 65%; display: flex; gap: 15px; align-items: center;">
-                                <img src="https://img.vietqr.io/image/970415-1801755276-print.png" style="width: 110px; height: 110px; object-fit: contain;">
-                                <div style="font-size: 14px; font-style: italic; line-height: 1.4;">
-                                    <p style="margin: 0 0 4px 0;">STK: 1801755276</p>
-                                    <p style="margin: 0 0 4px 0;">CONG TY TNHH THANH NHAN EDUCATION</p>
-                                    <p style="margin: 0;">Ngân hàng TMCP Kỹ thương Việt Nam - TECHCOMBANK</p>
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 20px; border-bottom: 1px solid #000; padding-bottom: 15px;">
+                            <div style="width: 65%; display: flex; gap: 10px; align-items: center;">
+                                <img src="https://img.vietqr.io/image/970415-1801755276-print.png" style="width: 80px; height: 80px; object-fit: contain; flex-shrink: 0;">
+                                <div style="font-size: 11px; font-style: italic; line-height: 1.3;">
+                                    <p style="margin: 0 0 3px 0;">STK: 1801755276</p>
+                                    <p style="margin: 0 0 3px 0; font-size: 10px;">CONG TY TNHH THANH NHAN EDUCATION</p>
+                                    <p style="margin: 0;">Ngân hàng TMCP Kỹ thương Việt Nam</p>
                                 </div>
                             </div>
-                            <div style="width: 30%; text-align: center; border-left: 1px solid #000; padding-left: 10px;">
-                                <strong style="font-size: 16px;">Người lập</strong>
-                                <br><br><br><br><br>
-                                <strong class="invoice-editable" contenteditable="true" style="font-size: 16px; outline: none;">Lê Duy Lương</strong>
+                            <div style="width: 30%; text-align: center; border-left: 1px solid #000; padding-left: 5px;">
+                                <strong style="font-size: 14px;">Người lập</strong>
+                                <br><br><br><br>
+                                <strong class="invoice-editable" contenteditable="true" style="font-size: 14px; outline: none;">Lê Duy Lương</strong>
                             </div>
                         </div>
                         
-                        <div style="text-align: center; margin-bottom: 15px;">
-                            <strong style="font-size: 18px;">TRUNG TÂM DẠY THÊM THÀNH NHÂN EDUCATION</strong>
+                        <div style="text-align: center; margin-bottom: 10px;">
+                            <strong style="font-size: 15px;">TRUNG TÂM DẠY THÊM THÀNH NHÂN EDUCATION</strong>
                         </div>
                         
-                        <div style="margin-bottom: 20px; font-size: 14px; line-height: 1.4;">
+                        <div style="margin-bottom: 15px; font-size: 12px; line-height: 1.4;">
                             <p style="margin: 0 0 5px 0; text-align: justify;">Chương trình giảng dạy bám sát chương trình phổ thông, tập trung củng cố kiến thức nền tảng và theo sát tiến độ học tập của từng học sinh, với các môn học:</p>
-                            <strong style="font-size: 15px; display: block; margin-bottom: 10px;">TOÁN - VĂN - ANH VĂN - LÝ - HÓA - TIẾNG ANH GIAO TIẾP.</strong>
+                            <strong style="font-size: 13px; display: block; margin-bottom: 8px;">TOÁN - VĂN - ANH VĂN - LÝ - HÓA - TIẾNG ANH GIAO TIẾP.</strong>
                             
-                            <p style="margin: 0 0 5px 0;">📌 <strong>Đối tượng:</strong> Học sinh Cấp 2; Cấp 3; Tiểu học (Tiếng Anh giao tiếp).</p>
-                            <p style="margin: 0 0 10px 0;">🆓 <strong>HỌC THỬ MIỄN PHÍ 01 BUỔI:</strong> Học trải nghiệm trước khi đăng ký.</p>
+                            <p style="margin: 0 0 4px 0;">📌 <strong>Đối tượng:</strong> Học sinh Cấp 2; Cấp 3; Tiểu học (Tiếng Anh giao tiếp).</p>
+                            <p style="margin: 0 0 8px 0;">🆓 <strong>HỌC THỬ MIỄN PHÍ 01 BUỔI:</strong> Học trải nghiệm trước khi đăng ký.</p>
                             
-                            <p style="margin: 0 0 5px 0;">🤝 <strong>Học cùng bạn - tăng động lực học tập:</strong> (Giảm trực tiếp học phí 3 tháng đầu cho cả nhóm)</p>
-                            <ul style="margin: 0 0 10px 20px; padding: 0;">
+                            <p style="margin: 0 0 4px 0;">🤝 <strong>Học cùng bạn - tăng động lực học tập:</strong> (Giảm trực tiếp học phí 3 tháng đầu cho cả nhóm)</p>
+                            <ul style="margin: 0 0 8px 20px; padding: 0;">
                                 <li>2 học sinh: giảm 5%</li>
                                 <li>3 học sinh: giảm 10%</li>
                                 <li>Từ 5 học sinh: giảm 20%</li>
                             </ul>
                             
-                            <p style="margin: 0 0 5px 0;">💡 <strong>Hỗ trợ học phí toàn khóa:</strong></p>
-                            <ul style="margin: 0 0 10px 20px; padding: 0;">
+                            <p style="margin: 0 0 4px 0;">💡 <strong>Hỗ trợ học phí toàn khóa:</strong></p>
+                            <ul style="margin: 0 0 8px 20px; padding: 0;">
                                 <li>Đăng ký 2 môn: giảm 5%</li>
                                 <li>Từ 3 môn trở lên: giảm 10%</li>
                             </ul>
                         </div>
                         
-                        <div style="border-top: 1px solid #000; padding-top: 10px; font-style: italic; font-weight: bold; font-size: 14px;">
-                            <p style="margin: 0 0 5px 0;">Số 56 Nguyễn Văn Trỗi, P. Xuân Khánh, TPCT (dưới chân cầu Rạch Ngỗng 1)</p>
+                        <div style="border-top: 1px solid #000; padding-top: 8px; font-style: italic; font-weight: bold; font-size: 12px;">
+                            <p style="margin: 0 0 4px 0;">Số 56 Nguyễn Văn Trỗi, P. Xuân Khánh, TPCT (dưới chân cầu Rạch Ngỗng 1)</p>
                             <p style="margin: 0;">Hotline/Zalo: 0388 877 543</p>
                         </div>
+                    </div>
                     </div>
                 `,
                 footer: `<button class="btn btn-secondary" onclick="Modal.close()">Đóng</button>`
