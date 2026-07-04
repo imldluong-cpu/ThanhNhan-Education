@@ -332,7 +332,12 @@ Router.register('attendance', async (container) => {
             selectedClassId = id;
             await loadData();
             localRecords = {};
-            attendance.forEach(r => { localRecords[r.studentId] = { status: r.status, reason: r.reason || '' }; });
+            attendance.forEach(r => {
+                let st = r.status;
+                if (st === 'absent') st = 'absent_unexcused';
+                if (st === 'late') st = 'present';
+                localRecords[r.studentId] = { status: st, reason: r.reason || '' }; 
+            });
             renderDailyView();
         },
 
@@ -348,7 +353,12 @@ Router.register('attendance', async (container) => {
                 await loadDailySummary();
                 await loadData();
                 localRecords = {};
-                attendance.forEach(r => { localRecords[r.studentId] = { status: r.status, reason: r.reason || '' }; });
+                attendance.forEach(r => {
+                    let st = r.status;
+                    if (st === 'absent') st = 'absent_unexcused';
+                    if (st === 'late') st = 'present';
+                    localRecords[r.studentId] = { status: st, reason: r.reason || '' }; 
+                });
                 renderDailyView();
             }
         },
