@@ -223,28 +223,43 @@ Router.register('attendance', async (container) => {
 
         area.innerHTML = `
             <div class="card">
-                <div class="card-body">
-                    <div class="attendance-grid" style="display: grid; gap: 12px;">
-                        ${students.map(s => {
-                            const rec = localRecords[s.id] || { status: '', reason: '' };
-                            const status = rec.status;
-                            return `<div class="attendance-item" id="att-item-${s.id}" style="padding: 12px; border: 1px solid var(--border-color); border-radius: 8px; display: flex; flex-direction: column; gap: 8px;">
-                                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
-                                    <div class="att-student-name" style="font-weight: 500;">${s.name}</div>
-                                    <div class="att-buttons" style="display: flex; gap: 4px;">
-                                        <button class="status-btn ${status === 'present' ? 'active-present' : ''}" style="width: auto; padding: 4px 12px; font-size: 13px;" onclick="AttendancePage.setStatus('${s.id}', 'present')" title="Có mặt">Có mặt</button>
-                                        <button class="status-btn ${status === 'absent_excused' ? 'active-absent' : ''}" style="width: auto; padding: 4px 12px; font-size: 13px;" onclick="AttendancePage.setStatus('${s.id}', 'absent_excused')" title="Vắng có phép">V. Có phép</button>
-                                        <button class="status-btn ${status === 'absent_unexcused' ? 'active-absent' : ''}" style="width: auto; padding: 4px 12px; font-size: 13px;" onclick="AttendancePage.setStatus('${s.id}', 'absent_unexcused')" title="Vắng không phép">V. Không phép</button>
-                                    </div>
-                                </div>
-                                <div class="att-reason-display" style="font-size: 13px; color: var(--danger); ${rec.reason ? 'display:block;' : 'display:none;'}">
-                                    <i data-lucide="info" style="width: 14px; height: 14px; vertical-align: middle;"></i> Lý do: <span class="reason-text">${rec.reason}</span>
-                                </div>
-                            </div>`;
-                        }).join('')}
-                    </div>
+                <div class="card-body" style="padding: 0;">
+                    <table class="table" style="margin: 0;">
+                        <thead>
+                            <tr style="background: var(--bg-color);">
+                                <th style="width: 40px; text-align: center;">#</th>
+                                <th>Học viên</th>
+                                <th style="text-align: center; width: 80px;">Có mặt</th>
+                                <th style="text-align: center; width: 100px;">Vắng CP</th>
+                                <th style="text-align: center; width: 100px;">Vắng KP</th>
+                                <th style="width: 200px;">Lý do</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${students.map((s, i) => {
+                                const rec = localRecords[s.id] || { status: '', reason: '' };
+                                const status = rec.status;
+                                return `<tr id="att-item-${s.id}">
+                                    <td style="text-align: center; color: var(--text-muted);">${i + 1}</td>
+                                    <td style="font-weight: 500;" class="att-student-name">${s.name}</td>
+                                    <td style="text-align: center;">
+                                        <button class="status-btn ${status === 'present' ? 'active-present' : ''}" style="width: 36px; height: 36px; border-radius: 50%; padding: 0; font-size: 16px;" onclick="AttendancePage.setStatus('${s.id}', 'present')" title="Có mặt">✓</button>
+                                    </td>
+                                    <td style="text-align: center;">
+                                        <button class="status-btn ${status === 'absent_excused' ? 'active-absent' : ''}" style="width: 36px; height: 36px; border-radius: 50%; padding: 0; font-size: 11px; font-weight: 600;" onclick="AttendancePage.setStatus('${s.id}', 'absent_excused')" title="Vắng có phép">CP</button>
+                                    </td>
+                                    <td style="text-align: center;">
+                                        <button class="status-btn ${status === 'absent_unexcused' ? 'active-absent' : ''}" style="width: 36px; height: 36px; border-radius: 50%; padding: 0; font-size: 11px; font-weight: 600;" onclick="AttendancePage.setStatus('${s.id}', 'absent_unexcused')" title="Vắng không phép">KP</button>
+                                    </td>
+                                    <td class="att-reason-display" style="font-size: 13px; color: var(--danger);">
+                                        <span class="reason-text">${rec.reason || ''}</span>
+                                    </td>
+                                </tr>`;
+                            }).join('')}
+                        </tbody>
+                    </table>
                     ${canEdit ? `
-                        <div style="margin-top:var(--space-6);display:flex;justify-content:center;gap:var(--space-3);">
+                        <div style="padding: 16px; display:flex; justify-content:center; gap:var(--space-3);">
                             <button class="btn btn-secondary btn-lg" onclick="AttendancePage.markAllPresent()"><i data-lucide="check-square"></i> Cả lớp có mặt</button>
                             <button class="btn btn-primary btn-lg" onclick="AttendancePage.save()"><i data-lucide="save"></i> Lưu điểm danh</button>
                         </div>
@@ -345,14 +360,9 @@ Router.register('attendance', async (container) => {
                 else if (st === 'absent_excused') btns[1].classList.add('active-absent');
                 else if (st === 'absent_unexcused') btns[2].classList.add('active-absent');
                 
-                const reasonDiv = item.querySelector('.att-reason-display');
-                if (reasonDiv) {
-                    if (st === 'absent_excused' || st === 'absent_unexcused') {
-                        reasonDiv.style.display = 'block';
-                        reasonDiv.querySelector('.reason-text').textContent = localRecords[studentId].reason;
-                    } else {
-                        reasonDiv.style.display = 'none';
-                    }
+                const reasonText = item.querySelector('.reason-text');
+                if (reasonText) {
+                    reasonText.textContent = (localRecords[studentId] && localRecords[studentId].reason) ? localRecords[studentId].reason : '';
                 }
             }
         },
