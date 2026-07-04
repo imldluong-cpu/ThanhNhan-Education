@@ -378,7 +378,11 @@ Router.register('attendance', async (container) => {
     // Initial call requires careful ordering
     let localRecords = {};
     if (isManager) {
-        renderFlexibleGrid();
+        const viewModeSelect = document.getElementById('att-view-mode');
+        if (viewModeSelect) viewModeSelect.value = viewMode;
+        // Force the date inputs to match the viewMode immediately
+        window.AttendancePage = window.AttendancePage || {};
+        // We defer changeViewMode call until AttendancePage is fully defined below
     } else {
         renderDailyView();
     }
@@ -599,5 +603,9 @@ Router.register('attendance', async (container) => {
             }
         }
     };
+
+    if (isManager) {
+        window.AttendancePage.changeViewMode(viewMode);
+    }
 });
 
