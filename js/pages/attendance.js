@@ -66,9 +66,10 @@ Router.register('attendance', async (container) => {
         const [y, m, d] = selectedDate.split('-');
         const monthPrefix = `${y}-${m}`;
 
-        const validClasses = getValidClassesForDate(selectedDate);
-        if (validClasses.length === 0) {
-            area.innerHTML = '<div class="card"><div class="card-body"><div class="empty-state"><p>Không có lớp nào học trong ngày này</p></div></div></div>';
+        // Show ALL classes, not just those scheduled for the selected day
+        const allActiveClasses = classes.filter(c => c.status !== 'inactive');
+        if (allActiveClasses.length === 0) {
+            area.innerHTML = '<div class="card"><div class="card-body"><div class="empty-state"><p>Không có lớp nào</p></div></div></div>';
             return;
         }
 
@@ -84,14 +85,17 @@ Router.register('attendance', async (container) => {
         window.globalGridRecords = {}; 
         window.globalGridClassDates = {};
 
-        for (const cls of validClasses) {
+        for (const cls of allActiveClasses) {
             const classDays = schedules.filter(s => s.classId === cls.id).map(s => Number(s.dayOfWeek));
+            if (classDays.length === 0) continue; // Skip classes with no schedule
+            
             const classDates = allMonthDates.filter(dateStr => {
                 const dateObj = new Date(dateStr.split('-')[0], dateStr.split('-')[1]-1, dateStr.split('-')[2]);
                 const day = dateObj.getDay();
                 const firestoreDay = day === 0 ? 8 : day + 1;
                 return classDays.includes(firestoreDay);
             });
+            if (classDates.length === 0) continue;
             window.globalGridClassDates[cls.id] = classDates;
 
             const classStudents = allStudents.filter(s => s.status === 'active' && (s.classIds || []).includes(cls.id));
@@ -106,22 +110,46 @@ Router.register('attendance', async (container) => {
                 const date = record.date;
                 (record.records || []).forEach(r => {
                     if (globalGridRecords[cls.id][r.studentId]) {
-                        globalGridRecords[cls.id][r.studentId][date] = { status: r.status, reason: r.reason || '' };
+                        // Backward compat: map old 'absent' to 'absent_unexcused'
+                        let status = r.status;
+                        if (status === 'absent') status = 'absent_unexcused';
+                        if (status === 'late') status = 'present'; // treat old 'late' as present
+                        globalGridRecords[cls.id][r.studentId][date] = { status, reason: r.reason || '' };
                     }
                 });
             });
 
+            // Count attendance summary for this class
+            let totalPresent = 0, totalAbsent = 0;
+            classStudents.forEach(student => {
+                classDates.forEach(dateStr => {
+                    const rec = globalGridRecords[cls.id][student.id][dateStr];
+                    if (rec && rec.status === 'present') totalPresent++;
+                    else if (rec && (rec.status === 'absent_excused' || rec.status === 'absent_unexcused')) totalAbsent++;
+                });
+            });
+
             html += `<div class="card" style="margin-bottom: 20px;">
-                <div class="card-header"><h3 style="margin:0;">Lớp ${cls.name}</h3></div>
+                <div class="card-header" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+                    <h3 style="margin:0;">📚 ${cls.name}</h3>
+                    <div style="display:flex; gap:12px; font-size: 13px;">
+                        <span style="color:var(--success);font-weight:600;">✓ Có mặt: ${totalPresent}</span>
+                        <span style="color:var(--danger);font-weight:600;">✗ Vắng: ${totalAbsent}</span>
+                        <span style="color:var(--text-muted);">📅 ${classDates.length} buổi/tháng</span>
+                    </div>
+                </div>
                 <div class="card-body" style="overflow-x: auto; padding: 0;">
                     <table class="table" style="min-width: max-content; margin: 0; border-collapse: collapse;">
                         <thead>
                             <tr style="background: var(--bg-color);">
-                                <th style="position: sticky; left: 0; background: var(--bg-color); z-index: 2; border-right: 1px solid var(--border-color);">Học viên</th>
+                                <th style="position: sticky; left: 0; background: var(--bg-color); z-index: 2; border-right: 1px solid var(--border-color); min-width: 150px;">Học viên</th>
                                 ${classDates.map(dateStr => {
                                     const dateD = dateStr.split('-')[2];
-                                    const isSelected = dateStr === selectedDate;
-                                    return `<th style="text-align:center; min-width: 60px; ${isSelected ? 'background: var(--primary-light); color: var(--primary-color);' : ''}">${dateD}/${m}</th>`;
+                                    const dateObj = new Date(dateStr.split('-')[0], dateStr.split('-')[1]-1, dateStr.split('-')[2]);
+                                    const dayNames = ['CN','T2','T3','T4','T5','T6','T7'];
+                                    const dayName = dayNames[dateObj.getDay()];
+                                    const isToday = dateStr === DB.today();
+                                    return `<th style="text-align:center; min-width: 55px; font-size: 12px; ${isToday ? 'background: var(--primary-light); color: var(--primary-color);' : ''}"><div>${dayName}</div><div>${dateD}/${m}</div></th>`;
                                 }).join('')}
                             </tr>
                         </thead>
@@ -133,13 +161,13 @@ Router.register('attendance', async (container) => {
                                         const rec = globalGridRecords[cls.id][student.id][dateStr];
                                         const status = rec ? rec.status : '';
                                         const reason = rec ? rec.reason : '';
-                                        let icon = '<div style="width:24px;height:24px;border-radius:4px;border:1px solid var(--border-color);margin:0 auto;background:#f8f9fa;"></div>';
-                                        if (status === 'present') { icon = '<div style="width:24px;height:24px;border-radius:4px;background:var(--success);color:white;margin:0 auto;display:flex;align-items:center;justify-content:center;font-size:12px;">✓</div>'; }
-                                        else if (status === 'absent_excused') { icon = '<div style="width:24px;height:24px;border-radius:4px;background:var(--warning);color:white;margin:0 auto;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:bold;">VCP</div>'; }
-                                        else if (status === 'absent_unexcused') { icon = '<div style="width:24px;height:24px;border-radius:4px;background:var(--danger);color:white;margin:0 auto;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:bold;">VKP</div>'; }
+                                        let icon = '<div style="width:26px;height:26px;border-radius:50%;border:1.5px dashed var(--border-color);margin:0 auto;background:#fafafa;"></div>';
+                                        if (status === 'present') { icon = '<div style="width:26px;height:26px;border-radius:50%;background:var(--success);color:white;margin:0 auto;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:bold;">✓</div>'; }
+                                        else if (status === 'absent_excused') { icon = '<div style="width:26px;height:26px;border-radius:50%;background:var(--warning);color:white;margin:0 auto;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:bold;">CP</div>'; }
+                                        else if (status === 'absent_unexcused') { icon = '<div style="width:26px;height:26px;border-radius:50%;background:var(--danger);color:white;margin:0 auto;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:bold;">KP</div>'; }
                                         
-                                        const isSelected = dateStr === selectedDate;
-                                        return `<td id="cell-${cls.id}-${student.id}-${dateStr}" style="text-align:center; cursor:pointer; padding: 4px; ${isSelected ? 'background: #f0f7ff;' : ''}" title="${reason}" onclick="AttendancePage.cycleGridStatus('${cls.id}', '${student.id}', '${dateStr}')">
+                                        const isToday = dateStr === DB.today();
+                                        return `<td id="cell-${cls.id}-${student.id}-${dateStr}" style="text-align:center; cursor:pointer; padding: 4px; ${isToday ? 'background: #f0f7ff;' : ''}" title="${reason ? 'Lý do: ' + reason : ''}" onclick="AttendancePage.cycleGridStatus('${cls.id}', '${student.id}', '${dateStr}')">
                                             ${icon}
                                         </td>`;
                                     }).join('')}
@@ -152,7 +180,7 @@ Router.register('attendance', async (container) => {
         }
 
         if (html === '') {
-            html = '<div class="card"><div class="card-body"><div class="empty-state"><p>Không có dữ liệu học viên trong các lớp ngày này</p></div></div></div>';
+            html = '<div class="card"><div class="card-body"><div class="empty-state"><p>Không có dữ liệu học viên trong các lớp</p></div></div></div>';
         } else {
             html += `<div style="position: sticky; bottom: 20px; text-align: center; margin-top: 20px;">
                 <button class="btn btn-primary btn-lg" style="box-shadow: 0 4px 12px rgba(13,110,253,0.3); padding: 12px 32px;" onclick="AttendancePage.saveAllGrid()"><i data-lucide="save"></i> Lưu điểm danh toàn bộ Tháng</button>
@@ -399,12 +427,12 @@ Router.register('attendance', async (container) => {
             // Re-render cell
             const cell = document.getElementById(`cell-${classId}-${studentId}-${date}`);
             if (cell) {
-                let icon = '<div style="width:24px;height:24px;border-radius:4px;border:1px solid var(--border-color);margin:0 auto;background:#f8f9fa;"></div>';
-                if (nextStatus === 'present') { icon = '<div style="width:24px;height:24px;border-radius:4px;background:var(--success);color:white;margin:0 auto;display:flex;align-items:center;justify-content:center;font-size:12px;">✓</div>'; }
-                else if (nextStatus === 'absent_excused') { icon = '<div style="width:24px;height:24px;border-radius:4px;background:var(--warning);color:white;margin:0 auto;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:bold;">VCP</div>'; }
-                else if (nextStatus === 'absent_unexcused') { icon = '<div style="width:24px;height:24px;border-radius:4px;background:var(--danger);color:white;margin:0 auto;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:bold;">VKP</div>'; }
+                let icon = '<div style="width:26px;height:26px;border-radius:50%;border:1.5px dashed var(--border-color);margin:0 auto;background:#fafafa;"></div>';
+                if (nextStatus === 'present') { icon = '<div style="width:26px;height:26px;border-radius:50%;background:var(--success);color:white;margin:0 auto;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:bold;">✓</div>'; }
+                else if (nextStatus === 'absent_excused') { icon = '<div style="width:26px;height:26px;border-radius:50%;background:var(--warning);color:white;margin:0 auto;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:bold;">CP</div>'; }
+                else if (nextStatus === 'absent_unexcused') { icon = '<div style="width:26px;height:26px;border-radius:50%;background:var(--danger);color:white;margin:0 auto;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:bold;">KP</div>'; }
                 cell.innerHTML = icon;
-                cell.title = reason;
+                cell.title = reason ? 'Lý do: ' + reason : '';
             }
         },
 
