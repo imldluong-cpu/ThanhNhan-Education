@@ -51,14 +51,14 @@ Router.register('tuition', async (container) => {
             if (t && t.note && t.note.includes(' - ') && t.note.startsWith('Học phí')) {
                 const parts = t.note.split(' - ');
                 if (parts.length > 1) {
-                    return 'Nhiều môn: ' + parts.slice(1).join(' - ');
+                    return parts.slice(1).join(' - ');
                 }
             }
             if (t && t.studentId) {
                 const student = students.find(s => s.id === t.studentId);
                 if (student && student.classIds && student.classIds.length > 0) {
                     const names = student.classIds.map(cid => (classes.find(c => c.id === cid) || {}).name).filter(Boolean);
-                    if (names.length > 0) return 'Nhiều môn: ' + names.join(', ');
+                    if (names.length > 0) return names.join(', ');
                 }
             }
             return 'Nhiều môn';
