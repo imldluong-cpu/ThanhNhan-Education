@@ -84,6 +84,9 @@ Router.register('attendance', async (container) => {
         window.globalGridRecords = {}; 
         window.globalGridClassDates = {};
 
+        const fetchPromises = [];
+        const classesToRender = [];
+
         for (const cls of allActiveClasses) {
             const classDays = schedules.filter(s => s.classId === cls.id).map(s => Number(s.dayOfWeek));
             if (classDays.length === 0) continue; // Skip classes with no schedule
@@ -100,7 +103,15 @@ Router.register('attendance', async (container) => {
             const classStudents = allStudents.filter(s => s.status === 'active' && (s.classIds || []).includes(cls.id));
             if (classStudents.length === 0) continue;
 
-            const monthAttendance = await DB.getAttendanceByDateRange(cls.id, `${monthPrefix}-01`, `${monthPrefix}-31`);
+            classesToRender.push({ cls, classDates, classStudents });
+            fetchPromises.push(DB.getAttendanceByDateRange(cls.id, `${monthPrefix}-01`, `${monthPrefix}-31`));
+        }
+
+        const fetchResults = await Promise.all(fetchPromises);
+
+        for (let i = 0; i < classesToRender.length; i++) {
+            const { cls, classDates, classStudents } = classesToRender[i];
+            const monthAttendance = fetchResults[i];
             
             globalGridRecords[cls.id] = {};
             classStudents.forEach(s => globalGridRecords[cls.id][s.id] = {});
