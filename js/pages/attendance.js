@@ -8,6 +8,10 @@ Router.register('attendance', async (container) => {
     let classes = [], schedules = [];
     let selectedClassId = '', selectedDate = DB.today();
     let students = [], attendance = [], allStudents = [], dailyAttendance = [];
+    let viewMode = 'month';
+    let startDate = DB.today();
+    let endDate = DB.today();
+    let monthVal = DB.today().slice(0, 7);
     try {
         const pClasses = Auth.isTeacher() ? DB.getClassesByTeacher(window.currentUser.id) : DB.getClasses();
         const pSchedules = DB.getSchedules();
@@ -57,7 +61,7 @@ Router.register('attendance', async (container) => {
         return record || { status: '', reason: '' };
     }
 
-    async function renderMonthlyGrid() {
+    async function renderFlexibleGrid() {
         const area = document.getElementById('att-area');
         
         const classSelect = document.getElementById('att-class-select');
@@ -66,24 +70,46 @@ Router.register('attendance', async (container) => {
         const summaryArea = document.getElementById('att-summary');
         if (summaryArea) summaryArea.style.display = 'none';
 
-        if (!selectedDate) return;
-        const [y, m, d] = selectedDate.split('-');
-        const monthPrefix = `${y}-${m}`;
-
-        // Show ALL classes, not just those scheduled for the selected day
         const allActiveClasses = classes.filter(c => c.status !== 'inactive');
         if (allActiveClasses.length === 0) {
             area.innerHTML = '<div class="card"><div class="card-body"><div class="empty-state"><p>Không có lớp nào</p></div></div></div>';
             return;
         }
 
-        area.innerHTML = '<div class="text-center" style="padding: 40px;"><div class="spinner"></div><p style="margin-top:10px;color:var(--text-muted);">Đang tải dữ liệu điểm danh tháng...</p></div>';
+        area.innerHTML = '<div class="text-center" style="padding: 40px;"><div class="spinner"></div><p style="margin-top:10px;color:var(--text-muted);">Đang tải dữ liệu điểm danh...</p></div>';
 
         let html = '';
-        const allMonthDates = []; 
-        const daysInMonth = new Date(y, m, 0).getDate();
-        for (let i = 1; i <= daysInMonth; i++) {
-            allMonthDates.push(`${y}-${m}-${String(i).padStart(2, '0')}`);
+        let allDates = [];
+        let minDateStr = '';
+        let maxDateStr = '';
+
+        if (viewMode === 'day') {
+            if (!startDate) return;
+            allDates.push(startDate);
+            minDateStr = startDate;
+            maxDateStr = startDate;
+        } else if (viewMode === 'range') {
+            if (!startDate || !endDate) return;
+            let current = new Date(startDate);
+            let end = new Date(endDate);
+            while (current <= end) {
+                const y = current.getFullYear();
+                const m = String(current.getMonth() + 1).padStart(2, '0');
+                const d = String(current.getDate()).padStart(2, '0');
+                allDates.push(`${y}-${m}-${d}`);
+                current.setDate(current.getDate() + 1);
+            }
+            minDateStr = startDate;
+            maxDateStr = endDate;
+        } else {
+            if (!monthVal) return;
+            const [y, m] = monthVal.split('-');
+            const daysInMonth = new Date(y, m, 0).getDate();
+            for (let i = 1; i <= daysInMonth; i++) {
+                allDates.push(`${y}-${m}-${String(i).padStart(2, '0')}`);
+            }
+            minDateStr = `${y}-${m}-01`;
+            maxDateStr = `${y}-${m}-${daysInMonth}`;
         }
 
         window.globalGridRecords = {}; 
@@ -91,14 +117,14 @@ Router.register('attendance', async (container) => {
 
         const classesToRender = [];
         
-        // Single DB query for the entire month
-        const allMonthAttendance = await DB.getAttendanceByMonth(`${monthPrefix}-01`, `${monthPrefix}-31`);
+        // Single DB query for the given date range
+        const allRangeAttendance = await DB.getAttendanceByMonth(minDateStr, maxDateStr);
 
         for (const cls of allActiveClasses) {
             const classDays = schedules.filter(s => s.classId === cls.id).map(s => Number(s.dayOfWeek));
             if (classDays.length === 0) continue; 
             
-            const classDates = allMonthDates.filter(dateStr => {
+            const classDates = allDates.filter(dateStr => {
                 const dateObj = new Date(dateStr.split('-')[0], dateStr.split('-')[1]-1, dateStr.split('-')[2]);
                 const day = dateObj.getDay();
                 const firestoreDay = day === 0 ? 8 : day + 1;
@@ -115,12 +141,12 @@ Router.register('attendance', async (container) => {
 
         for (let i = 0; i < classesToRender.length; i++) {
             const { cls, classDates, classStudents } = classesToRender[i];
-            const monthAttendance = allMonthAttendance.filter(a => a.classId === cls.id);
+            const rangeAttendance = allRangeAttendance.filter(a => a.classId === cls.id);
             
             globalGridRecords[cls.id] = {};
             classStudents.forEach(s => globalGridRecords[cls.id][s.id] = {});
             
-            monthAttendance.forEach(record => {
+            rangeAttendance.forEach(record => {
                 const date = record.date;
                 (record.records || []).forEach(r => {
                     if (globalGridRecords[cls.id][r.studentId]) {
@@ -147,9 +173,9 @@ Router.register('attendance', async (container) => {
                 <div class="card-header" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
                     <h3 style="margin:0;">📚 ${cls.name}</h3>
                     <div style="display:flex; gap:12px; font-size: 13px;">
-                        <span style="color:var(--success);font-weight:600;">✓ Có mặt: ${totalPresent}</span>
-                        <span style="color:var(--danger);font-weight:600;">✗ Vắng: ${totalAbsent}</span>
-                        <span style="color:var(--text-muted);">📅 ${classDates.length} buổi/tháng</span>
+                        <span style="color:var(--success-500);font-weight:600;">✓ Có mặt: ${totalPresent}</span>
+                        <span style="color:var(--danger-500);font-weight:600;">✗ Vắng: ${totalAbsent}</span>
+                        <span style="color:var(--text-muted);">📅 ${classDates.length} buổi</span>
                     </div>
                 </div>
                 <div class="card-body" style="overflow-x: auto; padding: 0;">
@@ -159,6 +185,7 @@ Router.register('attendance', async (container) => {
                                 <th style="position: sticky; left: 0; background: var(--bg-color); z-index: 2; border-right: 1px solid var(--border-color); min-width: 150px;">Học viên</th>
                                 ${classDates.map(dateStr => {
                                     const dateD = dateStr.split('-')[2];
+                                    const m = dateStr.split('-')[1];
                                     const dateObj = new Date(dateStr.split('-')[0], dateStr.split('-')[1]-1, dateStr.split('-')[2]);
                                     const dayNames = ['CN','T2','T3','T4','T5','T6','T7'];
                                     const dayName = dayNames[dateObj.getDay()];
@@ -196,8 +223,8 @@ Router.register('attendance', async (container) => {
         if (html === '') {
             html = '<div class="card"><div class="card-body"><div class="empty-state"><p>Không có dữ liệu học viên trong các lớp</p></div></div></div>';
         } else {
-            html += `<div style="position: sticky; bottom: 20px; text-align: center; margin-top: 20px;">
-                <button class="btn btn-primary btn-lg" style="box-shadow: 0 4px 12px rgba(13,110,253,0.3); padding: 12px 32px;" onclick="AttendancePage.saveAllGrid()"><i data-lucide="save"></i> Lưu điểm danh toàn bộ Tháng</button>
+            html += `<div style="position: sticky; bottom: 20px; text-align: center; margin-top: 20px; z-index: 999;">
+                <button class="btn btn-primary btn-lg" style="box-shadow: 0 4px 12px rgba(13,110,253,0.3); padding: 12px 32px;" onclick="AttendancePage.saveAllGrid()"><i data-lucide="save"></i> Lưu điểm danh toàn bộ lưới</button>
             </div>`;
         }
         
@@ -314,7 +341,7 @@ Router.register('attendance', async (container) => {
 
     function render() {
         if (isManager) {
-            renderMonthlyGrid();
+            renderFlexibleGrid();
         } else {
             renderDailyView();
         }
@@ -322,10 +349,22 @@ Router.register('attendance', async (container) => {
 
     container.innerHTML = `
         <div class="page-header">
-            <div><h1 class="page-title"><i data-lucide="check-square"></i> ${isManager ? 'Điểm danh Tổng quan Tháng' : 'Điểm danh học viên'}</h1></div>
+            <div><h1 class="page-title"><i data-lucide="check-square"></i> ${isManager ? 'Điểm danh Tổng quan' : 'Điểm danh học viên'}</h1></div>
         </div>
         <div class="filter-bar">
-            <input type="date" class="input" style="max-width:180px;" value="${selectedDate}" onchange="AttendancePage.selectDate(this.value)">
+            ${isManager ? `
+                <select class="select" id="att-view-mode" style="max-width:200px;" onchange="AttendancePage.changeViewMode(this.value)">
+                    <option value="month" selected>Xem theo tháng</option>
+                    <option value="day">Xem theo ngày</option>
+                    <option value="range">Xem theo khoảng thời gian</option>
+                </select>
+                <div id="att-date-inputs" style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+                    <!-- Default to Month -->
+                    <input type="month" class="input" id="att-month-val" style="max-width:180px;" value="${monthVal}" onchange="AttendancePage.filterDateChanged('month', this.value)">
+                </div>
+            ` : `
+                <input type="date" class="input" style="max-width:180px;" value="${selectedDate}" onchange="AttendancePage.selectDate(this.value)">
+            `}
             <select class="select" id="att-class-select" style="max-width:300px; display:none;" onchange="AttendancePage.selectClass(this.value)">
                 <option value="">Chọn lớp</option>
             </select>
@@ -337,7 +376,7 @@ Router.register('attendance', async (container) => {
     // Initial call requires careful ordering
     let localRecords = {};
     if (isManager) {
-        renderMonthlyGrid();
+        renderFlexibleGrid();
     } else {
         renderDailyView();
     }
@@ -358,24 +397,61 @@ Router.register('attendance', async (container) => {
 
         async selectDate(date) {
             selectedDate = date;
-            if (isManager) {
-                renderMonthlyGrid();
-            } else {
-                const validClasses = getValidClassesForDate(selectedDate);
-                if (selectedClassId && !validClasses.find(c => c.id === selectedClassId)) {
-                    selectedClassId = ''; 
-                }
-                await loadDailySummary();
-                await loadData();
-                localRecords = {};
-                attendance.forEach(r => {
-                    let st = r.status;
-                    if (st === 'absent') st = 'absent_unexcused';
-                    if (st === 'late') st = 'present';
-                    localRecords[r.studentId] = { status: st, reason: r.reason || '' }; 
-                });
-                renderDailyView();
+            const validClasses = getValidClassesForDate(selectedDate);
+            if (selectedClassId && !validClasses.find(c => c.id === selectedClassId)) {
+                selectedClassId = ''; 
             }
+            await loadDailySummary();
+            await loadData();
+            localRecords = {};
+            attendance.forEach(r => {
+                let st = r.status;
+                if (st === 'absent') st = 'absent_unexcused';
+                if (st === 'late') st = 'present';
+                localRecords[r.studentId] = { status: st, reason: r.reason || '' }; 
+            });
+            renderDailyView();
+        },
+
+        changeViewMode(mode) {
+            viewMode = mode;
+            const inputsContainer = document.getElementById('att-date-inputs');
+            if (inputsContainer) {
+                if (mode === 'day') {
+                    inputsContainer.innerHTML = `<input type="date" class="input" style="max-width:180px;" value="${startDate}" onchange="AttendancePage.filterDateChanged('startDate', this.value)">`;
+                } else if (mode === 'range') {
+                    inputsContainer.innerHTML = `
+                        <input type="date" class="input" style="max-width:140px;" value="${startDate}" onchange="AttendancePage.filterDateChanged('startDate', this.value)">
+                        <span style="color:var(--text-muted);font-size:14px;">đến</span>
+                        <input type="date" class="input" style="max-width:140px;" value="${endDate}" onchange="AttendancePage.filterDateChanged('endDate', this.value)">
+                    `;
+                } else {
+                    inputsContainer.innerHTML = `<input type="month" class="input" style="max-width:180px;" value="${monthVal}" onchange="AttendancePage.filterDateChanged('monthVal', this.value)">`;
+                }
+            }
+            renderFlexibleGrid();
+        },
+
+        filterDateChanged(type, value) {
+            if (type === 'startDate') startDate = value;
+            if (type === 'endDate') endDate = value;
+            if (type === 'monthVal') monthVal = value;
+
+            if (viewMode === 'range') {
+                if (startDate > endDate) {
+                    Toast.warning('Ngày bắt đầu không được lớn hơn ngày kết thúc');
+                    return;
+                }
+                const start = new Date(startDate);
+                const end = new Date(endDate);
+                const diffTime = Math.abs(end - start);
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                if (diffDays > 31) {
+                    Toast.warning('Chỉ hỗ trợ xem khoảng thời gian tối đa 31 ngày để tránh quá tải');
+                    return;
+                }
+            }
+            renderFlexibleGrid();
         },
 
         async setStatus(studentId, status) {
