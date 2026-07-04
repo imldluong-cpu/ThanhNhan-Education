@@ -8,7 +8,7 @@ Router.register('attendance', async (container) => {
     let classes = [], schedules = [];
     let selectedClassId = '', selectedDate = DB.today();
     let students = [], attendance = [], allStudents = [], dailyAttendance = [];
-    let viewMode = 'month';
+    let viewMode = 'day';
     let startDate = DB.today();
     let endDate = DB.today();
     let monthVal = DB.today().slice(0, 7);
@@ -356,13 +356,13 @@ Router.register('attendance', async (container) => {
         <div class="filter-bar">
             ${isManager ? `
                 <select class="select" id="att-view-mode" style="max-width:200px;" onchange="AttendancePage.changeViewMode(this.value)">
-                    <option value="month" selected>Xem theo tháng</option>
-                    <option value="day">Xem theo ngày</option>
+                    <option value="day" selected>Xem theo ngày</option>
+                    <option value="month">Xem theo tháng</option>
                     <option value="range">Xem theo khoảng thời gian</option>
                 </select>
                 <div id="att-date-inputs" style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-                    <!-- Default to Month -->
-                    <input type="month" class="input" id="att-month-val" style="max-width:180px;" value="${monthVal}" onchange="AttendancePage.filterDateChanged('month', this.value)">
+                    <!-- Default to Day -->
+                    <input type="date" class="input" style="max-width:180px;" value="${startDate}" onchange="AttendancePage.filterDateChanged('startDate', this.value)">
                 </div>
             ` : `
                 <input type="date" class="input" style="max-width:180px;" value="${selectedDate}" onchange="AttendancePage.selectDate(this.value)">
