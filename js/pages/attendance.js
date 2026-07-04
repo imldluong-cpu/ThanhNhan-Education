@@ -208,8 +208,10 @@ Router.register('attendance', async (container) => {
                                         else if (status === 'absent_unexcused') { icon = '<div style="width:26px;height:26px;border-radius:50%;background:var(--danger-500);color:white;margin:0 auto;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:bold;">KP</div>'; }
                                         
                                         const isToday = dateStr === DB.today();
+                                        const reasonHtml = reason ? `<div style="font-size:9px; color:var(--danger-500); margin-top:2px; max-width:50px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-left:auto; margin-right:auto;">${reason}</div>` : '';
                                         return `<td id="cell-${cls.id}-${student.id}-${dateStr}" style="text-align:center; cursor:pointer; padding: 4px; ${isToday ? 'background: #f0f7ff;' : ''}" title="${reason ? 'Lý do: ' + reason : ''}" onclick="AttendancePage.cycleGridStatus('${cls.id}', '${student.id}', '${dateStr}')">
                                             ${icon}
+                                            ${reasonHtml}
                                         </td>`;
                                     }).join('')}
                                 </tr>
@@ -456,9 +458,9 @@ Router.register('attendance', async (container) => {
 
         async setStatus(studentId, status) {
             let reason = '';
-            if (status === 'absent_excused' || status === 'absent_unexcused') {
+            if (status === 'absent_excused') {
                 const res = await Swal.fire({
-                    title: status === 'absent_excused' ? 'Lý do vắng có phép' : 'Lý do vắng không phép',
+                    title: 'Lý do vắng có phép',
                     input: 'text',
                     inputPlaceholder: 'Nhập lý do vắng...',
                     showCancelButton: true,
@@ -526,26 +528,6 @@ Router.register('attendance', async (container) => {
                 }
             }
 
-            if (nextStatus === 'absent_unexcused') {
-                const res = await Swal.fire({
-                    title: 'Lý do vắng không phép',
-                    input: 'text',
-                    inputPlaceholder: 'Nhập lý do vắng...',
-                    showCancelButton: true,
-                    confirmButtonText: 'Lưu',
-                    cancelButtonText: 'Bỏ qua (Xóa trạng thái)',
-                    customClass: { cancelButton: 'btn btn-secondary' }
-                });
-                if (!res.isConfirmed) {
-                    nextStatus = '';
-                } else if (!res.value.trim()) {
-                    Toast.warning('Vui lòng nhập lý do vắng');
-                    return;
-                } else {
-                    reason = res.value.trim();
-                }
-            }
-
             globalGridRecords[classId][studentId][date] = { status: nextStatus, reason };
             
             // Re-render cell
@@ -555,7 +537,9 @@ Router.register('attendance', async (container) => {
                 if (nextStatus === 'present') { icon = '<div style="width:26px;height:26px;border-radius:50%;background:var(--success-500);color:white;margin:0 auto;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:bold;">✓</div>'; }
                 else if (nextStatus === 'absent_excused') { icon = '<div style="width:26px;height:26px;border-radius:50%;background:var(--warning-500);color:white;margin:0 auto;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:bold;">CP</div>'; }
                 else if (nextStatus === 'absent_unexcused') { icon = '<div style="width:26px;height:26px;border-radius:50%;background:var(--danger-500);color:white;margin:0 auto;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:bold;">KP</div>'; }
-                cell.innerHTML = icon;
+                
+                const reasonHtml = reason ? `<div style="font-size:9px; color:var(--danger-500); margin-top:2px; max-width:50px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-left:auto; margin-right:auto;">${reason}</div>` : '';
+                cell.innerHTML = icon + '\\n' + reasonHtml;
                 cell.title = reason ? 'Lý do: ' + reason : '';
             }
         },
