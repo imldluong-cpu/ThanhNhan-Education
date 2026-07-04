@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="Thành Nhân Education - Nơi chắp cánh ước mơ. Trung tâm giảng dạy và gia sư uy tín hàng đầu.">
-    <title>Thành Nhân Education | Khơi Nguồn Tri Thức</title>
+    <title>Thành Nhân Education | Trung tâm dạy thêm</title>
     
     <!-- Google Fonts: Inter -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -16,6 +16,16 @@
     
     <!-- Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
+
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-WHZJZSKGEV"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+
+      gtag('config', 'G-WHZJZSKGEV');
+    </script>
 </head>
 <body>
     <!-- Header Navigation -->
@@ -37,7 +47,7 @@
                 <a href="#gia-su">Gia sư</a>
                 <a href="tin-tuc.html">Tin tức</a>
                 <a href="tai-lieu.html">Tài liệu</a>
-                <a href="https://zalo.me/0388877543" target="_blank" class="btn btn-primary" style="color: white;">Liên hệ ngay</a>
+                <a href="#dang-ky" class="btn btn-primary" style="color: white;">Đăng ký tư vấn</a>
             </nav>
         </div>
     </header>
@@ -162,53 +172,9 @@
         <div class="container">
             <h2 class="section-title animate-on-scroll">Đội ngũ giáo viên</h2>
             
-            <div class="teachers-grid animate-on-scroll">
-                <!-- Teacher 1 -->
-                <div class="teacher-card">
-                    <div class="teacher-img">
-                        <img src="assets/images/teacher-vu.jpg" alt="Thầy Danh Tuấn Vũ" style="object-position: center 15%;">
-                    </div>
-                    <div class="teacher-info">
-                        <h4>Thầy Danh Tuấn Vũ</h4>
-                        <span>Giáo viên Toán học</span>
-                        <p>Thạc sĩ ngành xác suất thống kê toán K21, hơn 9 năm kinh nghiệm dạy kèm Toán 6 - 12.</p>
-                    </div>
-                </div>
-                
-                <!-- Teacher 2 -->
-                <div class="teacher-card">
-                    <div class="teacher-img">
-                        <img src="assets/images/bao-khuyen.jpg" alt="Cô Lưu Ngọc Bảo Khuyên" style="object-position: center 35%;">
-                    </div>
-                    <div class="teacher-info">
-                        <h4>Cô Lưu Ngọc Bảo Khuyên</h4>
-                        <span>Giáo viên Anh Văn</span>
-                        <p>Phụ trách giảng dạy các lớp Anh Văn 6 - 12. Có hơn 3 năm kinh nghiệm giảng dạy, với phương pháp dễ hiểu, cá nhân hóa với từng học sinh.</p>
-                    </div>
-                </div>
-                
-                <!-- Teacher 3 -->
-                <div class="teacher-card">
-                    <div class="teacher-img" style="background-color: white;">
-                        <img src="assets/images/tu-ngan.jpg" alt="Cô Trần Tú Ngân" style="object-fit: contain; transform: scale(0.85); object-position: center;">
-                    </div>
-                    <div class="teacher-info">
-                        <h4>Cô Trần Tú Ngân</h4>
-                        <span>Giáo viên Ngữ Văn</span>
-                        <p>Phụ trách giảng dạy các lớp Ngữ Văn 6 - 12. Có phương pháp giảng dạy khoa học, giúp học sinh nắm vững kiến thức, tự tin chinh phục các kỳ thi và nâng cao điểm số.</p>
-                    </div>
-                </div>
-
-                <!-- Teacher 4 -->
-                <div class="teacher-card">
-                    <div class="teacher-img">
-                        <img src="assets/images/thuy-duy.jpg" alt="Cô Danh Thị Thúy Duy" style="object-position: center 45%;">
-                    </div>
-                    <div class="teacher-info">
-                        <h4>Cô Danh Thị Thúy Duy</h4>
-                        <span>Giáo viên Vật lý</span>
-                        <p>Cử nhân sư phạm Vật lý. Có nhiều năm nghiên cứu chuyên sâu. Hiện tại đang học cao học ngành Vật lý Lý thuyết và Vật lý Toán.</p>
-                    </div>
+            <div class="teachers-grid animate-on-scroll" id="teachers-grid-container">
+                <div style="grid-column: 1/-1; text-align: center; padding: 2rem;">
+                    <p style="color: var(--text-muted); font-size: 1.1rem;">Đang tải dữ liệu giáo viên...</p>
                 </div>
             </div>
         </div>
@@ -310,7 +276,7 @@
                             </div>
                         </li>
                     </ul>
-                    <a href="https://zalo.me/0388877543" target="_blank" class="btn btn-primary" style="margin-top: 1rem;">Đăng ký tìm gia sư</a>
+                    <a href="#dang-ky" class="btn btn-primary" style="margin-top: 1rem;">Đăng ký tìm gia sư</a>
                 </div>
                 <div class="about-image">
                     <img src="assets/images/gia-su.jpg" alt="Gia sư 1 kèm 1">
@@ -340,6 +306,22 @@
                     <p>Kho tài liệu phong phú, đề thi thử các năm, bài tập luyện tập chuyên sâu cho mọi khối lớp.</p>
                     <a href="tai-lieu.html" class="btn btn-outline">Truy cập thư viện</a>
                 </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Registration Form Section -->
+    <section class="section section-alt" id="dang-ky">
+        <div class="container">
+            <div class="registration-container animate-on-scroll" style="max-width: 800px; margin: 0 auto; background: var(--white); border-radius: var(--radius-lg); padding: 3rem; box-shadow: var(--shadow-lg);">
+                <div style="text-align: center; margin-bottom: 2rem;">
+                    <h2 class="section-title" style="margin-bottom: 1rem;">Đăng ký tư vấn / Tìm gia sư</h2>
+                    <p style="color: var(--text-muted); font-size: 1.1rem;">Để lại thông tin, đội ngũ Thành Nhân Edu sẽ liên hệ tư vấn lộ trình học tập phù hợp nhất cho con em bạn.</p>
+                </div>
+                
+                <!-- HubSpot Form -->
+                <script src="https://js-na2.hsforms.net/forms/embed/246668037.js" defer></script>
+                <div class="hs-form-frame" data-region="na2" data-form-id="077e796e-dd6b-42d4-8c29-8a6fe31deda7" data-portal-id="246668037"></div>
             </div>
         </div>
     </section>
@@ -401,5 +383,21 @@
 
     <!-- Scripts -->
     <script src="js/main.js"></script>
+
+    <!-- Start of HubSpot Embed Code -->
+    <script type="text/javascript" id="hs-script-loader" async defer src="//js-na2.hs-scripts.com/246668037.js"></script>
+    <!-- End of HubSpot Embed Code -->
+
+    <!-- Floating Contact Buttons -->
+    <div class="floating-contact">
+        <!-- Zalo -->
+        <a href="https://zalo.me/0388877543" target="_blank" class="float-btn zalo" title="Chat qua Zalo">
+            <span class="z-text">Z</span>
+        </a>
+        <!-- Messenger -->
+        <a href="https://m.me/trungtamthanhnhaneducation" target="_blank" class="float-btn messenger" title="Chat qua Messenger">
+            <i data-lucide="message-circle" style="width: 30px; height: 30px; color: white; fill: white;"></i>
+        </a>
+    </div>
 </body>
 </html>

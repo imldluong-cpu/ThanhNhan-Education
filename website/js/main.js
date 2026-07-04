@@ -158,6 +158,9 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // 6. Firebase Integration
+    window.globalTeacherMap = {};
+    window.fetchTeachersDataPromise = fetchTeachersData();
+    
     const firebaseConfig = {
         apiKey: "AIzaSyB0X4HHNv-TqJAsyE9XKRXIxzB7yRO6v84",
         authDomain: "thanhnhaneducation-29a2f.firebaseapp.com",
@@ -173,6 +176,9 @@ document.addEventListener('DOMContentLoaded', () => {
         
         async function fetchClassesData() {
             try {
+                if (window.fetchTeachersDataPromise) {
+                    await window.fetchTeachersDataPromise;
+                }
                 // Fetch Teachers
                 const teachersSnap = await db.collection('users').where('role', '==', 'teacher').get();
                 const teachers = {};
@@ -220,7 +226,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 function getTeacherNames(teacherIds) {
                     if (!teacherIds || teacherIds.length === 0) return 'Chưa phân công';
-                    return teacherIds.map(id => teachers[id] ? (teachers[id].displayName || teachers[id].email) : '').filter(Boolean).join(', ') || 'Chưa phân công';
+                    return teacherIds.map(id => {
+                        if (!teachers[id]) return '';
+                        const rawName = (teachers[id].displayName || teachers[id].email || '').trim();
+                        const key = rawName.toLowerCase();
+                        return window.globalTeacherMap && window.globalTeacherMap[key] ? window.globalTeacherMap[key] : rawName;
+                    }).filter(Boolean).join(', ') || 'Chưa phân công';
                 }
 
                 function renderClassCard(c, isUpcoming = false) {
@@ -275,5 +286,91 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         fetchClassesData();
+    }
+
+    // 7. Google Sheets Teachers Integration
+    async function fetchTeachersData() {
+        const sheetUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRQqEkB66KPPZZotJLPyosS8A_coYHWx7ghereXtBTNrMrRPrDyIQ2iBaz-J86OdN-j9llEh5XUPilp/pub?gid=0&single=true&output=tsv';
+        const container = document.getElementById('teachers-grid-container');
+        if (!container) return;
+
+        try {
+            const response = await fetch(sheetUrl);
+            const data = await response.text();
+            
+            // Parse TSV
+            const rows = data.split('\n');
+            // Remove header row
+            rows.shift();
+            
+            let html = '';
+            rows.forEach(row => {
+                if (!row.trim()) return;
+                const cols = row.split('\t');
+                if (cols.length >= 4) {
+                    const name = cols[0].trim();
+                    const subject = cols[1].trim();
+                    let rawImage = cols[2].trim().replace(/\\/g, '/');
+                    // Tự động lấy tên file (nếu admin copy nhầm cả đường dẫn trên máy tính G:/...)
+                    let parts = rawImage.split('/');
+                    let filename = parts[parts.length - 1];
+                    // Tự động thêm đuôi .jpg nếu admin quên nhập đuôi file
+                    if (!filename.match(/\.(jpg|jpeg|png|gif|webp|svg)$/i) && filename !== '') {
+                        filename += '.jpg';
+                    }
+                    let image = filename ? 'assets/images/' + filename : '';
+                    
+                    // Remove enclosing quotes if any
+                    let description = cols[3].trim();
+                    if (description.startsWith('"') && description.endsWith('"')) {
+                        description = description.substring(1, description.length - 1).replace(/""/g, '"');
+                    }
+                    
+                    let objectPosition = 'center';
+                    if (cols.length >= 5 && cols[4].trim()) {
+                        objectPosition = cols[4].trim();
+                    }
+                    
+                    // Xây dựng map tên hiển thị cho Firebase
+                    if (cols.length >= 6 && cols[5].trim()) {
+                        const firebaseNames = cols[5].split(',');
+                        firebaseNames.forEach(fn => {
+                            window.globalTeacherMap[fn.trim().toLowerCase()] = name;
+                        });
+                    }
+                    
+                    let imageStyle = `style="object-position: ${objectPosition};"`;
+                    let imgContainerStyle = '';
+                    
+                    // Specific logic for 'contain' images like Cô Ngân
+                    if (objectPosition.includes('contain')) {
+                        imageStyle = `style="object-fit: contain; width: 100%; height: 100%;"`;
+                        imgContainerStyle = `style="background-color: white; padding: 1.5rem;"`;
+                    }
+                    
+                    html += `
+                        <div class="teacher-card">
+                            <div class="teacher-img" ${imgContainerStyle}>
+                                <img src="${image}" alt="${name}" ${imageStyle}>
+                            </div>
+                            <div class="teacher-info">
+                                <h4>${name}</h4>
+                                <span>${subject}</span>
+                                <p>${description}</p>
+                            </div>
+                        </div>
+                    `;
+                }
+            });
+            
+            if (html.trim() !== '') {
+                container.innerHTML = html;
+            } else {
+                container.innerHTML = '<div style="grid-column: 1/-1; text-align: center; color: var(--text-muted);">Đang cập nhật danh sách giáo viên.</div>';
+            }
+        } catch (error) {
+            console.error("Lỗi khi tải dữ liệu giáo viên:", error);
+            container.innerHTML = '<div style="grid-column: 1/-1; text-align: center; color: var(--primary-red);">Lỗi tải dữ liệu giáo viên. Vui lòng thử lại sau.</div>';
+        }
     }
 });

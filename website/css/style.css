@@ -823,3 +823,79 @@ img {
         white-space: nowrap;
     }
 }
+
+/* --- Floating Contact Buttons --- */
+.floating-contact {
+    position: fixed;
+    bottom: 30px;
+    right: 30px;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    z-index: 9999;
+}
+
+.float-btn {
+    width: 55px;
+    height: 55px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 28px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+    text-decoration: none;
+    position: relative;
+    transition: all 0.3s ease;
+}
+
+.float-btn:hover {
+    transform: translateY(-5px) scale(1.05);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+    color: white;
+}
+
+.float-btn.zalo {
+    background-color: #0068ff;
+}
+.float-btn.zalo .z-text {
+    font-family: Arial, sans-serif;
+    font-weight: 900;
+    font-size: 24px;
+}
+
+.float-btn.messenger {
+    background: linear-gradient(45deg, #00C6FF, #0072FF);
+}
+
+@keyframes pulse-ring-zalo {
+    0% { transform: scale(0.8); box-shadow: 0 0 0 0 rgba(0, 104, 255, 0.7); }
+    70% { transform: scale(1); box-shadow: 0 0 0 15px rgba(0, 104, 255, 0); }
+    100% { transform: scale(0.8); box-shadow: 0 0 0 0 rgba(0, 104, 255, 0); }
+}
+
+@keyframes pulse-ring-mess {
+    0% { transform: scale(0.8); box-shadow: 0 0 0 0 rgba(0, 114, 255, 0.7); }
+    70% { transform: scale(1); box-shadow: 0 0 0 15px rgba(0, 114, 255, 0); }
+    100% { transform: scale(0.8); box-shadow: 0 0 0 0 rgba(0, 114, 255, 0); }
+}
+
+.float-btn.zalo::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    border-radius: 50%;
+    animation: pulse-ring-zalo 2s infinite;
+    z-index: -1;
+}
+
+.float-btn.messenger::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    border-radius: 50%;
+    animation: pulse-ring-mess 2s infinite;
+    animation-delay: 1s;
+    z-index: -1;
+}

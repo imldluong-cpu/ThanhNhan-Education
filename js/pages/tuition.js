@@ -190,6 +190,7 @@ Router.register('tuition', async (container) => {
                     <td><span class="badge badge-${t._displayStatus === 'paid' ? 'success' : t._displayStatus === 'overdue' ? 'danger' : t._displayStatus === 'upcoming' ? 'info' : 'warning'}">${t._displayStatus === 'paid' ? 'Đã đóng' : t._displayStatus === 'overdue' ? 'Quá hạn' : t._displayStatus === 'upcoming' ? 'Chưa đến hạn' : 'Chưa đóng'}</span></td>
                     <td><div class="table-actions">
                         ${t.status !== 'paid' ? `<button class="btn btn-success btn-sm" onclick="TuitionPage.markPaid('${t.id}')">Đã đóng</button>` : ''}
+                        <button class="btn-icon" title="In phiếu" onclick="TuitionPage.showInvoice('${t.id}')"><i data-lucide="printer"></i></button>
                         <button class="btn-icon" onclick="TuitionPage.edit('${t.id}')"><i data-lucide="pencil"></i></button>
                         <button class="btn-icon" onclick="TuitionPage.remove('${t.id}')"><i data-lucide="trash-2"></i></button>
                     </div></td>
@@ -443,6 +444,178 @@ Router.register('tuition', async (container) => {
                 render();
                 Toast.success('Đã cập nhật');
             } catch(e) { Toast.error('Lỗi', e.message); }
+        },
+
+        showInvoice(id) {
+            const t = tuitions.find(x => x.id === id);
+            if (!t) return;
+            
+            const studentName = getStudentName(t.studentId);
+            const className = getClassName(t.classId);
+            const amountFormatted = DB.formatCurrency(t.amount).replace(' ₫', '');
+            
+            const d = new Date();
+            const currentDay = String(d.getDate()).padStart(2, '0');
+            const currentMonth = String(d.getMonth() + 1).padStart(2, '0');
+            const currentYear = d.getFullYear();
+            
+            const dueDateObj = new Date(t.dueDate);
+            const monthStr = String(dueDateObj.getMonth() + 1).padStart(2, '0');
+            const yearStr = dueDateObj.getFullYear();
+            
+            const fromDateStr = `01/${monthStr}/${yearStr}`;
+            const toDateStr = `30/${monthStr}/${yearStr}`;
+
+            Modal.show({
+                title: 'Phiếu thu học phí',
+                content: `
+                    <style>
+                    @media print {
+                        body * { visibility: hidden !important; }
+                        #invoice-print-area, #invoice-print-area * { visibility: visible !important; }
+                        #invoice-print-area { position: absolute; left: 0; top: 0; width: 100%; margin: 0; padding: 0; }
+                        .modal { position: absolute; left: 0; top: 0; background: transparent !important; overflow: visible !important; }
+                        .modal-content { box-shadow: none !important; border: none !important; width: 100% !important; max-width: 100% !important; padding: 0 !important; margin: 0 !important; }
+                        .modal-header, .modal-footer, .invoice-actions { display: none !important; }
+                    }
+                    .invoice-editable:hover { background-color: #f0f9ff; cursor: text; outline: 1px dashed #0ea5e9; }
+                    .invoice-editable:focus { outline: 1px solid #0ea5e9; background-color: #fff; }
+                    </style>
+                    
+                    <div class="invoice-actions" style="display:flex; gap:10px; margin-bottom: 20px; justify-content: flex-end;">
+                        <button class="btn btn-secondary" onclick="TuitionPage.exportInvoiceImage('${studentName}')"><i data-lucide="image"></i> Tải ảnh</button>
+                        <button class="btn btn-primary" onclick="window.print()"><i data-lucide="printer"></i> In / Lưu PDF</button>
+                    </div>
+
+                    <div id="invoice-print-area" style="width: 100%; max-width: 210mm; background: white; padding: 20mm; box-sizing: border-box; margin: 0 auto; color: black; font-family: 'Times New Roman', serif; font-size: 16px; line-height: 1.5; border: 1px solid #eee;">
+                        <div style="text-align: center; margin-bottom: 20px;">
+                            <img src="assets/images/logo.png" style="height: 60px;" alt="Logo" onerror="this.style.display='none'">
+                        </div>
+                        
+                        <h2 style="text-align: center; margin: 0; font-size: 24px; font-weight: bold;">PHIẾU THU HỌC PHÍ</h2>
+                        <p style="text-align: center; margin: 5px 0 20px 0;">Tháng <span class="invoice-editable" contenteditable="true" style="border-bottom: 1px dotted #ccc; min-width: 50px; display: inline-block; text-align: center;">${monthStr}</span>/<span class="invoice-editable" contenteditable="true" style="border-bottom: 1px dotted #ccc; min-width: 50px; display: inline-block; text-align: center;">${yearStr}</span></p>
+                        
+                        <div style="margin-bottom: 20px;">
+                            <div style="display: flex; margin-bottom: 8px;">
+                                <strong style="width: 120px;">Học viên:</strong>
+                                <span class="invoice-editable" contenteditable="true" style="flex: 1; border-bottom: 1px dotted #ccc; outline: none;">${studentName}</span>
+                            </div>
+                            <div style="display: flex; margin-bottom: 8px;">
+                                <strong style="width: 120px;">Lớp - Môn:</strong>
+                                <span class="invoice-editable" contenteditable="true" style="flex: 1; border-bottom: 1px dotted #ccc; outline: none;">${className}</span>
+                            </div>
+                            <div style="display: flex; margin-bottom: 8px;">
+                                <strong style="width: 120px;">Số tiền:</strong>
+                                <span class="invoice-editable" contenteditable="true" style="flex: 1; border-bottom: 1px dotted #ccc; outline: none;">${amountFormatted}</span>
+                            </div>
+                            <div style="display: flex; margin-bottom: 8px; align-items: baseline;">
+                                <strong style="width: 150px; flex-shrink: 0;">Học phí từ ngày:</strong>
+                                <span class="invoice-editable" contenteditable="true" style="border-bottom: 1px dotted #ccc; min-width: 100px; text-align: center; outline: none;">${fromDateStr}</span>
+                                <span style="margin: 0 10px;">đến ngày</span>
+                                <span class="invoice-editable" contenteditable="true" style="flex: 1; border-bottom: 1px dotted #ccc; text-align: center; outline: none;">${toDateStr}</span>
+                            </div>
+                        </div>
+                        
+                        <div style="text-align: right; font-style: italic; margin-bottom: 20px;">
+                            Ngày <span class="invoice-editable" contenteditable="true" style="border-bottom: 1px dotted #ccc; min-width: 30px; display: inline-block; text-align: center; outline: none;">${currentDay}</span>
+                            tháng <span class="invoice-editable" contenteditable="true" style="border-bottom: 1px dotted #ccc; min-width: 30px; display: inline-block; text-align: center; outline: none;">${currentMonth}</span>
+                            năm <span class="invoice-editable" contenteditable="true" style="border-bottom: 1px dotted #ccc; min-width: 50px; display: inline-block; text-align: center; outline: none;">${currentYear}</span>
+                        </div>
+                        
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 30px; border-bottom: 1px solid #000; padding-bottom: 20px;">
+                            <div style="width: 65%; display: flex; gap: 15px; align-items: center;">
+                                <img src="https://img.vietqr.io/image/970415-1801755276-print.png" style="width: 110px; height: 110px; object-fit: contain;">
+                                <div style="font-size: 14px; font-style: italic; line-height: 1.4;">
+                                    <p style="margin: 0 0 4px 0;">STK: 1801755276</p>
+                                    <p style="margin: 0 0 4px 0;">CONG TY TNHH THANH NHAN EDUCATION</p>
+                                    <p style="margin: 0;">Ngân hàng TMCP Kỹ thương Việt Nam - TECHCOMBANK</p>
+                                </div>
+                            </div>
+                            <div style="width: 30%; text-align: center; border-left: 1px solid #000; padding-left: 10px;">
+                                <strong style="font-size: 16px;">Người lập</strong>
+                                <br><br><br><br><br>
+                                <strong class="invoice-editable" contenteditable="true" style="font-size: 16px; outline: none;">Lê Duy Lương</strong>
+                            </div>
+                        </div>
+                        
+                        <div style="text-align: center; margin-bottom: 15px;">
+                            <strong style="font-size: 18px;">TRUNG TÂM DẠY THÊM THÀNH NHÂN EDUCATION</strong>
+                        </div>
+                        
+                        <div style="margin-bottom: 20px; font-size: 14px; line-height: 1.4;">
+                            <p style="margin: 0 0 5px 0; text-align: justify;">Chương trình giảng dạy bám sát chương trình phổ thông, tập trung củng cố kiến thức nền tảng và theo sát tiến độ học tập của từng học sinh, với các môn học:</p>
+                            <strong style="font-size: 15px; display: block; margin-bottom: 10px;">TOÁN - VĂN - ANH VĂN - LÝ - HÓA - TIẾNG ANH GIAO TIẾP.</strong>
+                            
+                            <p style="margin: 0 0 5px 0;">📌 <strong>Đối tượng:</strong> Học sinh Cấp 2; Cấp 3; Tiểu học (Tiếng Anh giao tiếp).</p>
+                            <p style="margin: 0 0 10px 0;">🆓 <strong>HỌC THỬ MIỄN PHÍ 01 BUỔI:</strong> Học trải nghiệm trước khi đăng ký.</p>
+                            
+                            <p style="margin: 0 0 5px 0;">🤝 <strong>Học cùng bạn - tăng động lực học tập:</strong> (Giảm trực tiếp học phí 3 tháng đầu cho cả nhóm)</p>
+                            <ul style="margin: 0 0 10px 20px; padding: 0;">
+                                <li>2 học sinh: giảm 5%</li>
+                                <li>3 học sinh: giảm 10%</li>
+                                <li>Từ 5 học sinh: giảm 20%</li>
+                            </ul>
+                            
+                            <p style="margin: 0 0 5px 0;">💡 <strong>Hỗ trợ học phí toàn khóa:</strong></p>
+                            <ul style="margin: 0 0 10px 20px; padding: 0;">
+                                <li>Đăng ký 2 môn: giảm 5%</li>
+                                <li>Từ 3 môn trở lên: giảm 10%</li>
+                            </ul>
+                        </div>
+                        
+                        <div style="border-top: 1px solid #000; padding-top: 10px; font-style: italic; font-weight: bold; font-size: 14px;">
+                            <p style="margin: 0 0 5px 0;">Số 56 Nguyễn Văn Trỗi, P. Xuân Khánh, TPCT (dưới chân cầu Rạch Ngỗng 1)</p>
+                            <p style="margin: 0;">Hotline/Zalo: 0388 877 543</p>
+                        </div>
+                    </div>
+                `,
+                footer: `<button class="btn btn-secondary" onclick="Modal.close()">Đóng</button>`
+            });
+            
+            if (window.lucide) {
+                window.lucide.createIcons();
+            }
+        },
+        
+        async exportInvoiceImage(studentName) {
+            const element = document.getElementById('invoice-print-area');
+            if (!element) return;
+            
+            if (typeof html2canvas === 'undefined') {
+                Toast.error('Thư viện chụp ảnh chưa được tải. Vui lòng thử lại sau.');
+                return;
+            }
+            
+            const oldBorder = element.style.border;
+            element.style.border = 'none';
+            
+            try {
+                const btn = event.currentTarget;
+                const originalHtml = btn.innerHTML;
+                btn.innerHTML = 'Đang xử lý...';
+                btn.disabled = true;
+                
+                const canvas = await html2canvas(element, {
+                    scale: 2,
+                    useCORS: true,
+                    backgroundColor: '#ffffff'
+                });
+                
+                const link = document.createElement('a');
+                link.download = `PhieuThu_${studentName.replace(/\s+/g, '')}.png`;
+                link.href = canvas.toDataURL('image/png');
+                link.click();
+                
+                Toast.success('Đã tải ảnh thành công');
+                
+                btn.innerHTML = originalHtml;
+                btn.disabled = false;
+            } catch (err) {
+                console.error(err);
+                Toast.error('Lỗi chụp ảnh', err.message);
+            } finally {
+                element.style.border = oldBorder;
+            }
         },
 
         remove(id) {
