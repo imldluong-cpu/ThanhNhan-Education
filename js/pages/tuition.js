@@ -355,7 +355,25 @@ Router.register('tuition', async (container) => {
                         <div class="form-group"><label class="form-label">Số tiền *</label><input type="number" class="input" id="t-amount" placeholder="0"></div>
                         <div class="form-group"><label class="form-label">Hạn đóng *</label><input type="date" class="input" id="t-due"></div>
                     </div>
+                    <div class="form-group" style="padding: 10px; background: var(--bg-card); border-radius: 8px; border: 1px solid var(--border-color); margin-bottom: 12px;">
+                        <label class="form-label" style="margin-bottom: 8px;">Tự động tính ngày (tùy chọn)</label>
+                        <div class="form-row">
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label class="form-label" style="font-size: 12px;">Tính từ ngày</label>
+                                <input type="date" class="input" id="t-start-date">
+                            </div>
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label class="form-label" style="font-size: 12px;">Số buổi</label>
+                                <input type="number" class="input" id="t-lessons-count" value="8">
+                            </div>
+                            <div class="form-group" style="margin-bottom: 0; display: flex; align-items: flex-end;">
+                                <button class="btn btn-secondary" style="width: 100%; padding: 0 10px;" onclick="TuitionPage.calculateEndDate()"><i data-lucide="calculator"></i> Tính</button>
+                            </div>
+                        </div>
+                    </div>
                     <div class="form-group"><label class="form-label">Ghi chú</label><input type="text" class="input" id="t-note" placeholder="VD: Học phí tháng 6"></div>
+                    <input type="hidden" id="t-hidden-start">
+                    <input type="hidden" id="t-hidden-end">
                 `,
                 footer: `<button class="btn btn-secondary" onclick="Modal.close()">Hủy</button><button class="btn btn-primary" onclick="TuitionPage.saveNew()">Lưu</button>`
             });
@@ -416,8 +434,25 @@ Router.register('tuition', async (container) => {
             const amount = parseInt(document.getElementById('t-amount').value);
             const dueDate = document.getElementById('t-due').value;
             if (!studentId || !amount || !dueDate) { Toast.warning('Điền đầy đủ thông tin'); return; }
+            
+            const startDate = document.getElementById('t-hidden-start')?.value;
+            const endDate = document.getElementById('t-hidden-end')?.value;
+            
             try {
-                await DB.addTuition({ studentId, studentName: getStudentName(studentId), classId: document.getElementById('t-class').value, amount, dueDate, status: new Date(dueDate) < new Date() ? 'overdue' : 'pending', reminderSent: false, note: document.getElementById('t-note').value });
+                const dataToSave = { 
+                    studentId, 
+                    studentName: getStudentName(studentId), 
+                    classId: document.getElementById('t-class').value, 
+                    amount, 
+                    dueDate, 
+                    status: new Date(dueDate) < new Date() ? 'overdue' : 'pending', 
+                    reminderSent: false, 
+                    note: document.getElementById('t-note').value 
+                };
+                if (startDate) dataToSave.startDate = startDate;
+                if (endDate) dataToSave.endDate = endDate;
+                
+                await DB.addTuition(dataToSave);
                 Modal.close();
                 Toast.success('Đã thêm');
                 tuitions = await DB.getTuitions();
@@ -497,8 +532,26 @@ Router.register('tuition', async (container) => {
             const monthStr = String(dueDateObj.getMonth() + 1).padStart(2, '0');
             const yearStr = dueDateObj.getFullYear();
             
-            const fromDateStr = `01/${monthStr}/${yearStr}`;
-            const toDateStr = `30/${monthStr}/${yearStr}`;
+            let fromDateStr = `01/${monthStr}/${yearStr}`;
+            let toDateStr = `30/${monthStr}/${yearStr}`;
+            
+            const formatDt = (dateString) => {
+                const d = new Date(dateString);
+                return String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0') + '/' + d.getFullYear();
+            };
+            
+            if (t.startDate && t.endDate) {
+                fromDateStr = formatDt(t.startDate);
+                toDateStr = formatDt(t.endDate);
+            } else if (t.note) {
+                // Parse note for "(Từ dd/mm/yyyy đến dd/mm/yyyy)"
+                const rx = /Từ (\d{2}\/\d{2}\/\d{4}) đến (\d{2}\/\d{2}\/\d{4})/;
+                const match = t.note.match(rx);
+                if (match) {
+                    fromDateStr = match[1];
+                    toDateStr = match[2];
+                }
+            }
 
             Modal.show({
                 title: 'Phiếu thu học phí',
@@ -653,6 +706,101 @@ Router.register('tuition', async (container) => {
                 Toast.error('Lỗi chụp ảnh', err.message);
             } finally {
                 element.style.border = oldBorder;
+            }
+        },
+        
+        async calculateEndDate() {
+            const studentId = document.getElementById('t-student').value;
+            const startDateStr = document.getElementById('t-start-date').value;
+            const lessonsCount = parseInt(document.getElementById('t-lessons-count').value);
+            
+            if (!studentId || !startDateStr || !lessonsCount || lessonsCount <= 0) {
+                Toast.warning('Vui lòng chọn học viên, ngày bắt đầu và số buổi học lớn hơn 0.');
+                return;
+            }
+            
+            const student = students.find(s => s.id === studentId);
+            if (!student || !student.classIds || student.classIds.length === 0) {
+                Toast.warning('Học viên này chưa được xếp vào lớp nào.');
+                return;
+            }
+            
+            try {
+                // Fetch schedules if not already cached. Assuming DB.getSchedules exists or we can fetch them.
+                const schedules = await DB.getSchedules();
+                
+                let maxEndDate = null;
+                
+                // For each class the student is in
+                student.classIds.forEach(classId => {
+                    // Find schedules for this class
+                    const classSchedules = schedules.filter(s => s.classId === classId);
+                    if (classSchedules.length === 0) return;
+                    
+                    // Extract days of week (0-6 where 0 is Sunday or 2-8 where 2 is Monday). 
+                    // In schedule.js, dayMap uses 2=Mon, 3=Tue, 4=Wed, 5=Thu, 6=Fri, 7=Sat, 8=Sun
+                    const scheduledDays = classSchedules.map(s => parseInt(s.dayOfWeek)); // 2 to 8
+                    
+                    let currentDate = new Date(startDateStr);
+                    let lessonsFound = 0;
+                    
+                    // Safety limit to avoid infinite loops (e.g. 1 year)
+                    let safetyCounter = 0;
+                    while (lessonsFound < lessonsCount && safetyCounter < 365) {
+                        const jsDay = currentDate.getDay(); // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
+                        // Convert JS day to our system day (2-8)
+                        const ourDay = jsDay === 0 ? 8 : jsDay + 1;
+                        
+                        if (scheduledDays.includes(ourDay)) {
+                            lessonsFound++;
+                        }
+                        
+                        if (lessonsFound < lessonsCount) {
+                            currentDate.setDate(currentDate.getDate() + 1);
+                        }
+                        safetyCounter++;
+                    }
+                    
+                    if (lessonsFound === lessonsCount) {
+                        if (!maxEndDate || currentDate > maxEndDate) {
+                            maxEndDate = new Date(currentDate);
+                        }
+                    }
+                });
+                
+                if (maxEndDate) {
+                    const startObj = new Date(startDateStr);
+                    const formatDt = (d) => {
+                        return String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0') + '/' + d.getFullYear();
+                    };
+                    
+                    const startFmt = formatDt(startObj);
+                    const endFmt = formatDt(maxEndDate);
+                    
+                    // Format note
+                    const noteInput = document.getElementById('t-note');
+                    let currentNote = noteInput.value;
+                    const dateStr = `(Từ ${startFmt} đến ${endFmt})`;
+                    
+                    // Replace existing if matches
+                    const rx = /\(Từ .*? đến .*?\)/;
+                    if (rx.test(currentNote)) {
+                        noteInput.value = currentNote.replace(rx, dateStr);
+                    } else {
+                        noteInput.value = currentNote ? currentNote + ' ' + dateStr : dateStr;
+                    }
+                    
+                    // Save to hidden fields
+                    document.getElementById('t-hidden-start').value = startObj.toISOString().split('T')[0];
+                    document.getElementById('t-hidden-end').value = maxEndDate.toISOString().split('T')[0];
+                    
+                    Toast.success(`Đã tính: Đến ngày ${endFmt}`);
+                } else {
+                    Toast.warning('Không tìm thấy lịch học phù hợp để tính toán.');
+                }
+            } catch (err) {
+                console.error(err);
+                Toast.error('Lỗi khi tính toán', err.message);
             }
         },
 

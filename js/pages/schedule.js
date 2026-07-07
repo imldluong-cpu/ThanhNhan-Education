@@ -123,7 +123,7 @@ Router.register('schedule', async (container) => {
                 `;
                 if (canEdit) {
                     html += `
-                        <button class="event-delete-btn" style="position:absolute;top:2px;right:2px;background:rgba(0,0,0,0.15);border:none;border-radius:4px;color:inherit;cursor:pointer;padding:2px;display:flex;align-items:center;justify-content:center;transition:background 0.2s;" onmouseover="this.style.background='rgba(0,0,0,0.3)'" onmouseout="this.style.background='rgba(0,0,0,0.15)'" onclick="event.stopPropagation(); SchedulePage.removeSchedule('${arg.event.groupId}', ${arg.event.extendedProps.isException ? `'${arg.event.extendedProps.exceptionId}'` : 'null'})" title="Xóa lịch này">
+                        <button class="event-delete-btn" style="position:absolute;top:2px;right:2px;background:rgba(0,0,0,0.15);border:none;border-radius:4px;color:inherit;cursor:pointer;padding:2px;display:flex;align-items:center;justify-content:center;transition:background 0.2s;" onmouseover="this.style.background='rgba(0,0,0,0.3)'" onmouseout="this.style.background='rgba(0,0,0,0.15)'" onclick="event.stopPropagation(); SchedulePage.removeSchedule('${arg.event.groupId}', ${arg.event.extendedProps.isException ? `'${arg.event.extendedProps.exceptionId}'` : 'null'}, '${arg.event.extendedProps.occurrenceDate || ''}')" title="Xóa lịch này">
                             <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
                         </button>
                     `;
@@ -598,21 +598,61 @@ Router.register('schedule', async (container) => {
             } catch(e) { Toast.error('Lỗi', e.message); }
         },
 
-        removeSchedule(id, exceptionId = null) {
-            Modal.confirm({ title: 'Xóa lịch', message: 'Bạn chắc chắn muốn xóa lịch học này?', confirmText: 'Xóa', danger: true });
-            Modal.bindConfirm(async () => {
-                try {
-                    if (exceptionId) {
+        removeSchedule(id, exceptionId = null, occurrenceDate = '') {
+            if (exceptionId) {
+                Modal.confirm({ title: 'Khôi phục lịch gốc', message: 'Bạn đang thao tác trên một buổi học đã được bù/đổi lịch. Việc xóa sẽ khôi phục lại lịch gốc. Bạn có chắc chắn?', confirmText: 'Khôi phục', danger: true });
+                Modal.bindConfirm(async () => {
+                    try {
                         await DB.deleteScheduleException(exceptionId);
                         scheduleExceptions = scheduleExceptions.filter(e => e.id !== exceptionId);
-                    } else {
-                        await DB.deleteSchedule(id);
-                        schedules = schedules.filter(s => s.id !== id);
-                    }
-                    render();
-                    Toast.success('Đã xóa lịch học');
-                } catch(e) { Toast.error('Lỗi', e.message); }
-            });
+                        render();
+                        Toast.success('Đã khôi phục lịch gốc');
+                    } catch(e) { Toast.error('Lỗi', e.message); }
+                });
+            } else {
+                let dateFmt = occurrenceDate;
+                if (occurrenceDate) {
+                    const [y, m, d] = occurrenceDate.split('-');
+                    dateFmt = `${d}/${m}/${y}`;
+                }
+                Modal.show({
+                    title: 'Xóa lịch học',
+                    content: `
+                        <p style="margin-bottom: 12px; font-size: 15px;">Bạn muốn xóa buổi học ngày <strong>${dateFmt}</strong> hay xóa toàn bộ lịch định kỳ này của môn học?</p>
+                    `,
+                    footer: `
+                        <button class="btn btn-secondary" onclick="Modal.close()">Hủy</button>
+                        <button class="btn btn-warning" onclick="SchedulePage._processRemove('${id}', '${occurrenceDate}', false)">Xóa 1 buổi này</button>
+                        <button class="btn btn-danger" onclick="SchedulePage._processRemove('${id}', null, true)">Xóa toàn bộ</button>
+                    `
+                });
+            }
+        },
+
+        async _processRemove(id, occurrenceDate, isAll) {
+            Modal.close();
+            try {
+                if (isAll) {
+                    await DB.deleteSchedule(id);
+                    schedules = schedules.filter(s => s.id !== id);
+                    Toast.success('Đã xóa toàn bộ lịch định kỳ');
+                } else if (occurrenceDate) {
+                    const exData = {
+                        scheduleId: id,
+                        originalDate: occurrenceDate,
+                        newDate: null,
+                        newStartTime: null,
+                        newEndTime: null,
+                        newRoom: null,
+                        note: 'Nghỉ học'
+                    };
+                    const docRef = await DB.addScheduleException(exData);
+                    exData.id = docRef.id;
+                    scheduleExceptions.push(exData);
+                    Toast.success('Đã xóa buổi học');
+                }
+                render();
+            } catch(e) { Toast.error('Lỗi', e.message); }
         }
     };
 });
