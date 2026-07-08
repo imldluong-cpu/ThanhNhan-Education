@@ -570,6 +570,7 @@ Router.register('tuition', async (container) => {
                     </style>
                     
                     <div class="invoice-actions" style="display:flex; gap:10px; margin-bottom: 12px; justify-content: flex-end;">
+                        <button class="btn btn-success" onclick="TuitionPage.saveInvoiceChanges('${id}')"><i data-lucide="save"></i> Lưu thay đổi</button>
                         <button class="btn btn-secondary" onclick="TuitionPage.exportInvoiceImage('${studentName}')"><i data-lucide="image"></i> Tải ảnh</button>
                         <button class="btn btn-primary" onclick="window.print()"><i data-lucide="printer"></i> In / Lưu PDF</button>
                     </div>
@@ -581,7 +582,7 @@ Router.register('tuition', async (container) => {
                         </div>
                         
                         <h2 style="text-align: center; margin: 0; font-size: 17px; font-weight: bold;">PHIẾU THU HỌC PHÍ</h2>
-                        <p style="text-align: center; margin: 5px 0 15px 0;">Tháng <span class="invoice-editable" contenteditable="true" style="border-bottom: 1px dotted #ccc; min-width: 40px; display: inline-block; text-align: center;">${monthStr}</span>/<span class="invoice-editable" contenteditable="true" style="border-bottom: 1px dotted #ccc; min-width: 40px; display: inline-block; text-align: center;">${yearStr}</span></p>
+                        <p style="text-align: center; margin: 5px 0 15px 0;">Tháng <span id="inv-month" class="invoice-editable" contenteditable="true" style="border-bottom: 1px dotted #ccc; min-width: 40px; display: inline-block; text-align: center;">${monthStr}</span>/<span id="inv-year" class="invoice-editable" contenteditable="true" style="border-bottom: 1px dotted #ccc; min-width: 40px; display: inline-block; text-align: center;">${yearStr}</span></p>
                         
                         <div style="margin-bottom: 10px;">
                             <div style="display: flex; margin-bottom: 8px;">
@@ -594,13 +595,13 @@ Router.register('tuition', async (container) => {
                             </div>
                             <div style="display: flex; margin-bottom: 8px;">
                                 <strong style="width: 120px;">Số tiền:</strong>
-                                <span class="invoice-editable" contenteditable="true" style="flex: 1; border-bottom: 1px dotted #ccc; outline: none;">${amountFormatted}</span>
+                                <span id="inv-amount" class="invoice-editable" contenteditable="true" style="flex: 1; border-bottom: 1px dotted #ccc; outline: none;">${amountFormatted}</span>
                             </div>
                             <div style="display: flex; margin-bottom: 8px; align-items: baseline;">
                                 <strong style="width: 150px; flex-shrink: 0;">Học phí từ ngày:</strong>
-                                <span class="invoice-editable" contenteditable="true" style="border-bottom: 1px dotted #ccc; min-width: 100px; text-align: center; outline: none;">${fromDateStr}</span>
+                                <span id="inv-from-date" class="invoice-editable" contenteditable="true" style="border-bottom: 1px dotted #ccc; min-width: 100px; text-align: center; outline: none;">${fromDateStr}</span>
                                 <span style="margin: 0 10px;">đến ngày</span>
-                                <span class="invoice-editable" contenteditable="true" style="flex: 1; border-bottom: 1px dotted #ccc; text-align: center; outline: none;">${toDateStr}</span>
+                                <span id="inv-to-date" class="invoice-editable" contenteditable="true" style="flex: 1; border-bottom: 1px dotted #ccc; text-align: center; outline: none;">${toDateStr}</span>
                             </div>
                         </div>
                         
@@ -668,6 +669,53 @@ Router.register('tuition', async (container) => {
             }
         },
         
+        async saveInvoiceChanges(id) {
+            try {
+                const amountText = document.getElementById('inv-amount').innerText;
+                const fromDateText = document.getElementById('inv-from-date').innerText;
+                const toDateText = document.getElementById('inv-to-date').innerText;
+                const monthText = document.getElementById('inv-month').innerText.padStart(2, '0');
+                const yearText = document.getElementById('inv-year').innerText;
+                
+                const amount = parseInt(amountText.replace(/[^\d]/g, '')) || 0;
+                
+                const parseDt = (str) => {
+                    const parts = str.split('/');
+                    if (parts.length === 3) return `${parts[2]}-${parts[1]}-${parts[0]}`;
+                    return '';
+                };
+                
+                const startDate = parseDt(fromDateText);
+                const endDate = parseDt(toDateText);
+                
+                const t = tuitions.find(x => x.id === id);
+                if (!t) return;
+                
+                const d = new Date(t.dueDate);
+                d.setFullYear(parseInt(yearText) || d.getFullYear());
+                d.setMonth((parseInt(monthText) || 1) - 1);
+                
+                const updates = { 
+                    amount: amount, 
+                    startDate: startDate, 
+                    endDate: endDate,
+                    dueDate: d.toISOString()
+                };
+                
+                await DB.updateTuition(id, updates);
+                
+                t.amount = amount;
+                t.startDate = startDate;
+                t.endDate = endDate;
+                t.dueDate = updates.dueDate;
+                
+                render();
+                Toast.success('Đã lưu thay đổi vào hệ thống');
+            } catch(e) {
+                Toast.error('Lỗi: ' + e.message);
+            }
+        },
+
         async exportInvoiceImage(studentName) {
             const element = document.getElementById('invoice-print-area');
             if (!element) return;
