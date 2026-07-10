@@ -1,0 +1,75 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // --- Helper Functions ---
+    function isLoggedIn() {
+      return request.auth != null;
+    }
+    
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+    
+    function isOwner() {
+      return isLoggedIn() && (
+        (request.auth.token.email != null && request.auth.token.email.lower() == 'edu.thanhnhan@gmail.com') ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getUserData().role == 'owner')
+      );
+    }
+    
+    function isStaff() {
+      return isLoggedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getUserData().role == 'staff';
+    }
+    
+    function isOwnerOrStaff() {
+      return isOwner() || isStaff();
+    }
+    
+    function isTeacher() {
+      return isLoggedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getUserData().role == 'teacher';
+    }
+
+    // --- Rules for collections ---
+
+    // 1. Users Collection
+    match /users/{userId} {
+      // Anyone logged in can read user data (needed for UI to show names/roles)
+      allow read: if isLoggedIn();
+      
+      // Creating a profile is allowed ONLY IF they set their role to 'pending'
+      // Exception: The owner email can set their role to 'owner'
+      allow create: if request.auth.uid == userId && (
+        (request.resource.data.email.lower() == 'edu.thanhnhan@gmail.com' && request.resource.data.role == 'owner') ||
+        (request.resource.data.email.lower() != 'edu.thanhnhan@gmail.com' && request.resource.data.role == 'pending')
+      );
+      
+      // Users can update their own profile (except role and status), Owner can update anything
+      allow update: if (request.auth.uid == userId && request.resource.data.role == resource.data.role && request.resource.data.status == resource.data.status) 
+                    || isOwner();
+                    
+      allow delete: if isOwner();
+    }
+
+    // 2. Core Administration (Students, Classes, Tuition, Finance, Salary, Schedules)
+    match /students/{docId} { 
+      allow read: if isOwnerOrStaff() || isTeacher(); 
+      allow write: if isOwnerOrStaff(); 
+    }
+    match /classes/{docId} { allow read, write: if isOwnerOrStaff() || isTeacher(); } // Teachers might need to see classes
+    match /tuition/{docId} { allow read, write: if isOwnerOrStaff(); }
+    match /finance/{docId} { allow read, write: if isOwnerOrStaff(); }
+    match /salaryAdjustments/{docId} { allow read, write: if isOwnerOrStaff(); }
+    match /schedules/{docId} { allow read, write: if isOwnerOrStaff() || isTeacher(); } // Teachers can view schedules
+
+    // 3. Teaching & Operational (Attendance, Grades, Teacher Attendance)
+    match /attendance/{docId} { allow read, write: if isOwnerOrStaff() || isTeacher(); }
+    match /grades/{docId} { allow read, write: if isOwnerOrStaff() || isTeacher(); }
+    match /teacherAttendance/{docId} { allow read, write: if isOwnerOrStaff() || isTeacher(); }
+
+    // Default deny for everything else
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -5,7 +5,7 @@
 Router.register('teacher-attendance', async (container) => {
     const isOwner = Auth.isOwner();
     const isTeacher = Auth.isTeacher();
-    let records = [], teachers = [], classes = [], settings = {}, schedules = [];
+    let records = [], teachers = [], classes = [], settings = {}, schedules = [], adjustments = [];
     const currentMonth = DB.currentMonth();
     let selectedMonth = currentMonth;
     let mySalaryConfig = {};

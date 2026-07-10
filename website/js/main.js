@@ -186,13 +186,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     teachers[doc.id] = doc.data();
                 });
 
-                // Fetch Students to calculate class sizes
-                const studentsSnap = await db.collection('students').get();
-                const students = [];
-                studentsSnap.forEach(doc => {
-                    students.push({ id: doc.id, ...doc.data() });
-                });
-
                 // Fetch Classes
                 const classesSnap = await db.collection('classes').get();
                 const activeClasses = [];
@@ -235,9 +228,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 function renderClassCard(c, isUpcoming = false) {
-                    const classStudents = students.filter(s => (s.classIds || []).includes(c.id) && s.status === 'active');
-                    const studentCount = classStudents.length;
-                    
                     const badgeHtml = isUpcoming ? `<div class="class-badge upcoming">Mới</div>` : '';
                     const startDateHtml = isUpcoming && c.startDate ? `<li><i data-lucide="clock"></i> Khai giảng: <strong>${formatDate(c.startDate)}</strong></li>` : '';
                     
@@ -249,7 +239,6 @@ document.addEventListener('DOMContentLoaded', () => {
                                 ${startDateHtml}
                                 <li><i data-lucide="book-open"></i> Môn: ${c.subject || 'Đang cập nhật'}</li>
                                 <li><i data-lucide="user"></i> GV: ${getTeacherNames(c.teacherIds)}</li>
-                                <li><i data-lucide="users"></i> Sĩ số: ${studentCount} học viên</li>
                                 <li><i data-lucide="wallet"></i> Học phí: ${c.fee ? formatCurrency(c.fee) + '/tháng' : 'Theo bảng giá'}</li>
                             </ul>
                             <a href="https://zalo.me/0388877543" target="_blank" class="btn ${isUpcoming ? 'btn-primary' : 'btn-outline'}">${isUpcoming ? 'Giữ chỗ ngay' : 'Đăng ký bổ sung'}</a>
