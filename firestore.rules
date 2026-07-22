@@ -61,11 +61,18 @@ service cloud.firestore {
     match /finance/{docId} { allow read, write: if isOwnerOrStaff(); }
     match /salaryAdjustments/{docId} { allow read, write: if isOwnerOrStaff(); }
     match /schedules/{docId} { allow read, write: if isOwnerOrStaff() || isTeacher(); } // Teachers can view schedules
+    match /scheduleExceptions/{docId} { allow read, write: if isOwnerOrStaff() || isTeacher(); }
 
     // 3. Teaching & Operational (Attendance, Grades, Teacher Attendance)
     match /attendance/{docId} { allow read, write: if isOwnerOrStaff() || isTeacher(); }
     match /grades/{docId} { allow read, write: if isOwnerOrStaff() || isTeacher(); }
     match /teacherAttendance/{docId} { allow read, write: if isOwnerOrStaff() || isTeacher(); }
+
+    // 4. Global Settings
+    match /settings/{docId} { 
+      allow read: if isLoggedIn(); 
+      allow write: if isOwner(); 
+    }
 
     // Default deny for everything else
     match /{document=**} {

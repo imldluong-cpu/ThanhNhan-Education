@@ -322,9 +322,9 @@ Router.register('teacher-attendance', async (container) => {
                             <div class="form-group"><label class="form-label">Ra</label><input type="time" class="input" id="ci-end"></div>
                         </div>
                     </div>
-                    <div class="form-group"><label class="form-label">Lớp dạy (Chỉ hiện lớp có lịch hôm nay)</label>
+                    <div class="form-group"><label class="form-label">Lớp dạy * (Chỉ hiện lớp có lịch hôm nay)</label>
                         <select class="select" id="ci-class">
-                            <option value="">Chọn</option>
+                            <option value="">-- Chọn lớp học --</option>
                             ${validClasses.map(c => `<option value="${c.id}">${c.name}</option>`).join('')}
                         </select>
                         ${validClasses.length === 0 ? '<p style="color:var(--danger-400);font-size:12px;margin-top:4px;">Bạn không có lớp nào xếp lịch vào hôm nay.</p>' : ''}
@@ -340,6 +340,11 @@ Router.register('teacher-attendance', async (container) => {
         },
 
         async confirmCheckIn() {
+            const classId = document.getElementById('ci-class').value;
+            if (!classId) {
+                Toast.warning('Chưa chọn lớp', 'Vui lòng chọn Lớp học khi chấm công!');
+                return;
+            }
             const shift = document.getElementById('ci-shift').value;
             let hours = 0, startTime = '', endTime = '';
             if (shift === 'morning') { hours = 4.5; startTime = '07:00'; endTime = '11:30'; }
@@ -455,8 +460,8 @@ Router.register('teacher-attendance', async (container) => {
                         <div class="form-group"><label class="form-label">Giờ vào</label><input type="time" class="input" id="ta-start"></div>
                         <div class="form-group"><label class="form-label">Giờ ra</label><input type="time" class="input" id="ta-end"></div>
                     </div>
-                    <div class="form-group"><label class="form-label">Lớp (Tất cả lớp)</label>
-                        <select class="select" id="ta-class"><option value="">Chọn</option>${classListHtml}</select></div>
+                    <div class="form-group"><label class="form-label">Lớp *</label>
+                        <select class="select" id="ta-class"><option value="">-- Chọn lớp học --</option>${classListHtml}</select></div>
                     <div class="form-group"><label style="display:flex;align-items:center;gap:8px;cursor:pointer;"><input type="checkbox" id="ta-first-session"> Buổi dạy đầu tiên (50% lương)</label></div>
                     <div class="form-group"><label class="form-label">Ghi chú</label><input type="text" class="input" id="ta-note"></div>
                 `,
@@ -467,6 +472,8 @@ Router.register('teacher-attendance', async (container) => {
         async saveRecord() {
             const teacherId = document.getElementById('ta-teacher').value;
             if (!teacherId) { Toast.warning('Chọn giáo viên'); return; }
+            const classId = document.getElementById('ta-class').value;
+            if (!classId) { Toast.warning('Chưa chọn lớp', 'Vui lòng chọn Lớp học!'); return; }
             const date = document.getElementById('ta-date').value;
             const shift = document.getElementById('ta-shift').value;
             const startTime = document.getElementById('ta-start').value;
@@ -531,8 +538,8 @@ Router.register('teacher-attendance', async (container) => {
                         <div class="form-group"><label class="form-label">Số giờ</label><input type="number" step="0.1" class="input" id="ta-edit-hours" value="${r.hours || 0}"></div>
                         <div class="form-group"><label class="form-label">Lương (đ)</label><input type="number" class="input" id="ta-edit-salary" value="${r.salary || 0}"></div>
                     </div>
-                    <div class="form-group"><label class="form-label">Lớp (Tất cả lớp)</label>
-                        <select class="select" id="ta-edit-class"><option value="">Chọn</option>${classListHtml}</select></div>
+                    <div class="form-group"><label class="form-label">Lớp *</label>
+                        <select class="select" id="ta-edit-class"><option value="">-- Chọn lớp học --</option>${classListHtml}</select></div>
                     <div class="form-group"><label style="display:flex;align-items:center;gap:8px;cursor:pointer;"><input type="checkbox" id="ta-edit-first-session" ${r.isFirstSession ? 'checked' : ''} onchange="TAPage.toggleFirstSessionEdit()"> Buổi dạy đầu tiên (50% lương)</label></div>
                     <div class="form-group"><label class="form-label">Ghi chú</label><input type="text" class="input" id="ta-edit-note" value="${r.note || ''}"></div>
                 `,
@@ -552,6 +559,8 @@ Router.register('teacher-attendance', async (container) => {
         },
 
         async saveEditRecord(id) {
+            const classId = document.getElementById('ta-edit-class').value;
+            if (!classId) { Toast.warning('Chưa chọn lớp', 'Vui lòng chọn Lớp học!'); return; }
             const date = document.getElementById('ta-edit-date').value;
             const shift = document.getElementById('ta-edit-shift').value;
             const startTime = document.getElementById('ta-edit-start').value;
