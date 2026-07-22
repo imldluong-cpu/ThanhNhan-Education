@@ -47,23 +47,26 @@ Router.register('tuition', async (container) => {
 
     function getStudentName(id) { return (students.find(s => s.id === id) || {}).name || '—'; }
     function getClassName(id, t) {
+        let name = '—';
         if (id === 'Nhiều môn') {
             if (t && t.note && t.note.includes(' - ') && t.note.startsWith('Học phí')) {
                 const parts = t.note.split(' - ');
                 if (parts.length > 1) {
-                    return parts.slice(1).join(' - ');
+                    name = parts.slice(1).join(' - ');
                 }
             }
-            if (t && t.studentId) {
+            if (name === '—' && t && t.studentId) {
                 const student = students.find(s => s.id === t.studentId);
                 if (student && student.classIds && student.classIds.length > 0) {
                     const names = student.classIds.map(cid => (classes.find(c => c.id === cid) || {}).name).filter(Boolean);
-                    if (names.length > 0) return names.join(', ');
+                    if (names.length > 0) name = names.join(', ');
                 }
             }
-            return 'Nhiều môn';
+            if (name === '—') name = 'Nhiều môn';
+        } else {
+            name = (classes.find(c => c.id === id) || {}).name || '—';
         }
-        return (classes.find(c => c.id === id) || {}).name || '—';
+        return name.replace(/\s*\(Từ .*? đến .*?\)/gi, '').trim();
     }
 
     function getFiltered() {
@@ -825,17 +828,10 @@ Router.register('tuition', async (container) => {
                     const startFmt = formatDt(startObj);
                     const endFmt = formatDt(maxEndDate);
                     
-                    // Format note
+                    // Clean dateStr from note input if present so it doesn't duplicate in Lớp - Môn
                     const noteInput = document.getElementById('t-note');
-                    let currentNote = noteInput.value;
-                    const dateStr = `(Từ ${startFmt} đến ${endFmt})`;
-                    
-                    // Replace existing if matches
-                    const rx = /\(Từ .*? đến .*?\)/;
-                    if (rx.test(currentNote)) {
-                        noteInput.value = currentNote.replace(rx, dateStr);
-                    } else {
-                        noteInput.value = currentNote ? currentNote + ' ' + dateStr : dateStr;
+                    if (noteInput && noteInput.value) {
+                        noteInput.value = noteInput.value.replace(/\s*\(Từ .*? đến .*?\)/gi, '').trim();
                     }
                     
                     // Save to hidden fields
