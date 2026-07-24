@@ -28,7 +28,7 @@ Router.register('teacher-attendance', async (container) => {
     function getTeacherName(id) {
         if (isTeacher && id === window.currentUser.id) return window.currentUser.displayName;
         const t = teachers.find(x => x.id === id);
-        return t ? t.displayName : '—';
+        return t ? t.displayName : (id || '—');
     }
     
     function getClassName(id) { return (classes.find(c => c.id === id) || {}).name || '—'; }
@@ -450,7 +450,13 @@ Router.register('teacher-attendance', async (container) => {
                 title: 'Thêm chấm công',
                 content: `
                     <div class="form-group"><label class="form-label">Giáo viên *</label>
-                        <select class="select" id="ta-teacher"><option value="">Chọn</option>${teachers.map(t => `<option value="${t.id}">${t.displayName || t.email}</option>`).join('')}</select></div>
+                        <select class="select" id="ta-teacher" onchange="if(this.value==='_custom') document.getElementById('ta-teacher-custom').style.display='block'; else document.getElementById('ta-teacher-custom').style.display='none';">
+                            <option value="">Chọn</option>
+                            ${teachers.map(t => `<option value="${t.id}">${t.displayName || t.email}</option>`).join('')}
+                            <option value="_custom">Nhập tên khác...</option>
+                        </select>
+                        <input type="text" class="input" id="ta-teacher-custom" style="display:none;margin-top:8px;" placeholder="Nhập tên giáo viên">
+                    </div>
                     <div class="form-row">
                         <div class="form-group"><label class="form-label">Ngày</label><input type="date" class="input" id="ta-date" value="${initialDate}"></div>
                         <div class="form-group"><label class="form-label">Ca</label>
@@ -470,8 +476,9 @@ Router.register('teacher-attendance', async (container) => {
         },
 
         async saveRecord() {
-            const teacherId = document.getElementById('ta-teacher').value;
-            if (!teacherId) { Toast.warning('Chọn giáo viên'); return; }
+            let teacherId = document.getElementById('ta-teacher').value;
+            if (teacherId === '_custom') teacherId = document.getElementById('ta-teacher-custom').value.trim();
+            if (!teacherId) { Toast.warning('Chọn hoặc nhập tên giáo viên'); return; }
             const classId = document.getElementById('ta-class').value;
             if (!classId) { Toast.warning('Chưa chọn lớp', 'Vui lòng chọn Lớp học!'); return; }
             const date = document.getElementById('ta-date').value;
