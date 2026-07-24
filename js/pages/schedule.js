@@ -54,6 +54,7 @@ Router.register('schedule', async (container) => {
     const classColors = ['#6366f1', '#ec4899', '#14b8a6', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#84cc16'];
     function getClassColor(classId) {
         const idx = classes.findIndex(c => c.id === classId);
+        if (idx === -1) return '#999999'; // Default gray for deleted classes
         return classColors[idx % classColors.length];
     }
 
