@@ -30,7 +30,7 @@ Router.register('classes', async (container) => {
         if (!teacherIds || teacherIds.length === 0) return 'Chưa phân công';
         return teacherIds.map(id => {
             const t = teachers.find(te => te.id === id);
-            return t ? t.displayName || t.email : '';
+            return t ? (t.displayName || t.email) : id;
         }).filter(Boolean).join(', ') || 'Chưa phân công';
     }
 
@@ -343,6 +343,7 @@ Router.register('classes', async (container) => {
             const teacherCheckboxes = teachers.map(t => `
                 <label class="checkbox-label"><input type="checkbox" value="${t.id}"> ${t.displayName || t.email}</label>
             `).join('') || '<span class="text-muted text-sm">Chưa có giáo viên nào</span>';
+            const customInput = `<div style="margin-top:8px;"><input type="text" class="input" id="c-custom-teachers" placeholder="Hoặc nhập tên GV khác (cách nhau bằng dấu phẩy)"></div>`;
 
             Modal.show({
                 title: 'Thêm lớp học mới',
@@ -370,6 +371,7 @@ Router.register('classes', async (container) => {
                     <div class="form-group">
                         <label class="form-label">Giáo viên phụ trách</label>
                         <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px;" id="c-teachers">${teacherCheckboxes}</div>
+                        ${customInput}
                     </div>
                     <div class="form-row">
                         <div class="form-group">
@@ -402,6 +404,13 @@ Router.register('classes', async (container) => {
             if (!name) { Toast.warning('Thiếu thông tin', 'Vui lòng nhập tên lớp'); return; }
 
             const teacherIds = Array.from(document.querySelectorAll('#c-teachers input:checked')).map(cb => cb.value);
+            const customInput = document.getElementById('c-custom-teachers');
+            if (customInput && customInput.value.trim()) {
+                customInput.value.split(',').forEach(n => {
+                    const tName = n.trim();
+                    if (tName) teacherIds.push(tName);
+                });
+            }
             const fee = parseInt(document.getElementById('c-fee').value) || 0;
 
             try {
@@ -433,6 +442,8 @@ Router.register('classes', async (container) => {
             const teacherCheckboxes = teachers.map(t => `
                 <label class="checkbox-label"><input type="checkbox" value="${t.id}" ${(c.teacherIds || []).includes(t.id) ? 'checked' : ''}> ${t.displayName || t.email}</label>
             `).join('') || '<span class="text-muted text-sm">Chưa có giáo viên</span>';
+            const customTeachers = (c.teacherIds || []).filter(tid => !teachers.find(t => t.id === tid)).join(', ');
+            const customInput = `<div style="margin-top:8px;"><input type="text" class="input" id="c-custom-teachers" value="${customTeachers}" placeholder="Hoặc nhập tên GV khác (cách nhau bằng dấu phẩy)"></div>`;
 
             Modal.show({
                 title: 'Sửa lớp học',
@@ -460,6 +471,7 @@ Router.register('classes', async (container) => {
                     <div class="form-group">
                         <label class="form-label">Giáo viên phụ trách</label>
                         <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px;" id="c-teachers">${teacherCheckboxes}</div>
+                        ${customInput}
                     </div>
                     <div class="form-row">
                         <div class="form-group">
@@ -492,6 +504,13 @@ Router.register('classes', async (container) => {
             if (!name) { Toast.warning('Thiếu thông tin', 'Vui lòng nhập tên lớp'); return; }
 
             const teacherIds = Array.from(document.querySelectorAll('#c-teachers input:checked')).map(cb => cb.value);
+            const customInput = document.getElementById('c-custom-teachers');
+            if (customInput && customInput.value.trim()) {
+                customInput.value.split(',').forEach(n => {
+                    const tName = n.trim();
+                    if (tName) teacherIds.push(tName);
+                });
+            }
             const fee = parseInt(document.getElementById('c-fee').value) || 0;
 
             try {
