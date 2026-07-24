@@ -15,13 +15,12 @@ Router.register('teacher-attendance', async (container) => {
         records = await DB.getTeacherAttendance(selectedMonth);
         adjustments = await DB.getSalaryAdjustments(selectedMonth);
         schedules = await DB.getSchedules();
+        classes = await DB.getClasses(); // Fetch all classes so teachers can substitute or check-in if assigned by custom name
+        
         if (isOwner) teachers = await DB.getTeachers();
         if (isTeacher) {
-            classes = await DB.getClassesByTeacher(window.currentUser.id);
             const myDoc = await window.db.collection('users').doc(window.currentUser.id).get();
             mySalaryConfig = myDoc.exists ? (myDoc.data().salaryConfig || {}) : {};
-        } else {
-            classes = await DB.getClasses();
         }
     } catch(e) { console.warn(e); }
 
