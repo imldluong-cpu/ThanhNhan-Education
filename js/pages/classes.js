@@ -80,8 +80,34 @@ Router.register('classes', async (container) => {
                     });
                     const expectedProfit = expectedRev - expectedSal;
 
-                    const paidTuitions = tuitions.filter(t => t.classId === c.id && t.month === DB.currentMonth() && t.status === 'paid');
-                    const realtimeRev = paidTuitions.reduce((sum, t) => sum + Number(t.amount || 0), 0);
+                    const currentMonth = DB.currentMonth();
+                    const paidTuitions = tuitions.filter(t => {
+                        if (t.status !== 'paid') return false;
+                        if (!t.dueDate || !t.dueDate.startsWith(currentMonth)) return false;
+                        if (t.classId === c.id) return true;
+                        // For multi-class students, check if the student belongs to this class
+                        if (t.classId === 'Nhiều môn' && t.studentId) {
+                            const student = students.find(s => s.id === t.studentId);
+                            return student && (student.classIds || []).includes(c.id);
+                        }
+                        return false;
+                    });
+                    // For multi-class tuitions, pro-rate the amount based on this class's fee vs total
+                    const realtimeRev = paidTuitions.reduce((sum, t) => {
+                        if (t.classId === c.id) return sum + Number(t.amount || 0);
+                        // Pro-rate for multi-class
+                        const student = students.find(s => s.id === t.studentId);
+                        if (student && student.classIds && student.classIds.length > 1) {
+                            const thisFee = (student.customFees && student.customFees[c.id] !== undefined) ? student.customFees[c.id] : (c.fee || 0);
+                            let totalFee = 0;
+                            student.classIds.forEach(cid => {
+                                const cls = classes.find(cc => cc.id === cid);
+                                if (cls) totalFee += (student.customFees && student.customFees[cid] !== undefined) ? student.customFees[cid] : (cls.fee || 0);
+                            });
+                            if (totalFee > 0) return sum + Math.round(Number(t.amount || 0) * thisFee / totalFee);
+                        }
+                        return sum + Number(t.amount || 0);
+                    }, 0);
 
                     const classAtt = teacherAttendance.filter(r => r.classId === c.id);
                     let realtimeSal = 0;
