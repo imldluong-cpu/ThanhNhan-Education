@@ -573,7 +573,6 @@ Router.register('teacher-attendance', async (container) => {
             const endTime = document.getElementById('ta-edit-end').value;
             const hours = parseFloat(document.getElementById('ta-edit-hours').value) || 0;
             const salary = parseInt(document.getElementById('ta-edit-salary').value) || 0;
-            const classId = document.getElementById('ta-edit-class').value;
             const note = document.getElementById('ta-edit-note').value;
             const isFirstSession = document.getElementById('ta-edit-first-session') ? document.getElementById('ta-edit-first-session').checked : false;
 
