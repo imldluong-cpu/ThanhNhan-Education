@@ -360,7 +360,6 @@ Router.register('teacher-attendance', async (container) => {
                 }
             }
 
-            const classId = document.getElementById('ci-class').value;
             const classConf = mySalaryConfig[classId] || {};
             let salary = 0;
             if (shift === 'custom') {
