@@ -354,14 +354,15 @@ Router.register('schedule', async (container) => {
         filterClass(id) { filterClassId = id; render(); },
 
         autoSetEnd(rowIdx) {
-            const startSelect = document.getElementById(`sa-start-${rowIdx}`);
-            const endSelect = document.getElementById(`sa-end-${rowIdx}`);
-            if (!startSelect || !endSelect) return;
-            const idx = timeSlots.indexOf(startSelect.value);
-            if (idx !== -1) {
-                let endIdx = idx + 3; // +1.5 hours
-                endSelect.value = endIdx >= timeSlots.length ? "21:00" : timeSlots[endIdx];
-            }
+            const startInput = document.getElementById(`sa-start-${rowIdx}`);
+            const endInput = document.getElementById(`sa-end-${rowIdx}`);
+            if (!startInput || !endInput || !startInput.value) return;
+            const [h, m] = startInput.value.split(':').map(Number);
+            let date = new Date(2000, 0, 1, h, m);
+            date.setMinutes(date.getMinutes() + 90);
+            const newH = String(date.getHours()).padStart(2, '0');
+            const newM = String(date.getMinutes()).padStart(2, '0');
+            endInput.value = `${newH}:${newM}`;
         },
 
         // === ADD SCHEDULE (multi-row) ===
@@ -385,14 +386,9 @@ Router.register('schedule', async (container) => {
                         <select class="select" id="sa-day-${i}" style="width:100px;">
                             ${dayNames.map((d, j) => `<option value="${j + 2}">${d}</option>`).join('')}
                         </select>
-                        <select class="select" id="sa-start-${i}" style="width:90px;" onchange="SchedulePage.autoSetEnd(${i})">
-                            ${timeSlots.map(t => `<option value="${t}">${t}</option>`).join('')}
-                        </select>
+                        <input type="time" class="input" id="sa-start-${i}" style="width:110px;" value="17:30" onchange="SchedulePage.autoSetEnd(${i})">
                         <span style="color:var(--text-muted);">→</span>
-                        <select class="select" id="sa-end-${i}" style="width:90px;">
-                            ${timeSlots.slice(1).map(t => `<option value="${t}">${t}</option>`).join('')}
-                            <option value="21:00">21:00</option>
-                        </select>
+                        <input type="time" class="input" id="sa-end-${i}" style="width:110px;" value="19:00">
                         <select class="select" id="sa-room-${i}" style="width:100px;">
                             <option value="">Phòng</option>
                             <option value="Trệt">Trệt</option>
@@ -434,14 +430,9 @@ Router.register('schedule', async (container) => {
                 <select class="select" id="sa-day-${i}" style="width:100px;">
                     ${dayNames.map((d, j) => `<option value="${j + 2}">${d}</option>`).join('')}
                 </select>
-                <select class="select" id="sa-start-${i}" style="width:90px;" onchange="SchedulePage.autoSetEnd(${i})">
-                    ${timeSlots.map(t => `<option value="${t}">${t}</option>`).join('')}
-                </select>
+                <input type="time" class="input" id="sa-start-${i}" style="width:110px;" value="17:30" onchange="SchedulePage.autoSetEnd(${i})">
                 <span style="color:var(--text-muted);">→</span>
-                <select class="select" id="sa-end-${i}" style="width:90px;">
-                    ${timeSlots.slice(1).map(t => `<option value="${t}">${t}</option>`).join('')}
-                    <option value="21:00">21:00</option>
-                </select>
+                <input type="time" class="input" id="sa-end-${i}" style="width:110px;" value="19:00">
                 <select class="select" id="sa-room-${i}" style="width:100px;">
                     <option value="">Phòng</option>
                     <option value="Trệt">Trệt</option>
@@ -487,7 +478,7 @@ Router.register('schedule', async (container) => {
                     const conflict = allDB.find(s => 
                         s.dayOfWeek === item.dayOfWeek && 
                         s.room === item.room && 
-                        Math.max(timeToSlot(s.startTime), timeToSlot(item.startTime)) < Math.min(timeToSlot(s.endTime), timeToSlot(item.endTime))
+                        item.startTime < s.endTime && item.endTime > s.startTime
                     );
                     if (conflict) { 
                         Toast.error('Trùng phòng học', `Phòng ${item.room} đã có lớp từ ${conflict.startTime} đến ${conflict.endTime}`); 
@@ -540,9 +531,9 @@ Router.register('schedule', async (container) => {
                     </div>
                     <div class="form-row">
                         <div class="form-group"><label class="form-label">Bắt đầu</label>
-                            <select class="select" id="se-start">${timeSlots.map(t => `<option value="${t}" ${t === sch.startTime ? 'selected' : ''}>${t}</option>`).join('')}</select></div>
+                            <input type="time" class="input" id="se-start" value="${sch.startTime}"></div>
                         <div class="form-group"><label class="form-label">Kết thúc</label>
-                            <select class="select" id="se-end">${[...timeSlots.slice(1), '21:00'].map(t => `<option value="${t}" ${t === sch.endTime ? 'selected' : ''}>${t}</option>`).join('')}</select></div>
+                            <input type="time" class="input" id="se-end" value="${sch.endTime}"></div>
                     </div>
                     </div>
                 `,
@@ -575,7 +566,7 @@ Router.register('schedule', async (container) => {
                         s.id !== id &&
                         s.dayOfWeek === newData.dayOfWeek && 
                         s.room === newData.room && 
-                        Math.max(timeToSlot(s.startTime), timeToSlot(newData.startTime)) < Math.min(timeToSlot(s.endTime), timeToSlot(newData.endTime))
+                        newData.startTime < s.endTime && newData.endTime > s.startTime
                     );
                     if (conflict) { 
                         Toast.error('Trùng phòng học', `Phòng ${newData.room} đã có lớp từ ${conflict.startTime} đến ${conflict.endTime}`); 
