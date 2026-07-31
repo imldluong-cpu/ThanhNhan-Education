@@ -28,22 +28,15 @@ Router.register('tuition', async (container) => {
     let activeTab = 'all';
     let searchTerm = '';
     
-    function getAcademicYear(dateStr, t = null) {
-        if (t && t.academicYear) {
-            return t.academicYear.indexOf(' - ') === -1 ? t.academicYear.replace('-', ' - ') : t.academicYear;
+    function getTuitionMonth(t) {
+        if (t && t.dueDate && t.dueDate.length >= 7) {
+            return t.dueDate.substring(0, 7);
         }
-        if (!dateStr) return 'Khác';
-        const d = new Date(dateStr);
-        if (isNaN(d.getTime())) return 'Khác';
-        const year = d.getFullYear();
-        const month = d.getMonth() + 1;
-        const date = d.getDate();
-        if (month >= 7 || (month === 6 && date > 15)) return `${year} - ${year + 1}`;
-        return `${year - 1} - ${year}`;
+        return DB.currentMonth();
     }
     
-    let currentYearStr = getAcademicYear(DB.today());
-    let activeYear = currentYearStr;
+    let currentMonthStr = DB.currentMonth();
+    let activeMonth = currentMonthStr;
 
     function getStudentName(id) { return (students.find(s => s.id === id) || {}).name || '—'; }
     function getClassName(id, t) {
@@ -71,8 +64,8 @@ Router.register('tuition', async (container) => {
 
     function getFiltered() {
         let list = tuitions;
-        if (activeYear) {
-            list = list.filter(t => getAcademicYear(t.dueDate, t) === activeYear);
+        if (activeMonth) {
+            list = list.filter(t => getTuitionMonth(t) === activeMonth);
         }
         
         const todayDate = new Date(DB.today());
@@ -130,15 +123,18 @@ Router.register('tuition', async (container) => {
 
         const filtered = getFiltered();
 
-        const yearSet = new Set();
-        tuitions.forEach(t => yearSet.add(getAcademicYear(t.dueDate, t)));
-        if (!yearSet.has(currentYearStr)) yearSet.add(currentYearStr);
-        const years = Array.from(yearSet).sort().reverse();
+        const monthSet = new Set();
+        tuitions.forEach(t => monthSet.add(getTuitionMonth(t)));
+        if (!monthSet.has(currentMonthStr)) monthSet.add(currentMonthStr);
+        const months = Array.from(monthSet).sort().reverse();
         
-        const yearSelect = document.getElementById('t-year-filter');
-        if (yearSelect) {
-            yearSelect.innerHTML = `<option value="">Tất cả năm học</option>` + 
-                years.map(y => `<option value="${y}" ${activeYear === y ? 'selected' : ''}>Năm học ${y}</option>`).join('');
+        const monthSelect = document.getElementById('t-month-filter');
+        if (monthSelect) {
+            monthSelect.innerHTML = `<option value="">Tất cả các tháng</option>` + 
+                months.map(m => {
+                    const [y, mo] = m.split('-');
+                    return `<option value="${m}" ${activeMonth === m ? 'selected' : ''}>Tháng ${mo}/${y}</option>`;
+                }).join('');
         }
 
         let totalDue = 0, totalPaid = 0, totalOwed = 0;
@@ -250,7 +246,7 @@ Router.register('tuition', async (container) => {
         </div>
         <div class="filter-bar" style="display:flex; justify-content:space-between; align-items:center;">
             <div class="search-box"><i data-lucide="search"></i><input type="text" class="input" placeholder="Tìm theo tên..." oninput="TuitionPage.search(this.value)"></div>
-            <select class="select" id="t-year-filter" style="max-width:200px;" onchange="TuitionPage.filterYear(this.value)">
+            <select class="select" id="t-month-filter" style="max-width:200px;" onchange="TuitionPage.filterMonth(this.value)">
             </select>
         </div>
         <div id="tuition-main"></div>
@@ -260,7 +256,7 @@ Router.register('tuition', async (container) => {
 
     window.TuitionPage = {
         search(val) { searchTerm = val; render(); },
-        filterYear(val) { activeYear = val; render(); },
+        filterMonth(val) { activeMonth = val; render(); },
         switchTab(tab, el) {
             activeTab = tab;
             document.querySelectorAll('.tab-item').forEach(t => t.classList.remove('active'));
