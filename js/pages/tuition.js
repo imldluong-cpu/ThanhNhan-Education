@@ -470,9 +470,28 @@ Router.register('tuition', async (container) => {
                         <div class="form-group"><label class="form-label">Số tiền</label><input type="number" class="input" id="t-amount" value="${t.amount || 0}"></div>
                         <div class="form-group"><label class="form-label">Hạn đóng</label><input type="date" class="input" id="t-due" value="${t.dueDate || ''}"></div>
                     </div>
+                    <div class="form-group" style="padding: 10px; background: var(--bg-card); border-radius: 8px; border: 1px solid var(--border-color); margin-bottom: 12px;">
+                        <label class="form-label" style="margin-bottom: 8px;">Tự động tính ngày (tùy chọn)</label>
+                        <div class="form-row">
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label class="form-label" style="font-size: 12px;">Tính từ ngày</label>
+                                <input type="date" class="input" id="t-start-date" value="${t.startDate || ''}">
+                            </div>
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label class="form-label" style="font-size: 12px;">Số buổi</label>
+                                <input type="number" class="input" id="t-lessons-count" value="8">
+                            </div>
+                            <div class="form-group" style="margin-bottom: 0; display: flex; align-items: flex-end;">
+                                <button class="btn btn-secondary" style="width: 100%; padding: 0 10px;" onclick="TuitionPage.calculateEndDate()"><i data-lucide="calculator"></i> Tính</button>
+                            </div>
+                        </div>
+                    </div>
                     <div class="form-group"><label class="form-label">Trạng thái</label>
                         <select class="select" id="t-status"><option value="pending" ${t.status === 'pending' ? 'selected' : ''}>Chưa đóng</option><option value="overdue" ${t.status === 'overdue' ? 'selected' : ''}>Quá hạn</option><option value="paid" ${t.status === 'paid' ? 'selected' : ''}>Đã đóng</option></select></div>
                     <div class="form-group" id="t-paid-date-group" style="${t.status === 'paid' ? '' : 'display:none;'}"><label class="form-label">Ngày đóng</label><input type="date" class="input" id="t-paid-date" value="${t.paidDate || DB.today()}"></div>
+                    <div class="form-group"><label class="form-label">Ghi chú</label><input type="text" class="input" id="t-note" value="${t.note || ''}"></div>
+                    <input type="hidden" id="t-hidden-start" value="${t.startDate || ''}">
+                    <input type="hidden" id="t-hidden-end" value="${t.endDate || ''}">
                     <script>
                         document.getElementById('t-status').addEventListener('change', function() {
                             document.getElementById('t-paid-date-group').style.display = this.value === 'paid' ? 'block' : 'none';
@@ -492,7 +511,23 @@ Router.register('tuition', async (container) => {
                     paidDate = (inputPaidDate && inputPaidDate.value) ? inputPaidDate.value : DB.today();
                 }
                 const oldT = tuitions.find(x => x.id === id);
-                await DB.updateTuition(id, { studentId: document.getElementById('t-student').value, studentName: getStudentName(document.getElementById('t-student').value), amount: parseInt(document.getElementById('t-amount').value) || 0, dueDate: document.getElementById('t-due').value, status, paidDate });
+                
+                const updates = { 
+                    studentId: document.getElementById('t-student').value, 
+                    studentName: getStudentName(document.getElementById('t-student').value), 
+                    amount: parseInt(document.getElementById('t-amount').value) || 0, 
+                    dueDate: document.getElementById('t-due').value, 
+                    status, 
+                    paidDate,
+                    note: document.getElementById('t-note') ? document.getElementById('t-note').value : ''
+                };
+                
+                const hiddenStart = document.getElementById('t-hidden-start');
+                const hiddenEnd = document.getElementById('t-hidden-end');
+                if (hiddenStart && hiddenStart.value) updates.startDate = hiddenStart.value;
+                if (hiddenEnd && hiddenEnd.value) updates.endDate = hiddenEnd.value;
+                
+                await DB.updateTuition(id, updates);
                 
                 if (status === 'paid' && oldT && oldT.status !== 'paid') {
                     const studentName = getStudentName(document.getElementById('t-student').value);
