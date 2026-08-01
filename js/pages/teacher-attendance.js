@@ -32,8 +32,15 @@ Router.register('teacher-attendance', async (container) => {
     
     function getClassName(id) { return (classes.find(c => c.id === id) || {}).name || '—'; }
 
+    function getEffectiveTeacherId(id) {
+        if (isTeacher && (id === window.currentUser.id || id === window.currentUser.displayName)) {
+            return window.currentUser.id;
+        }
+        return id;
+    }
+
     function getMyRecords() {
-        if (isTeacher) return records.filter(r => r.teacherId === window.currentUser.id);
+        if (isTeacher) return records.filter(r => r.teacherId === window.currentUser.id || r.teacherId === window.currentUser.displayName);
         return records;
     }
 
@@ -58,17 +65,19 @@ Router.register('teacher-attendance', async (container) => {
 
         const teacherAdjustments = {};
         adjustments.forEach(a => {
-            if (!teacherAdjustments[a.teacherId]) teacherAdjustments[a.teacherId] = [];
-            teacherAdjustments[a.teacherId].push(a);
+            const tid = getEffectiveTeacherId(a.teacherId);
+            if (!teacherAdjustments[tid]) teacherAdjustments[tid] = [];
+            teacherAdjustments[tid].push(a);
         });
 
         // Summary
         const teacherSummary = {};
         let totalSalaryAll = 0;
         myRecords.forEach(r => {
-            if (!teacherSummary[r.teacherId]) teacherSummary[r.teacherId] = { total: 0, hours: 0, salary: 0 };
-            teacherSummary[r.teacherId].total++;
-            teacherSummary[r.teacherId].hours += (r.hours || 0);
+            const tid = getEffectiveTeacherId(r.teacherId);
+            if (!teacherSummary[tid]) teacherSummary[tid] = { total: 0, hours: 0, salary: 0 };
+            teacherSummary[tid].total++;
+            teacherSummary[tid].hours += (r.hours || 0);
             
             let rSalary = r.salary || 0;
             if (r.salaryMultiplier !== undefined) rSalary = rSalary * r.salaryMultiplier;
@@ -76,7 +85,7 @@ Router.register('teacher-attendance', async (container) => {
             if (rSalary < 0) rSalary = 0;
             r.finalSalary = rSalary;
 
-            teacherSummary[r.teacherId].salary += rSalary;
+            teacherSummary[tid].salary += rSalary;
             totalSalaryAll += rSalary;
         });
 
