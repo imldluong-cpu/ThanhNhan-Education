@@ -302,7 +302,7 @@ Router.register('teacher-attendance', async (container) => {
         },
 
         _showCheckInForm() {
-            const validClasses = getClassesForDate(DB.today());
+            const validClasses = classes;
             
             Modal.show({
                 title: '✅ Xác nhận chấm công hôm nay',
@@ -321,12 +321,11 @@ Router.register('teacher-attendance', async (container) => {
                             <div class="form-group"><label class="form-label">Ra</label><input type="time" class="input" id="ci-end"></div>
                         </div>
                     </div>
-                    <div class="form-group"><label class="form-label">Lớp dạy * (Chỉ hiện lớp có lịch hôm nay)</label>
+                    <div class="form-group"><label class="form-label">Lớp dạy *</label>
                         <select class="select" id="ci-class">
                             <option value="">-- Chọn lớp học --</option>
                             ${validClasses.map(c => `<option value="${c.id}">${c.name}</option>`).join('')}
                         </select>
-                        ${validClasses.length === 0 ? '<p style="color:var(--danger-400);font-size:12px;margin-top:4px;">Bạn không có lớp nào xếp lịch vào hôm nay.</p>' : ''}
                     </div>
                     <div class="form-group"><label class="form-label">Ghi chú</label><input type="text" class="input" id="ci-note"></div>
                 `,
@@ -344,6 +343,19 @@ Router.register('teacher-attendance', async (container) => {
                 Toast.warning('Chưa chọn lớp', 'Vui lòng chọn Lớp học khi chấm công!');
                 return;
             }
+            
+            if (isTeacher) {
+                const cls = classes.find(c => c.id === classId);
+                if (cls) {
+                    const tIds = cls.teacherIds || [];
+                    const isMyClass = tIds.includes(window.currentUser.id) || tIds.includes(window.currentUser.displayName);
+                    if (!isMyClass) {
+                        Toast.error('Lỗi phân công', 'Bạn không được phân công dạy lớp học này. Vui lòng chọn đúng lớp của bạn!');
+                        return;
+                    }
+                }
+            }
+            
             const shift = document.getElementById('ci-shift').value;
             let hours = 0, startTime = '', endTime = '';
             if (shift === 'morning') { hours = 4.5; startTime = '07:00'; endTime = '11:30'; }
