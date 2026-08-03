@@ -124,7 +124,7 @@ Router.register('schedule', async (container) => {
                 `;
                 if (canEdit) {
                     html += `
-                        <button class="event-delete-btn" style="position:absolute;top:2px;right:2px;background:rgba(0,0,0,0.15);border:none;border-radius:4px;color:inherit;cursor:pointer;padding:2px;display:flex;align-items:center;justify-content:center;transition:background 0.2s;" onmouseover="this.style.background='rgba(0,0,0,0.3)'" onmouseout="this.style.background='rgba(0,0,0,0.15)'" onclick="event.stopPropagation(); SchedulePage.removeSchedule('${arg.event.groupId}', ${arg.event.extendedProps.isException ? `'${arg.event.extendedProps.exceptionId}'` : 'null'}, '${arg.event.extendedProps.occurrenceDate || ''}')" title="Xóa lịch này">
+                        <button class="event-delete-btn" style="position:absolute;top:2px;right:2px;background:rgba(0,0,0,0.15);border:none;border-radius:4px;color:inherit;cursor:pointer;padding:2px;display:flex;align-items:center;justify-content:center;transition:background 0.2s;" onmouseover="this.style.background='rgba(0,0,0,0.3)'" onmouseout="this.style.background='rgba(0,0,0,0.15)'" onclick="event.stopPropagation(); SchedulePage.removeSchedule('${arg.event.groupId}', ${arg.event.extendedProps.isException ? `'${arg.event.extendedProps.exceptionId}'` : 'null'}, '${arg.event.extendedProps.occurrenceDate || ''}', ${arg.event.extendedProps.isOneOff ? 'true' : 'false'})" title="Xóa lịch này">
                             <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
                         </button>
                     `;
@@ -135,6 +135,8 @@ Router.register('schedule', async (container) => {
             events: function(info, successCallback, failureCallback) {
                 const start = info.start;
                 const end = info.end;
+                const startStr = start.toISOString().split('T')[0];
+                const endStr = end.toISOString().split('T')[0];
                 
                 let expandedEvents = [];
                 const filtered = schedules.filter(s => {
@@ -142,7 +144,7 @@ Router.register('schedule', async (container) => {
                     return true;
                 });
 
-                // Generate recurring events
+                // Generate recurring events (without specificDate)
                 for (let d = new Date(start.getTime()); d < end; d.setDate(d.getDate() + 1)) {
                     let dbDay = d.getDay() + 1;
                     if (dbDay === 1) dbDay = 8; // Sunday
@@ -152,7 +154,7 @@ Router.register('schedule', async (container) => {
                     const day = String(d.getDate()).padStart(2, '0');
                     const dateStr = `${year}-${month}-${day}`;
                     
-                    const dayEvents = filtered.filter(s => s.dayOfWeek === dbDay);
+                    const dayEvents = filtered.filter(s => !s.specificDate && s.dayOfWeek === dbDay);
                     
                     dayEvents.forEach(s => {
                         const c = classes.find(x => x.id === s.classId);
@@ -170,12 +172,31 @@ Router.register('schedule', async (container) => {
                             end: `${dateStr}T${s.endTime}:00`,
                             backgroundColor: color,
                             borderColor: color,
-                            extendedProps: { ...s, occurrenceDate: dateStr, isException: false }
+                            extendedProps: { ...s, occurrenceDate: dateStr, isException: false, isOneOff: false }
                         });
                     });
                 }
+
+                // Generate one-off events (with specificDate)
+                const oneOffEvents = filtered.filter(s => s.specificDate);
+                oneOffEvents.forEach(s => {
+                    if (s.specificDate >= startStr && s.specificDate <= endStr) {
+                        const color = getClassColor(s.classId);
+                        const tag = s.note ? `[${s.note}] ` : '[Buổi lẻ] ';
+                        expandedEvents.push({
+                            id: s.id + '_' + s.specificDate,
+                            groupId: s.id,
+                            title: tag + getClassName(s.classId) + (s.room ? ` (📍 ${s.room})` : ''),
+                            start: `${s.specificDate}T${s.startTime}:00`,
+                            end: `${s.specificDate}T${s.endTime}:00`,
+                            backgroundColor: color,
+                            borderColor: color,
+                            extendedProps: { ...s, occurrenceDate: s.specificDate, isException: false, isOneOff: true }
+                        });
+                    }
+                });
                 
-                // Add exceptions
+                // Add exceptions (Dời bù)
                 scheduleExceptions.forEach(ex => {
                     if (ex.newDate) {
                         const d = new Date(ex.newDate);
@@ -365,17 +386,162 @@ Router.register('schedule', async (container) => {
             endInput.value = `${newH}:${newM}`;
         },
 
-        // === ADD SCHEDULE (multi-row) ===
+        // === ADD SCHEDULE (one-off / recurring) ===
         _schedRows: 1,
+        _addMode: 'one-off',
+        _preselectClassId: '',
 
-        showAddSchedule(preselectClassId = '') {
+        showAddSchedule(preselectClassId = '', mode = 'one-off') {
+            this._addMode = mode;
+            this._preselectClassId = preselectClassId;
             this._schedRows = 1;
+            this._renderAddModal();
+        },
+
+        switchAddMode(mode) {
+            this._addMode = mode;
+            this._renderAddModal();
+        },
+
+        _renderAddModal() {
+            const isOneOff = this._addMode === 'one-off';
+            const preselectClassId = this._preselectClassId || '';
+            
+            const content = `
+                <div style="display:flex;gap:8px;margin-bottom:16px;background:var(--bg-card);border:1px solid var(--border-color);padding:4px;border-radius:10px;">
+                    <button type="button" class="btn btn-sm" style="flex:1;border-radius:8px;font-weight:600;${isOneOff ? 'background:var(--primary);color:#fff;' : 'background:transparent;color:var(--text-muted);border:none;'}" onclick="SchedulePage.switchAddMode('one-off')">
+                        📅 Thêm 1 buổi học lẻ
+                    </button>
+                    <button type="button" class="btn btn-sm" style="flex:1;border-radius:8px;font-weight:600;${!isOneOff ? 'background:var(--primary);color:#fff;' : 'background:transparent;color:var(--text-muted);border:none;'}" onclick="SchedulePage.switchAddMode('recurring')">
+                        🔄 Lịch định kỳ hàng tuần
+                    </button>
+                </div>
+                ${isOneOff ? this._buildOneOffContent(preselectClassId) : this._buildAddContent(preselectClassId)}
+            `;
+
+            const footer = isOneOff ? `
+                <button class="btn btn-secondary" onclick="Modal.close()">Hủy</button>
+                <button class="btn btn-primary" onclick="SchedulePage.saveOneOffSchedule()">💾 Lưu buổi học</button>
+            ` : `
+                <button class="btn btn-secondary" onclick="Modal.close()">Hủy</button>
+                <button class="btn btn-primary" onclick="SchedulePage.saveNewSchedules()">💾 Lưu lịch định kỳ</button>
+            `;
+
             Modal.show({
-                title: 'Thêm lịch học',
-                size: 'lg',
-                content: this._buildAddContent(preselectClassId),
-                footer: `<button class="btn btn-secondary" onclick="Modal.close()">Hủy</button><button class="btn btn-primary" onclick="SchedulePage.saveNewSchedules()">💾 Lưu tất cả</button>`
+                title: isOneOff ? 'Thêm 1 buổi học (Lẻ / Bù / Tăng cường)' : 'Thêm lịch học định kỳ hàng tuần',
+                size: isOneOff ? 'md' : 'lg',
+                content: content,
+                footer: footer
             });
+
+            if (window.lucide) lucide.createIcons();
+        },
+
+        _buildOneOffContent(preselectClassId) {
+            return `
+                <div class="form-group"><label class="form-label">Lớp học *</label>
+                    <select class="select" id="so-class">
+                        <option value="">-- Chọn lớp học --</option>
+                        ${classes.map(c => `<option value="${c.id}" ${c.id === preselectClassId ? 'selected' : ''}>${c.name}</option>`).join('')}
+                    </select>
+                </div>
+                <div class="form-row">
+                    <div class="form-group"><label class="form-label">Ngày học *</label>
+                        <input type="date" class="input" id="so-date" value="${DB.today()}">
+                    </div>
+                    <div class="form-group"><label class="form-label">Phòng học</label>
+                        <select class="select" id="so-room">
+                            <option value="">Chọn phòng</option>
+                            <option value="Trệt">Trệt</option>
+                            <option value="P.T1">P.T1</option>
+                            <option value="P.T2">P.T2</option>
+                            <option value="P.ST">P.ST</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group"><label class="form-label">Bắt đầu *</label>
+                        <input type="time" class="input" id="so-start" value="17:30" onchange="SchedulePage.autoSetEndOneOff()">
+                    </div>
+                    <div class="form-group"><label class="form-label">Kết thúc *</label>
+                        <input type="time" class="input" id="so-end" value="19:00">
+                    </div>
+                </div>
+                <div class="form-group"><label class="form-label">Phân loại / Ghi chú</label>
+                    <input type="text" class="input" id="so-note" placeholder="VD: Buổi bù, Buổi tăng cường, Học thử..." value="Buổi lẻ">
+                </div>
+            `;
+        },
+
+        autoSetEndOneOff() {
+            const startInput = document.getElementById('so-start');
+            const endInput = document.getElementById('so-end');
+            if (!startInput || !endInput || !startInput.value) return;
+            const [h, m] = startInput.value.split(':').map(Number);
+            let date = new Date(2000, 0, 1, h, m);
+            date.setMinutes(date.getMinutes() + 90);
+            const newH = String(date.getHours()).padStart(2, '0');
+            const newM = String(date.getMinutes()).padStart(2, '0');
+            endInput.value = `${newH}:${newM}`;
+        },
+
+        async saveOneOffSchedule() {
+            const classId = document.getElementById('so-class').value;
+            const dateStr = document.getElementById('so-date').value;
+            const startTime = document.getElementById('so-start').value;
+            const endTime = document.getElementById('so-end').value;
+            const room = document.getElementById('so-room').value;
+            const note = document.getElementById('so-note').value;
+
+            if (!classId) { Toast.warning('Chọn lớp', 'Vui lòng chọn lớp học'); return; }
+            if (!dateStr) { Toast.warning('Chọn ngày', 'Vui lòng chọn ngày học'); return; }
+            if (!startTime || !endTime) { Toast.warning('Chọn giờ', 'Vui lòng nhập giờ bắt đầu và kết thúc'); return; }
+
+            const [y, m, d] = dateStr.split('-').map(Number);
+            const dateObj = new Date(y, m - 1, d);
+            const jsDay = dateObj.getDay();
+            const dayOfWeek = jsDay === 0 ? 8 : jsDay + 1;
+
+            try {
+                if (room) {
+                    const allDB = await DB.getSchedules();
+                    const conflict = allDB.find(s => {
+                        if (s.room !== room) return false;
+                        if (s.specificDate) {
+                            if (s.specificDate !== dateStr) return false;
+                        } else {
+                            if (s.dayOfWeek !== dayOfWeek) return false;
+                            const hasCancel = scheduleExceptions.some(ex => ex.scheduleId === s.id && ex.originalDate === dateStr && !ex.newDate);
+                            if (hasCancel) return false;
+                        }
+                        return startTime < s.endTime && endTime > s.startTime;
+                    });
+
+                    if (conflict) {
+                        Toast.error('Trùng phòng học', `Phòng ${room} đã có lớp ${getClassName(conflict.classId)} từ ${conflict.startTime} đến ${conflict.endTime}`);
+                        return;
+                    }
+                }
+
+                await DB.addSchedule({
+                    classId,
+                    specificDate: dateStr,
+                    dayOfWeek,
+                    startTime,
+                    endTime,
+                    room: room || '',
+                    note: note || 'Buổi lẻ',
+                    isOneOff: true
+                });
+
+                Modal.close();
+                Toast.success('Đã thêm 1 buổi học thành công');
+                schedules = await DB.getSchedules();
+                scheduleExceptions = await DB.getScheduleExceptions();
+                render();
+            } catch(e) {
+                Toast.error('Lỗi', e.message);
+            }
         },
 
         _buildAddContent(preselectClassId) {
@@ -404,13 +570,14 @@ Router.register('schedule', async (container) => {
                 <div class="form-row">
                     <div class="form-group"><label class="form-label">Lớp *</label>
                         <select class="select" id="sa-class"><option value="">Chọn lớp</option>${classes.map(c => `<option value="${c.id}" ${c.id === preselectClassId ? 'selected' : ''}>${c.name}</option>`).join('')}</select></div>
-                    <div class="form-group"><label class="form-label">Ngày bắt đầu (Dự kiến)</label>
-                        <input type="date" class="input" id="sa-start-date" value="${DB.today()}"></div>
+                    <div class="form-group"><label class="form-label">Ngày bắt đầu (Tùy chọn)</label>
+                        <input type="date" class="input" id="sa-start-date" value="${DB.today()}">
+                    </div>
                 </div>
                 <div class="form-group">
-                    <label class="form-label">Lịch học 
+                    <label class="form-label">Lịch học hàng tuần
                         <button class="btn btn-ghost btn-sm" onclick="SchedulePage.addScheduleRow()" style="font-size:12px;margin-left:8px;">
-                            <i data-lucide="plus" style="width:14px;height:14px;"></i> Thêm buổi
+                            <i data-lucide="plus" style="width:14px;height:14px;"></i> Thêm thứ khác
                         </button>
                     </label>
                     <div id="schedule-rows">${rowsHtml}</div>
@@ -476,6 +643,7 @@ Router.register('schedule', async (container) => {
                 for (const item of toAdd) {
                     if (!item.room) continue;
                     const conflict = allDB.find(s => 
+                        !s.specificDate &&
                         s.dayOfWeek === item.dayOfWeek && 
                         s.room === item.room && 
                         item.startTime < s.endTime && item.endTime > s.startTime
@@ -488,7 +656,7 @@ Router.register('schedule', async (container) => {
 
                 await DB.addSchedulesBatch(toAdd);
                 
-                // Update class room and startDate
+                // Update class room and startDate if needed
                 const roomToUpdate = toAdd.find(s => s.room)?.room;
                 if (roomToUpdate || startDate) {
                     const updateData = {};
@@ -511,8 +679,46 @@ Router.register('schedule', async (container) => {
             if (!canEdit) return;
             const sch = schedules.find(s => s.id === id);
             if (!sch) return;
+
+            if (sch.specificDate) {
+                Modal.show({
+                    title: 'Sửa buổi học (Lẻ / Bù)',
+                    content: `
+                        <div class="form-group"><label class="form-label">Lớp</label>
+                            <select class="select" id="se-class">${classes.map(c => `<option value="${c.id}" ${c.id === sch.classId ? 'selected' : ''}>${c.name}</option>`).join('')}</select></div>
+                        <div class="form-row">
+                            <div class="form-group"><label class="form-label">Ngày học</label>
+                                <input type="date" class="input" id="se-date" value="${sch.specificDate}"></div>
+                            <div class="form-group"><label class="form-label">Phòng</label>
+                                <select class="select" id="se-room">
+                                    <option value="" ${!sch.room ? 'selected' : ''}>Phòng</option>
+                                    <option value="Trệt" ${sch.room === 'Trệt' ? 'selected' : ''}>Trệt</option>
+                                    <option value="P.T1" ${sch.room === 'P.T1' ? 'selected' : ''}>P.T1</option>
+                                    <option value="P.T2" ${sch.room === 'P.T2' ? 'selected' : ''}>P.T2</option>
+                                    <option value="P.ST" ${sch.room === 'P.ST' ? 'selected' : ''}>P.ST</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group"><label class="form-label">Bắt đầu</label>
+                                <input type="time" class="input" id="se-start" value="${sch.startTime}"></div>
+                            <div class="form-group"><label class="form-label">Kết thúc</label>
+                                <input type="time" class="input" id="se-end" value="${sch.endTime}"></div>
+                        </div>
+                        <div class="form-group"><label class="form-label">Ghi chú / Loại buổi học</label>
+                            <input type="text" class="input" id="se-note" value="${sch.note || 'Buổi lẻ'}"></div>
+                    `,
+                    footer: `
+                        <button class="btn btn-secondary" onclick="Modal.close()">Hủy</button>
+                        <button class="btn btn-primary" onclick="SchedulePage.saveEditOneOff('${id}')">Cập nhật</button>
+                    `
+                });
+                if (window.lucide) lucide.createIcons();
+                return;
+            }
+
             Modal.show({
-                title: 'Sửa lịch học',
+                title: 'Sửa lịch học định kỳ',
                 content: `
                     <div class="form-group"><label class="form-label">Lớp</label>
                         <select class="select" id="se-class">${classes.map(c => `<option value="${c.id}" ${c.id === sch.classId ? 'selected' : ''}>${c.name}</option>`).join('')}</select></div>
@@ -535,11 +741,10 @@ Router.register('schedule', async (container) => {
                         <div class="form-group"><label class="form-label">Kết thúc</label>
                             <input type="time" class="input" id="se-end" value="${sch.endTime}"></div>
                     </div>
-                    </div>
                 `,
                 footer: `
                     <div style="display:flex;justify-content:space-between;width:100%;">
-                        <button class="btn btn-ghost" onclick="SchedulePage.showAddSchedule('${sch.classId}')"><i data-lucide="plus"></i> Thêm buổi khác</button>
+                        <button class="btn btn-ghost" onclick="SchedulePage.showAddSchedule('${sch.classId}', 'one-off')"><i data-lucide="plus"></i> Thêm buổi khác</button>
                         <div style="display:flex;gap:8px;">
                             <button class="btn btn-secondary" onclick="Modal.close()">Hủy</button>
                             <button class="btn btn-primary" onclick="SchedulePage.saveEdit('${id}')">Cập nhật</button>
@@ -548,6 +753,33 @@ Router.register('schedule', async (container) => {
                 `
             });
             if (window.lucide) lucide.createIcons();
+        },
+
+        async saveEditOneOff(id) {
+            try {
+                const dateStr = document.getElementById('se-date').value;
+                const [y, m, d] = dateStr.split('-').map(Number);
+                const dateObj = new Date(y, m - 1, d);
+                const jsDay = dateObj.getDay();
+                const dayOfWeek = jsDay === 0 ? 8 : jsDay + 1;
+
+                const newData = {
+                    classId: document.getElementById('se-class').value,
+                    specificDate: dateStr,
+                    dayOfWeek,
+                    startTime: document.getElementById('se-start').value,
+                    endTime: document.getElementById('se-end').value,
+                    room: document.getElementById('se-room').value,
+                    note: document.getElementById('se-note').value
+                };
+
+                await DB.updateSchedule(id, newData);
+                Modal.close();
+                schedules = await DB.getSchedules();
+                scheduleExceptions = await DB.getScheduleExceptions();
+                render();
+                Toast.success('Đã cập nhật buổi học');
+            } catch(e) { Toast.error('Lỗi', e.message); }
         },
 
         async saveEdit(id) {
@@ -564,6 +796,7 @@ Router.register('schedule', async (container) => {
                     const allDB = await DB.getSchedules();
                     const conflict = allDB.find(s => 
                         s.id !== id &&
+                        !s.specificDate &&
                         s.dayOfWeek === newData.dayOfWeek && 
                         s.room === newData.room && 
                         newData.startTime < s.endTime && newData.endTime > s.startTime
@@ -590,7 +823,7 @@ Router.register('schedule', async (container) => {
             } catch(e) { Toast.error('Lỗi', e.message); }
         },
 
-        removeSchedule(id, exceptionId = null, occurrenceDate = '') {
+        removeSchedule(id, exceptionId = null, occurrenceDate = '', isOneOff = false) {
             if (exceptionId) {
                 Modal.confirm({ title: 'Khôi phục lịch gốc', message: 'Bạn đang thao tác trên một buổi học đã được bù/đổi lịch. Việc xóa sẽ khôi phục lại lịch gốc. Bạn có chắc chắn?', confirmText: 'Khôi phục', danger: true });
                 Modal.bindConfirm(async () => {
@@ -599,6 +832,26 @@ Router.register('schedule', async (container) => {
                         scheduleExceptions = scheduleExceptions.filter(e => e.id !== exceptionId);
                         render();
                         Toast.success('Đã khôi phục lịch gốc');
+                    } catch(e) { Toast.error('Lỗi', e.message); }
+                });
+            } else if (isOneOff) {
+                let dateFmt = occurrenceDate;
+                if (occurrenceDate) {
+                    const [y, m, d] = occurrenceDate.split('-');
+                    dateFmt = `${d}/${m}/${y}`;
+                }
+                Modal.confirm({
+                    title: 'Xóa buổi học',
+                    message: `Bạn có chắc chắn muốn xóa buổi học ngày <strong>${dateFmt}</strong> không?`,
+                    confirmText: 'Xóa buổi học',
+                    danger: true
+                });
+                Modal.bindConfirm(async () => {
+                    try {
+                        await DB.deleteSchedule(id);
+                        schedules = schedules.filter(s => s.id !== id);
+                        render();
+                        Toast.success('Đã xóa buổi học');
                     } catch(e) { Toast.error('Lỗi', e.message); }
                 });
             } else {
