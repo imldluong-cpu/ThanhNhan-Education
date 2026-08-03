@@ -160,9 +160,10 @@ Router.register('students', async (container) => {
                 <p class="page-subtitle">${students.length} học viên trong hệ thống</p>
             </div>
             <div class="page-actions" style="display:flex;gap:8px;">
+                <button class="btn btn-secondary" onclick="StudentsPage.showExportModal()"><i data-lucide="file-spreadsheet"></i> Xuất Excel</button>
                 ${canEdit ? `
                     <button class="btn btn-secondary" onclick="StudentsPage.showImportOldYear()"><i data-lucide="history"></i> Nhập từ năm cũ</button>
-                    <button class="btn btn-secondary" onclick="StudentsPage.showImportExcel()"><i data-lucide="file-spreadsheet"></i> Nhập từ Excel</button>
+                    <button class="btn btn-secondary" onclick="StudentsPage.showImportExcel()"><i data-lucide="upload"></i> Nhập từ Excel</button>
                     <button class="btn btn-primary" onclick="StudentsPage.showAdd()"><i data-lucide="plus"></i> Thêm học viên</button>
                 ` : ''}
             </div>
@@ -490,6 +491,7 @@ Router.register('students', async (container) => {
                         <div class="form-group"><label class="form-label">Trường</label><input type="text" class="input" id="s-school"></div>
                     </div>
                     <div class="form-row">
+                        <div class="form-group"><label class="form-label">Số định danh / CCCD</label><input type="text" class="input" id="s-national-id" placeholder="Mã định danh học sinh"></div>
                         <div class="form-group"><label class="form-label">Ngày nhập học</label><input type="date" class="input" id="s-enrollment-date" value="${DB.today()}"></div>
                         <div class="form-group"><label class="form-label">Giới tính</label>
                             <select class="select" id="s-gender">
@@ -677,6 +679,7 @@ Router.register('students', async (container) => {
                     name, 
                     school: document.getElementById('s-school').value.trim(),
                     grade: gradeText,
+                    nationalId: document.getElementById('s-national-id')?.value.trim() || '',
                     parentPhone: document.getElementById('s-phone').value || '', 
                     enrollmentDate: document.getElementById('s-enrollment-date').value,
                     gender: document.getElementById('s-gender').value,
@@ -774,6 +777,7 @@ Router.register('students', async (container) => {
                         <div class="form-group"><label class="form-label">Trường</label><input type="text" class="input" id="s-school" value="${s.school || ''}"></div>
                     </div>
                     <div class="form-row">
+                        <div class="form-group"><label class="form-label">Số định danh / CCCD</label><input type="text" class="input" id="s-national-id" value="${s.nationalId || s.studentCode || ''}" placeholder="Mã định danh học sinh"></div>
                         <div class="form-group"><label class="form-label">Ngày nhập học</label><input type="date" class="input" id="s-enrollment-date" value="${s.enrollmentDate || DB.today()}"></div>
                         <div class="form-group"><label class="form-label">Giới tính</label>
                             <select class="select" id="s-gender">
@@ -835,6 +839,7 @@ Router.register('students', async (container) => {
                     name, 
                     school: document.getElementById('s-school').value.trim(),
                     grade: document.getElementById('s-grade').value.trim(),
+                    nationalId: document.getElementById('s-national-id')?.value.trim() || '',
                     parentPhone: document.getElementById('s-phone').value || '', 
                     enrollmentDate: document.getElementById('s-enrollment-date').value,
                     gender: document.getElementById('s-gender').value,
@@ -1017,19 +1022,24 @@ Router.register('students', async (container) => {
                     
                     // Find phone column index
                     let phoneColIdx = -1;
+                    let nationalIdColIdx = -1;
                     for (let i = 0; i < row1.length; i++) {
-                        if (String(row1[i]).toLowerCase().includes('sđt')) { phoneColIdx = i; break; }
+                        const cellStr = String(row1[i] || '').toLowerCase();
+                        if (cellStr.includes('sđt') || cellStr.includes('điện thoại')) { phoneColIdx = i; }
+                        if (cellStr.includes('định danh') || cellStr.includes('cccd') || cellStr.includes('mã định danh')) { nationalIdColIdx = i; }
                     }
-                    if (phoneColIdx === -1) {
+                    if (phoneColIdx === -1 || nationalIdColIdx === -1) {
                         for (let i = 0; i < row2.length; i++) {
-                            if (String(row2[i]).toLowerCase().includes('sđt')) { phoneColIdx = i; break; }
+                            const cellStr = String(row2[i] || '').toLowerCase();
+                            if (phoneColIdx === -1 && (cellStr.includes('sđt') || cellStr.includes('điện thoại'))) { phoneColIdx = i; }
+                            if (nationalIdColIdx === -1 && (cellStr.includes('định danh') || cellStr.includes('cccd') || cellStr.includes('mã định danh'))) { nationalIdColIdx = i; }
                         }
                     }
                     if (phoneColIdx === -1) phoneColIdx = row2.length; // fallback
 
                     const subjectsMap = []; // { index, name }
                     for (let i = 3; i < phoneColIdx; i++) {
-                        if (row2[i]) subjectsMap.push({ index: i, name: String(row2[i]).trim() });
+                        if (row2[i] && i !== nationalIdColIdx) subjectsMap.push({ index: i, name: String(row2[i]).trim() });
                     }
 
                     // Parse data from Row 3 (index 2)
@@ -1038,7 +1048,8 @@ Router.register('students', async (container) => {
                         const gradeText = String(r[1] || '').trim();
                         let grade = gradeText.replace(/lớp/i, '').trim(); // "Lớp 3" -> "3", "Tiền tiểu học" -> "Tiền tiểu học"
                         const school = String(r[2] || '').trim();
-                        const phone = r[phoneColIdx] ? String(r[phoneColIdx]).trim() : '';
+                        const phone = phoneColIdx < r.length && r[phoneColIdx] ? String(r[phoneColIdx]).trim() : '';
+                        const nationalId = nationalIdColIdx !== -1 && r[nationalIdColIdx] ? String(r[nationalIdColIdx]).trim() : '';
 
                         const registeredClasses = [];
                         subjectsMap.forEach(subj => {
@@ -1053,6 +1064,7 @@ Router.register('students', async (container) => {
                         return {
                             name, school, grade: gradeText,
                             parentPhone: phone,
+                            nationalId: nationalId,
                             registeredClasses
                         };
                     });
@@ -1064,11 +1076,12 @@ Router.register('students', async (container) => {
                         <p style="font-size:13px;color:var(--success-400);margin-bottom:8px;">✅ Tìm thấy <strong>${data.length}</strong> học viên</p>
                         <div class="table-container" style="max-height:300px;overflow-y:auto;">
                             <table>
-                                <thead><tr><th>Họ tên</th><th>Trường</th><th>SĐT</th><th>Đăng ký lớp</th></tr></thead>
+                                <thead><tr><th>Họ tên</th><th>Trường</th><th>SĐT</th><th>Số định danh</th><th>Đăng ký lớp</th></tr></thead>
                                 <tbody>${data.slice(0, 50).map(d => `<tr>
                                     <td>${d.name}</td>
                                     <td>${d.school}</td>
                                     <td>${d.parentPhone}</td>
+                                    <td>${d.nationalId || '—'}</td>
                                     <td class="text-sm">${d.registeredClasses.map(c => `<span class="badge badge-info">${c}</span>`).join(' ')}</td>
                                 </tr>`).join('')}</tbody>
                             </table>
@@ -1116,6 +1129,7 @@ Router.register('students', async (container) => {
                         name: d.name, 
                         school: d.school,
                         grade: d.grade,
+                        nationalId: d.nationalId || '',
                         parentPhone: d.parentPhone, 
                         classIds, 
                         status: 'active',
@@ -1140,6 +1154,361 @@ Router.register('students', async (container) => {
                 btn.disabled = false;
                 btn.innerHTML = 'Nhập học viên';
             }
+        },
+
+        // === EXPORT EXCEL MODAL & LOGIC ===
+        showExportModal() {
+            const curDate = new Date();
+            const curMonth = String(curDate.getMonth() + 1).padStart(2, '0');
+            const curYear = curDate.getFullYear();
+            const defaultMonthYear = `${curMonth}/${curYear}`;
+
+            // Unique grades
+            const gradeSet = new Set();
+            students.forEach(s => {
+                const g = (s.grade || '').trim().replace(/^lớp\s*/i, '');
+                if (g) gradeSet.add(g);
+            });
+            const gradesList = Array.from(gradeSet).sort((a, b) => {
+                const numA = parseInt(a, 10) || 999;
+                const numB = parseInt(b, 10) || 999;
+                return numA !== numB ? numA - numB : a.localeCompare(b, 'vi');
+            });
+
+            Modal.show({
+                title: 'Xuất danh sách học viên theo mẫu Excel',
+                size: 'md',
+                content: `
+                    <div style="background:var(--bg-glass);padding:14px;border-radius:8px;border:1px solid var(--border-color);margin-bottom:16px;">
+                        <p style="font-size:14px;color:var(--text-secondary);margin-bottom:12px;">
+                            Xuất danh sách học sinh theo đúng cấu trúc mẫu: <strong>STT, Họ tên, Lớp, Các cột Môn học, Học phí dự kiến từng môn, Tổng học phí/tháng, Số định danh</strong> và hàng <strong>Tổng cộng</strong>.
+                        </p>
+                        <div class="form-group">
+                            <label class="form-label">Tiêu đề Tháng / Năm trên bảng Excel *</label>
+                            <input type="text" class="input" id="exp-month-year" value="${defaultMonthYear}" placeholder="MM/YYYY (VD: 06/2026)">
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label">Trạng thái học viên</label>
+                                <select class="select" id="exp-status">
+                                    <option value="active">Chỉ học viên Đang học (active)</option>
+                                    <option value="all">Tất cả học viên (Đang học + Chờ lớp)</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Lọc theo khối lớp</label>
+                                <select class="select" id="exp-grade">
+                                    <option value="">Tất cả các khối lớp</option>
+                                    ${gradesList.map(g => `<option value="${g}">Khối / Lớp ${g}</option>`).join('')}
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    <div style="font-size:12px;color:var(--text-muted);line-height:1.5;">
+                        💡 <em>File tải về định dạng chuẩn <code>.xlsx</code> với đầy đủ định dạng số tiền (VD: <code>475,000 đ</code>), hợp nhất ô tiêu đề và tự động tính toán tổng cộng.</em>
+                    </div>
+                `,
+                footer: `
+                    <button class="btn btn-secondary" onclick="Modal.close()">Hủy</button>
+                    <button class="btn btn-primary" onclick="StudentsPage.exportExcel()">
+                        <i data-lucide="file-spreadsheet"></i> Tải file Excel (.xlsx)
+                    </button>
+                `
+            });
+            if (window.lucide) lucide.createIcons();
+        },
+
+        exportExcel() {
+            if (typeof XLSX === 'undefined') {
+                Toast.error('Lỗi', 'Thư viện Excel (XLSX) chưa được tải.');
+                return;
+            }
+
+            const monthYearInput = (document.getElementById('exp-month-year')?.value || '').trim() || `${String(new Date().getMonth()+1).padStart(2,'0')}/${new Date().getFullYear()}`;
+            const statusFilter = document.getElementById('exp-status')?.value || 'active';
+            const gradeFilter = document.getElementById('exp-grade')?.value || '';
+
+            // Filter students
+            let targetStudents = students.slice();
+            if (statusFilter === 'active') {
+                targetStudents = targetStudents.filter(s => s.status === 'active');
+            } else if (statusFilter !== 'all') {
+                targetStudents = targetStudents.filter(s => s.status === statusFilter);
+            }
+
+            if (gradeFilter) {
+                targetStudents = targetStudents.filter(s => {
+                    const g = (s.grade || '').trim().replace(/^lớp\s*/i, '');
+                    return g === gradeFilter || s.grade === gradeFilter;
+                });
+            }
+
+            // Sort students by Grade ascending (1 to 12), then by Name alphabetically
+            targetStudents.sort((a, b) => {
+                const gradeAStr = (a.grade || '').trim();
+                const gradeBStr = (b.grade || '').trim();
+                const matchA = gradeAStr.match(/\d+/);
+                const matchB = gradeBStr.match(/\d+/);
+                const numA = matchA ? parseInt(matchA[0], 10) : 999;
+                const numB = matchB ? parseInt(matchB[0], 10) : 999;
+
+                if (numA !== numB) return numA - numB;
+                return (a.name || '').localeCompare(b.name || '', 'vi');
+            });
+
+            if (targetStudents.length === 0) {
+                Toast.warning('Không có học viên', 'Không tìm thấy học viên nào phù hợp với bộ lọc.');
+                return;
+            }
+
+            // Standard subject columns matching user's template
+            const standardSubjects = [
+                { key: 'toan', shortName: 'Toán', fullName: 'Toán', keywords: ['toán', 'math'] },
+                { key: 'van', shortName: 'Văn', fullName: 'Văn', keywords: ['văn', 'ngữ văn', 'tiếng việt'] },
+                { key: 'av', shortName: 'AV', fullName: 'Anh Văn', keywords: ['anh văn', 'tiếng anh', 'av', 'english', 'ielts'] },
+                { key: 'ly', shortName: 'Lý', fullName: 'Lý', keywords: ['lý', 'vật lý', 'vat ly', 'ly'] },
+                { key: 'hoa', shortName: 'Hóa', fullName: 'Hoá', keywords: ['hóa', 'hoá', 'hoa'] },
+                { key: 'av_gt', shortName: 'Anh Văn GT', fullName: 'Anh Văn GT', keywords: ['giao tiếp', 'anh văn gt', 'av gt', 'av giao tiếp'] },
+                { key: 'ai', shortName: 'Khóa AI', fullName: 'Khóa AI Cơ...', keywords: ['ai', 'khóa ai', 'tin học', 'lập trình'] }
+            ];
+
+            // Detect any other subjects present in classes
+            const extraSubjects = [];
+            classes.forEach(c => {
+                const subjName = (c.subject || c.name || '').trim();
+                const isStandard = standardSubjects.some(s => s.keywords.some(kw => subjName.toLowerCase().includes(kw)));
+                if (!isStandard && subjName) {
+                    const short = subjName.split(' ')[0];
+                    if (!extraSubjects.some(e => e.fullName.toLowerCase() === subjName.toLowerCase())) {
+                        extraSubjects.push({
+                            key: 'extra_' + extraSubjects.length,
+                            shortName: short,
+                            fullName: subjName,
+                            keywords: [subjName.toLowerCase()]
+                        });
+                    }
+                }
+            });
+
+            const allSubjectCols = [...standardSubjects, ...extraSubjects];
+            const numSubjects = allSubjectCols.length;
+            const totalCols = 3 + numSubjects * 2 + 2; // STT, Họ và tên, Lớp + N (Môn) + N (Học phí) + Tổng + Số định danh
+
+            // Helper to match student class with subject
+            function getStudentClassForSubject(student, subjectObj) {
+                if (!student.classIds || student.classIds.length === 0) return null;
+                for (const cid of student.classIds) {
+                    const cls = classes.find(c => c.id === cid);
+                    if (!cls) continue;
+                    const cName = (cls.name || '').toLowerCase();
+                    const cSubj = (cls.subject || '').toLowerCase();
+                    
+                    if (subjectObj.key === 'av_gt') {
+                        if (cName.includes('giao tiếp') || cName.includes('gt') || cSubj.includes('giao tiếp') || cSubj.includes('gt')) {
+                            return cls;
+                        }
+                        continue;
+                    }
+                    if (subjectObj.key === 'av') {
+                        if (cName.includes('giao tiếp') || cName.includes('gt') || cSubj.includes('giao tiếp') || cSubj.includes('gt')) {
+                            continue;
+                        }
+                        if (cName.startsWith('anh') || cName.startsWith('av') || cName.startsWith('tiếng anh') || cSubj.includes('anh')) {
+                            return cls;
+                        }
+                        continue;
+                    }
+                    if (subjectObj.key === 'ai') {
+                        if (cName.includes('ai') || cSubj.includes('ai') || cName.includes('tin') || cName.includes('lập trình')) {
+                            return cls;
+                        }
+                        continue;
+                    }
+                    if (subjectObj.keywords.some(kw => cName.startsWith(kw) || cName.includes(kw) || cSubj.includes(kw))) {
+                        return cls;
+                    }
+                }
+                return null;
+            }
+
+            // Helper to calculate subject fee for student
+            function calcSubjectFee(student, subjectObj) {
+                const cls = getStudentClassForSubject(student, subjectObj);
+                if (!cls) return 0;
+                
+                let baseFee = 0;
+                if (student.customFees && student.customFees[cls.id] !== undefined && student.customFees[cls.id] !== null) {
+                    baseFee = parseInt(student.customFees[cls.id], 10) || 0;
+                } else if (cls.fee) {
+                    baseFee = parseInt(cls.fee, 10) || 0;
+                } else {
+                    baseFee = StudentsPage.getDefaultFee(student.grade || '');
+                }
+
+                const discount = parseFloat(student.discount) || 0;
+                if (discount > 0 && baseFee > 0) {
+                    return Math.round(baseFee * (1 - discount));
+                }
+                return baseFee;
+            }
+
+            // Helper to format student grade
+            function formatStudentGrade(student) {
+                let g = (student.grade || '').trim();
+                g = g.replace(/^lớp\s*/i, '').trim();
+                if (!g) {
+                    if (student.classIds && student.classIds.length > 0) {
+                        const cls = classes.find(c => student.classIds.includes(c.id));
+                        if (cls) {
+                            const m = cls.name.match(/\d+/);
+                            if (m) g = m[0];
+                        }
+                    }
+                }
+                return g || '—';
+            }
+
+            // Build Rows (Array of Arrays)
+            const aoa = [];
+
+            // 1. Title Row
+            const titleRow = [`DANH SÁCH HỌC VIÊN THÁNG ${monthYearInput}`];
+            for (let i = 1; i < totalCols; i++) titleRow.push('');
+            aoa.push(titleRow);
+
+            // 2. Header Row 1
+            const headerRow1 = ['STT', 'Họ và tên', 'Lớp'];
+            headerRow1.push('MÔN HỌC');
+            for (let i = 1; i < numSubjects; i++) headerRow1.push('');
+            headerRow1.push('HỌC PHÍ DỰ KIẾN');
+            for (let i = 1; i < numSubjects; i++) headerRow1.push('');
+            headerRow1.push('Tổng học phí/tháng');
+            headerRow1.push('Số định danh');
+            aoa.push(headerRow1);
+
+            // 3. Header Row 2
+            const headerRow2 = ['', '', ''];
+            allSubjectCols.forEach(s => headerRow2.push(s.shortName));
+            allSubjectCols.forEach(s => headerRow2.push(s.fullName));
+            headerRow2.push('');
+            headerRow2.push('');
+            aoa.push(headerRow2);
+
+            // 4. Data Rows
+            targetStudents.forEach((st, idx) => {
+                const row = [];
+                row.push(idx + 1); // STT
+                row.push(st.name || ''); // Họ và tên
+                row.push(formatStudentGrade(st)); // Lớp
+                
+                // MÔN HỌC (x or blank)
+                allSubjectCols.forEach(s => {
+                    const cls = getStudentClassForSubject(st, s);
+                    row.push(cls ? 'x' : '');
+                });
+
+                // HỌC PHÍ DỰ KIẾN
+                let totalMonthly = 0;
+                allSubjectCols.forEach(s => {
+                    const fee = calcSubjectFee(st, s);
+                    row.push(fee); // Numeric for excel format & calculations
+                    totalMonthly += fee;
+                });
+
+                // Tổng học phí/tháng
+                row.push(totalMonthly);
+
+                // Số định danh
+                const idCode = st.nationalId || st.studentCode || st.idNumber || st.cccd || '0';
+                row.push(idCode);
+
+                aoa.push(row);
+            });
+
+            // 5. Summary Row: "Tổng cộng"
+            const summaryRow = ['Tổng cộng', '', ''];
+            allSubjectCols.forEach(s => {
+                const count = targetStudents.filter(st => getStudentClassForSubject(st, s) !== null).length;
+                summaryRow.push(count);
+            });
+
+            let grandTotalFee = 0;
+            allSubjectCols.forEach(s => {
+                let sumFee = 0;
+                targetStudents.forEach(st => {
+                    sumFee += calcSubjectFee(st, s);
+                });
+                summaryRow.push(sumFee);
+                grandTotalFee += sumFee;
+            });
+
+            summaryRow.push(grandTotalFee);
+            summaryRow.push('');
+            aoa.push(summaryRow);
+
+            // Create Sheet
+            const ws = XLSX.utils.aoa_to_sheet(aoa);
+
+            // Merges
+            const lastRowIdx = aoa.length - 1;
+            ws['!merges'] = [
+                // Title Row
+                { s: { r: 0, c: 0 }, e: { r: 0, c: totalCols - 1 } },
+                // STT
+                { s: { r: 1, c: 0 }, e: { r: 2, c: 0 } },
+                // Họ và tên
+                { s: { r: 1, c: 1 }, e: { r: 2, c: 1 } },
+                // Lớp
+                { s: { r: 1, c: 2 }, e: { r: 2, c: 2 } },
+                // MÔN HỌC group
+                { s: { r: 1, c: 3 }, e: { r: 1, c: 3 + numSubjects - 1 } },
+                // HỌC PHÍ DỰ KIẾN group
+                { s: { r: 1, c: 3 + numSubjects }, e: { r: 1, c: 3 + 2 * numSubjects - 1 } },
+                // Tổng học phí/tháng
+                { s: { r: 1, c: 3 + 2 * numSubjects }, e: { r: 2, c: 3 + 2 * numSubjects } },
+                // Số định danh
+                { s: { r: 1, c: 3 + 2 * numSubjects + 1 }, e: { r: 2, c: 3 + 2 * numSubjects + 1 } },
+                // Summary row label "Tổng cộng" merged across col 0 to 2
+                { s: { r: lastRowIdx, c: 0 }, e: { r: lastRowIdx, c: 2 } }
+            ];
+
+            // Column Widths
+            const cols = [
+                { wch: 6 },   // STT
+                { wch: 25 },  // Họ và tên
+                { wch: 14 }   // Lớp
+            ];
+            for (let i = 0; i < numSubjects; i++) cols.push({ wch: 10 });
+            for (let i = 0; i < numSubjects; i++) cols.push({ wch: 15 });
+            cols.push({ wch: 20 }); // Tổng học phí/tháng
+            cols.push({ wch: 16 }); // Số định danh
+            ws['!cols'] = cols;
+
+            // Apply currency number format to Fee columns
+            for (let R = 3; R <= lastRowIdx; R++) {
+                // Subject fees columns
+                for (let C = 3 + numSubjects; C < 3 + 2 * numSubjects; C++) {
+                    const cellAddr = XLSX.utils.encode_cell({ r: R, c: C });
+                    if (ws[cellAddr] && typeof ws[cellAddr].v === 'number') {
+                        ws[cellAddr].z = '#,##0" đ"';
+                    }
+                }
+                // Total column
+                const totalCellAddr = XLSX.utils.encode_cell({ r: R, c: 3 + 2 * numSubjects });
+                if (ws[totalCellAddr] && typeof ws[totalCellAddr].v === 'number') {
+                    ws[totalCellAddr].z = '#,##0" đ"';
+                }
+            }
+
+            // Create Workbook and Save
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'Danh sách học viên');
+            
+            const fileName = `Danh_Sach_Hoc_Vien_${monthYearInput.replace(/\//g, '_')}.xlsx`;
+            XLSX.writeFile(wb, fileName);
+
+            Modal.close();
+            Toast.success('Xuất file thành công', `Đã tải xuống file ${fileName}`);
         }
     };
 });

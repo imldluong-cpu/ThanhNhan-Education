@@ -234,7 +234,10 @@ Router.register('tuition', async (container) => {
     container.innerHTML = `
         <div class="page-header">
             <div><h1 class="page-title"><i data-lucide="wallet"></i> Quản lý Học phí</h1></div>
-            <div class="page-actions"><button class="btn btn-primary" onclick="TuitionPage.showAdd()"><i data-lucide="plus"></i> Thêm khoản thu</button></div>
+            <div class="page-actions" style="display:flex;gap:8px;">
+                <button class="btn btn-secondary" onclick="window.StudentsPage?.showExportModal ? window.StudentsPage.showExportModal() : App.navigate('students')"><i data-lucide="file-spreadsheet"></i> Xuất Excel Mẫu Mới</button>
+                <button class="btn btn-primary" onclick="TuitionPage.showAdd()"><i data-lucide="plus"></i> Thêm khoản thu</button>
+            </div>
         </div>
         <div class="tabs">
             <button class="tab-item active" onclick="TuitionPage.switchTab('all', this)">Tất cả</button>
