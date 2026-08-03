@@ -11,16 +11,18 @@ Router.register('teacher-attendance', async (container) => {
     let mySalaryConfig = {};
 
     try {
-        settings = await DB.getSettings();
-        records = await DB.getTeacherAttendance(selectedMonth);
-        adjustments = await DB.getSalaryAdjustments(selectedMonth);
-        schedules = await DB.getSchedules();
-        classes = await DB.getClasses(); // Fetch all classes so teachers can substitute or check-in if assigned by custom name
+        settings = await DB.getSettings().catch(() => ({}));
+        records = await DB.getTeacherAttendance(selectedMonth).catch(() => []);
+        adjustments = await DB.getSalaryAdjustments(selectedMonth).catch(() => []);
+        schedules = await DB.getSchedules().catch(() => []);
+        classes = await DB.getClasses().catch(() => []); // Fetch all classes so teachers can substitute or check-in if assigned by custom name
         
-        if (isOwner) teachers = await DB.getTeachers();
-        if (isTeacher) {
-            const myDoc = await window.db.collection('users').doc(window.currentUser.id).get();
-            mySalaryConfig = myDoc.exists ? (myDoc.data().salaryConfig || {}) : {};
+        if (isOwner) teachers = await DB.getTeachers().catch(() => []);
+        if (isTeacher && window.currentUser && window.currentUser.id) {
+            try {
+                const myDoc = await window.db.collection('users').doc(window.currentUser.id).get();
+                mySalaryConfig = myDoc.exists ? (myDoc.data().salaryConfig || {}) : {};
+            } catch(e) { console.warn('Could not load salaryConfig:', e); }
         }
     } catch(e) { console.warn(e); }
 
@@ -32,15 +34,43 @@ Router.register('teacher-attendance', async (container) => {
     
     function getClassName(id) { return (classes.find(c => c.id === id) || {}).name || '—'; }
 
+    function isMyRecord(r) {
+        if (!isTeacher) return true;
+        if (!r) return false;
+        
+        const myId = (window.currentUser ? window.currentUser.id : '') || '';
+        const myName = ((window.currentUser ? window.currentUser.displayName : '') || '').trim().toLowerCase();
+        const myEmail = ((window.currentUser ? window.currentUser.email : '') || '').trim().toLowerCase();
+        
+        const rTId = (r.teacherId || '').trim();
+        const rTIdLower = rTId.toLowerCase();
+        const rTNameLower = (r.teacherName || '').trim().toLowerCase();
+        
+        // Exact UID or email match
+        if (myId && rTId === myId) return true;
+        if (myEmail && (rTIdLower === myEmail || rTNameLower === myEmail)) return true;
+        
+        // Name match (case-insensitive & trimmed)
+        if (myName && (rTIdLower === myName || rTNameLower === myName)) return true;
+        
+        // Fuzzy / Substring name match (e.g. "Bảo Khuyên" vs "Lưu Ngọc Bảo Khuyên")
+        if (myName && rTIdLower && (myName.includes(rTIdLower) || rTIdLower.includes(myName))) return true;
+        if (myName && rTNameLower && (myName.includes(rTNameLower) || rTNameLower.includes(myName))) return true;
+        
+        return false;
+    }
+
     function getEffectiveTeacherId(id) {
-        if (isTeacher && (id === window.currentUser.id || id === window.currentUser.displayName)) {
-            return window.currentUser.id;
+        if (isTeacher) {
+            if (isMyRecord({ teacherId: id })) {
+                return (window.currentUser ? window.currentUser.id : '') || id;
+            }
         }
         return id;
     }
 
     function getMyRecords() {
-        if (isTeacher) return records.filter(r => r.teacherId === window.currentUser.id || r.teacherId === window.currentUser.displayName);
+        if (isTeacher) return records.filter(r => isMyRecord(r));
         return records;
     }
 
@@ -208,8 +238,12 @@ Router.register('teacher-attendance', async (container) => {
     window.TAPage = {
         async changeMonth(m) {
             selectedMonth = m;
-            records = await DB.getTeacherAttendance(m);
-            adjustments = await DB.getSalaryAdjustments(m);
+            try {
+                records = await DB.getTeacherAttendance(m);
+            } catch(e) { records = []; console.warn(e); }
+            try {
+                adjustments = await DB.getSalaryAdjustments(m);
+            } catch(e) { adjustments = []; console.warn(e); }
             render();
         },
 
@@ -357,7 +391,19 @@ Router.register('teacher-attendance', async (container) => {
                 const cls = classes.find(c => c.id === classId);
                 if (cls) {
                     const tIds = cls.teacherIds || [];
-                    const isMyClass = tIds.includes(window.currentUser.id) || tIds.includes(window.currentUser.displayName);
+                    const myId = (window.currentUser ? window.currentUser.id : '') || '';
+                    const myName = ((window.currentUser ? window.currentUser.displayName : '') || '').trim().toLowerCase();
+                    const myEmail = ((window.currentUser ? window.currentUser.email : '') || '').trim().toLowerCase();
+                    
+                    const isMyClass = tIds.some(tid => {
+                        const tidStr = (tid || '').trim();
+                        const tidLower = tidStr.toLowerCase();
+                        if (myId && tidStr === myId) return true;
+                        if (myEmail && tidLower === myEmail) return true;
+                        if (myName && (tidLower === myName || myName.includes(tidLower) || tidLower.includes(myName))) return true;
+                        return false;
+                    });
+                    
                     if (!isMyClass) {
                         Toast.error('Lỗi phân công', 'Bạn không được phân công dạy lớp học này. Vui lòng chọn đúng lớp của bạn!');
                         return;

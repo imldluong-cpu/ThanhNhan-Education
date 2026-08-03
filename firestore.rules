@@ -59,7 +59,10 @@ service cloud.firestore {
     match /classes/{docId} { allow read, write: if isOwnerOrStaff() || isTeacher(); } // Teachers might need to see classes
     match /tuition/{docId} { allow read, write: if isOwnerOrStaff(); }
     match /finance/{docId} { allow read, write: if isOwnerOrStaff(); }
-    match /salaryAdjustments/{docId} { allow read, write: if isOwnerOrStaff(); }
+    match /salaryAdjustments/{docId} { 
+      allow read: if isOwnerOrStaff() || isTeacher(); 
+      allow write: if isOwnerOrStaff(); 
+    }
     match /schedules/{docId} { allow read, write: if isOwnerOrStaff() || isTeacher(); } // Teachers can view schedules
     match /scheduleExceptions/{docId} { allow read, write: if isOwnerOrStaff() || isTeacher(); }
 

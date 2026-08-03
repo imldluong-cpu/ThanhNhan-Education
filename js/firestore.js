@@ -206,10 +206,19 @@ const DB = {
 
     // === TEACHER ATTENDANCE ===
     async getTeacherAttendance(month) {
-        const snap = await window.db.collection('teacherAttendance')
-            .where('month', '==', month)
-            .get();
-        return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        try {
+            const snap = await window.db.collection('teacherAttendance').get();
+            return snap.docs
+                .map(d => {
+                    const data = d.data();
+                    const docMonth = data.month || (data.date ? data.date.substring(0, 7) : '');
+                    return { id: d.id, ...data, month: docMonth };
+                })
+                .filter(r => !month || r.month === month);
+        } catch(e) {
+            console.warn('Error fetching teacher attendance:', e);
+            return [];
+        }
     },
 
     async addTeacherAttendanceRecord(data) {
@@ -227,10 +236,19 @@ const DB = {
 
     // === SALARY ADJUSTMENTS ===
     async getSalaryAdjustments(month) {
-        const snap = await window.db.collection('salaryAdjustments')
-            .where('month', '==', month)
-            .get();
-        return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        try {
+            const snap = await window.db.collection('salaryAdjustments').get();
+            return snap.docs
+                .map(d => {
+                    const data = d.data();
+                    const docMonth = data.month || (data.date ? data.date.substring(0, 7) : '');
+                    return { id: d.id, ...data, month: docMonth };
+                })
+                .filter(r => !month || r.month === month);
+        } catch(e) {
+            console.warn('Error fetching salary adjustments:', e);
+            return [];
+        }
     },
 
     async addSalaryAdjustment(data) {
