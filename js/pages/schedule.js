@@ -496,49 +496,107 @@ Router.register('schedule', async (container) => {
             if (!classId) { Toast.warning('Chọn lớp', 'Vui lòng chọn lớp học'); return; }
             if (!dateStr) { Toast.warning('Chọn ngày', 'Vui lòng chọn ngày học'); return; }
             if (!startTime || !endTime) { Toast.warning('Chọn giờ', 'Vui lòng nhập giờ bắt đầu và kết thúc'); return; }
+            if (startTime >= endTime) { Toast.warning('Giờ không hợp lệ', 'Giờ bắt đầu phải trước giờ kết thúc'); return; }
 
             const [y, m, d] = dateStr.split('-').map(Number);
             const dateObj = new Date(y, m - 1, d);
             const jsDay = dateObj.getDay();
             const dayOfWeek = jsDay === 0 ? 8 : jsDay + 1;
 
+            const executeSave = async () => {
+                try {
+                    await DB.addSchedule({
+                        classId,
+                        specificDate: dateStr,
+                        dayOfWeek,
+                        startTime,
+                        endTime,
+                        room: room || '',
+                        note: note || 'Buổi lẻ',
+                        isOneOff: true
+                    });
+
+                    Modal.close();
+                    Toast.success('Đã thêm 1 buổi học thành công');
+                    schedules = await DB.getSchedules();
+                    scheduleExceptions = await DB.getScheduleExceptions();
+                    render();
+                } catch(e) {
+                    Toast.error('Lỗi', e.message);
+                }
+            };
+
             try {
                 if (room) {
                     const allDB = await DB.getSchedules();
-                    const conflict = allDB.find(s => {
+                    const currentClasses = await DB.getClasses();
+                    const currentExceptions = await DB.getScheduleExceptions();
+
+                    // 1. Check one-off schedules on dateStr
+                    let conflictInfo = null;
+                    const oneOffConflict = allDB.find(s => {
+                        if (!s.specificDate || s.specificDate !== dateStr) return false;
                         if (s.room !== room) return false;
-                        if (s.specificDate) {
-                            if (s.specificDate !== dateStr) return false;
-                        } else {
-                            if (s.dayOfWeek !== dayOfWeek) return false;
-                            const hasCancel = scheduleExceptions.some(ex => ex.scheduleId === s.id && ex.originalDate === dateStr && !ex.newDate);
-                            if (hasCancel) return false;
-                        }
                         return startTime < s.endTime && endTime > s.startTime;
                     });
+                    if (oneOffConflict) {
+                        conflictInfo = `lớp ${getClassName(oneOffConflict.classId)} (${oneOffConflict.startTime} - ${oneOffConflict.endTime})`;
+                    }
 
-                    if (conflict) {
-                        Toast.error('Trùng phòng học', `Phòng ${room} đã có lớp ${getClassName(conflict.classId)} từ ${conflict.startTime} đến ${conflict.endTime}`);
+                    // 2. Check recurring schedules (only if active on dateStr)
+                    if (!conflictInfo) {
+                        const recurringConflict = allDB.find(s => {
+                            if (s.specificDate) return false;
+                            if (s.room !== room) return false;
+                            if (s.dayOfWeek !== dayOfWeek) return false;
+
+                            // Check class active status & date range
+                            const c = currentClasses.find(x => x.id === s.classId);
+                            if (!c || c.status === 'inactive') return false;
+                            if (c.startDate && dateStr < c.startDate) return false;
+                            if (c.endDate && dateStr > c.endDate) return false;
+
+                            // Check if this recurring session is cancelled or moved away on dateStr
+                            const hasException = currentExceptions.some(ex => ex.scheduleId === s.id && ex.originalDate === dateStr);
+                            if (hasException) return false;
+
+                            return startTime < s.endTime && endTime > s.startTime;
+                        });
+                        if (recurringConflict) {
+                            conflictInfo = `lớp ${getClassName(recurringConflict.classId)} (${recurringConflict.startTime} - ${recurringConflict.endTime})`;
+                        }
+                    }
+
+                    // 3. Check exceptions moved TO dateStr
+                    if (!conflictInfo) {
+                        const movedEx = currentExceptions.find(ex => {
+                            if (ex.newDate !== dateStr) return false;
+                            const origSch = allDB.find(s => s.id === ex.scheduleId);
+                            const exRoom = ex.newRoom || (origSch ? origSch.room : '');
+                            if (exRoom !== room) return false;
+                            const exStart = ex.newStartTime || (origSch ? origSch.startTime : '');
+                            const exEnd = ex.newEndTime || (origSch ? origSch.endTime : '');
+                            return startTime < exEnd && endTime > exStart;
+                        });
+                        if (movedEx) {
+                            const origSch = allDB.find(s => s.id === movedEx.scheduleId);
+                            conflictInfo = `lớp ${origSch ? getClassName(origSch.classId) : 'bù'} (${movedEx.newStartTime} - ${movedEx.newEndTime})`;
+                        }
+                    }
+
+                    if (conflictInfo) {
+                        Modal.confirm({
+                            title: 'Trùng phòng học',
+                            message: `Phòng ${room} vào ngày ${DB.formatDate ? DB.formatDate(dateStr) : dateStr} đã có lịch học của ${conflictInfo}.<br><br>Bạn có chắc chắn muốn xếp trùng phòng học này không?`,
+                            confirmText: 'Vẫn lưu',
+                            cancelText: 'Hủy / Đổi lại'
+                        });
+                        Modal.bindConfirm(executeSave);
                         return;
                     }
                 }
 
-                await DB.addSchedule({
-                    classId,
-                    specificDate: dateStr,
-                    dayOfWeek,
-                    startTime,
-                    endTime,
-                    room: room || '',
-                    note: note || 'Buổi lẻ',
-                    isOneOff: true
-                });
-
-                Modal.close();
-                Toast.success('Đã thêm 1 buổi học thành công');
-                schedules = await DB.getSchedules();
-                scheduleExceptions = await DB.getScheduleExceptions();
-                render();
+                await executeSave();
             } catch(e) {
                 Toast.error('Lỗi', e.message);
             }
