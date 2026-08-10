@@ -9,12 +9,27 @@ Router.register('finance', async (container) => {
         return;
     }
 
+    let filterMode = 'month';
     let selectedMonth = DB.currentMonth();
+    let selectedYear = String(new Date().getFullYear());
+    let customStart = DB.today();
+    let customEnd = DB.today();
     let records = [];
 
-    try {
-        records = await DB.getFinanceRecords(selectedMonth);
-    } catch(e) { console.warn(e); }
+    async function loadData() {
+        try {
+            if (filterMode === 'month') {
+                records = await DB.getFinanceRecords(selectedMonth);
+            } else if (filterMode === 'year') {
+                records = await DB.getFinanceRecords(selectedYear);
+            } else if (filterMode === 'custom') {
+                records = await DB.getFinanceRecords({ from: customStart, to: customEnd });
+            }
+        } catch(e) { console.warn(e); }
+        renderContent();
+    }
+
+    await loadData();
 
     function getSummary() {
         let revenue = 0, expense = 0;
@@ -33,26 +48,60 @@ Router.register('finance', async (container) => {
         return colors[cat] || 'neutral';
     }
 
+    function renderFilterBar() {
+        const bar = document.getElementById('finance-filter-bar');
+        if (!bar) return;
+        
+        let inputsHtml = '';
+        if (filterMode === 'month') {
+            inputsHtml = `<input type="month" class="input" value="${selectedMonth}" onchange="FinancePage.changeFilter('month', this.value)">`;
+        } else if (filterMode === 'year') {
+            inputsHtml = `<input type="number" class="input" value="${selectedYear}" placeholder="Năm (VD: 2024)" onchange="FinancePage.changeFilter('year', this.value)" style="width:120px;">`;
+        } else if (filterMode === 'custom') {
+            inputsHtml = `
+                <input type="date" class="input" value="${customStart}" onchange="FinancePage.changeFilter('customStart', this.value)">
+                <span style="display:flex;align-items:center;color:var(--text-muted);">-</span>
+                <input type="date" class="input" value="${customEnd}" onchange="FinancePage.changeFilter('customEnd', this.value)">
+            `;
+        }
+
+        bar.innerHTML = `
+            <select class="select" onchange="FinancePage.changeFilterMode(this.value)" style="width:160px;">
+                <option value="month" ${filterMode === 'month' ? 'selected' : ''}>Theo tháng</option>
+                <option value="year" ${filterMode === 'year' ? 'selected' : ''}>Theo năm</option>
+                <option value="custom" ${filterMode === 'custom' ? 'selected' : ''}>Tùy chỉnh</option>
+            </select>
+            ${inputsHtml}
+        `;
+    }
+
     function renderContent() {
         const content = document.getElementById('finance-content');
         if (!content) return;
 
         const summary = getSummary();
-        const monthLabel = `tháng ${selectedMonth.split('-')[1]}/${selectedMonth.split('-')[0]}`;
+        let periodLabel = '';
+        if (filterMode === 'month') {
+            periodLabel = `tháng ${selectedMonth.split('-')[1]}/${selectedMonth.split('-')[0]}`;
+        } else if (filterMode === 'year') {
+            periodLabel = `năm ${selectedYear}`;
+        } else {
+            periodLabel = `từ ${DB.formatDate(customStart)} đến ${DB.formatDate(customEnd)}`;
+        }
 
         content.innerHTML = `
             <div class="finance-summary stagger">
                 <div class="finance-summary-item revenue">
                     <div class="amount">${DB.formatCurrency(summary.revenue)}</div>
-                    <div class="label">Doanh thu ${monthLabel}</div>
+                    <div class="label">Doanh thu ${periodLabel}</div>
                 </div>
                 <div class="finance-summary-item expense">
                     <div class="amount">${DB.formatCurrency(summary.expense)}</div>
-                    <div class="label">Chi phí ${monthLabel}</div>
+                    <div class="label">Chi phí ${periodLabel}</div>
                 </div>
                 <div class="finance-summary-item profit">
                     <div class="amount">${DB.formatCurrency(summary.profit)}</div>
-                    <div class="label">Lợi nhuận ${monthLabel}</div>
+                    <div class="label">Lợi nhuận ${periodLabel}</div>
                 </div>
             </div>
 
@@ -65,7 +114,7 @@ Router.register('finance', async (container) => {
 
             <div class="card">
                 <div class="card-header">
-                    <h3>Chi tiết thu/chi ${monthLabel}</h3>
+                    <h3>Chi tiết thu/chi ${periodLabel}</h3>
                     <span class="badge badge-neutral">${records.length} bản ghi</span>
                 </div>
                 <div class="table-container">
@@ -74,7 +123,7 @@ Router.register('finance', async (container) => {
                             <tr><th>Ngày</th><th>Loại</th><th>Danh mục</th><th>Mô tả</th><th style="text-align:right;">Số tiền</th><th>Thao tác</th></tr>
                         </thead>
                         <tbody>
-                            ${records.length === 0 ? '<tr><td colspan="6"><div class="empty-state"><p>Chưa có dữ liệu tháng này</p></div></td></tr>' :
+                            ${records.length === 0 ? '<tr><td colspan="6"><div class="empty-state"><p>Chưa có dữ liệu</p></div></td></tr>' :
                             records.map(r => `<tr style="background:${r.type === 'revenue' ? 'rgba(34,197,94,0.03)' : 'rgba(239,68,68,0.03)'};">
                                 <td>${DB.formatDate(r.date)}</td>
                                 <td><span class="badge badge-${r.type === 'revenue' ? 'success' : 'danger'}">${r.type === 'revenue' ? 'Thu' : 'Chi'}</span></td>
@@ -183,20 +232,27 @@ Router.register('finance', async (container) => {
             </div>
         </div>
 
-        <div class="filter-bar">
-            <input type="month" class="input" id="finance-month" value="${selectedMonth}" style="max-width:200px;" onchange="FinancePage.changeMonth(this.value)">
-        </div>
+        <div class="filter-bar" id="finance-filter-bar" style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;"></div>
 
         <div id="finance-content"></div>
     `;
 
+    renderFilterBar();
     renderContent();
 
     window.FinancePage = {
-        async changeMonth(val) {
-            selectedMonth = val;
-            try { records = await DB.getFinanceRecords(selectedMonth); } catch(e) { console.warn(e); }
-            renderContent();
+        changeFilterMode(mode) {
+            filterMode = mode;
+            renderFilterBar();
+            loadData();
+        },
+
+        changeFilter(field, val) {
+            if (field === 'month') selectedMonth = val;
+            else if (field === 'year') selectedYear = val;
+            else if (field === 'customStart') customStart = val;
+            else if (field === 'customEnd') customEnd = val;
+            loadData();
         },
 
         showAdd() {

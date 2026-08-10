@@ -261,16 +261,35 @@ const DB = {
     },
 
     // === FINANCE ===
-    async getFinanceRecords(month) {
+    async getFinanceRecords(filter) {
         let snap;
-        if (month) {
-            const start = month + '-01';
-            const endDate = new Date(parseInt(month.split('-')[0]), parseInt(month.split('-')[1]), 0);
-            const end = month + '-' + String(endDate.getDate()).padStart(2, '0');
-            snap = await window.db.collection('finance')
-                .where('date', '>=', start)
-                .where('date', '<=', end)
-                .get();
+        if (typeof filter === 'string') {
+            if (filter.length === 4) {
+                // Year format: 'YYYY'
+                const start = filter + '-01-01';
+                const end = filter + '-12-31';
+                snap = await window.db.collection('finance')
+                    .where('date', '>=', start)
+                    .where('date', '<=', end)
+                    .get();
+            } else if (filter.length === 7) {
+                // Month format: 'YYYY-MM'
+                const start = filter + '-01';
+                const endDate = new Date(parseInt(filter.split('-')[0]), parseInt(filter.split('-')[1]), 0);
+                const end = filter + '-' + String(endDate.getDate()).padStart(2, '0');
+                snap = await window.db.collection('finance')
+                    .where('date', '>=', start)
+                    .where('date', '<=', end)
+                    .get();
+            } else {
+                snap = await window.db.collection('finance').get();
+            }
+        } else if (typeof filter === 'object' && filter !== null) {
+            // Custom range
+            let query = window.db.collection('finance');
+            if (filter.from) query = query.where('date', '>=', filter.from);
+            if (filter.to) query = query.where('date', '<=', filter.to);
+            snap = await query.get();
         } else {
             snap = await window.db.collection('finance').get();
         }
