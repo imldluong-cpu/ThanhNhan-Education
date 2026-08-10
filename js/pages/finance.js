@@ -100,7 +100,7 @@ Router.register('finance', async (container) => {
                     <div class="label">Chi phí ${periodLabel}</div>
                 </div>
                 <div class="finance-summary-item profit">
-                    <div class="amount">${DB.formatCurrency(summary.profit)}</div>
+                    <div class="amount" style="color: ${summary.profit < 0 ? 'var(--danger-500)' : (summary.profit > 0 ? 'var(--info-500)' : '')} !important;">${DB.formatCurrency(summary.profit)}</div>
                     <div class="label">Lợi nhuận ${periodLabel}</div>
                 </div>
             </div>
