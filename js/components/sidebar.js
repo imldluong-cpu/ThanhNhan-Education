@@ -15,6 +15,9 @@ const Sidebar = {
 
         const menuItems = [];
 
+        // Assistant - everyone
+        menuItems.push({ icon: 'sparkles', label: 'Trợ lý', page: 'assistant' });
+
         // Dashboard - everyone
         menuItems.push({ icon: 'layout-dashboard', label: 'Tổng quan', page: 'dashboard' });
 
