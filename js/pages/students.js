@@ -158,15 +158,21 @@ Router.register('students', async (container) => {
                         <span style="font-size:13px;color:var(--text-muted);">trong hệ thống</span>
                     </div>
                 </div>
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px;padding-top:10px;border-top:1px dashed var(--border-color);font-size:12px;">
-                    <div style="background:rgba(34,197,94,0.08);padding:6px 10px;border-radius:6px;border-left:3px solid var(--success-500);cursor:pointer;transition:background 0.15s;" onclick="StudentsPage.filterByStatus('active_assigned')" title="Bấm để lọc danh sách đang học">
-                        <span style="color:var(--text-muted);display:block;font-size:11px;">Đang học (Có lớp)</span>
-                        <strong style="font-size:15px;color:var(--success-600);">${studyingStudents} HV</strong>
+                <div style="display:grid;grid-template-columns:${inactiveStudents > 0 ? 'repeat(3, 1fr)' : '1fr 1fr'};gap:6px;margin-top:12px;padding-top:10px;border-top:1px dashed var(--border-color);font-size:12px;">
+                    <div style="background:rgba(34,197,94,0.08);padding:6px 8px;border-radius:6px;border-left:3px solid var(--success-500);cursor:pointer;transition:background 0.15s;" onclick="StudentsPage.filterByStatus('active_assigned')" title="Bấm để lọc danh sách đang học">
+                        <span style="color:var(--text-muted);display:block;font-size:11px;">Đang học</span>
+                        <strong style="font-size:14px;color:var(--success-600);">${studyingStudents} HV</strong>
                     </div>
-                    <div style="background:rgba(245,158,11,0.08);padding:6px 10px;border-radius:6px;border-left:3px solid var(--warning-500);cursor:pointer;transition:background 0.15s;" onclick="StudentsPage.filterByStatus('unassigned')" title="Bấm để lọc danh sách chưa xếp lớp">
-                        <span style="color:var(--text-muted);display:block;font-size:11px;">Chờ sắp lớp</span>
-                        <strong style="font-size:15px;color:var(--warning-600);">${unassignedStudents} HV</strong>
+                    <div style="background:rgba(245,158,11,0.08);padding:6px 8px;border-radius:6px;border-left:3px solid var(--warning-500);cursor:pointer;transition:background 0.15s;" onclick="StudentsPage.filterByStatus('unassigned')" title="Bấm để lọc danh sách chưa xếp lớp">
+                        <span style="color:var(--text-muted);display:block;font-size:11px;">Chờ lớp</span>
+                        <strong style="font-size:14px;color:var(--warning-600);">${unassignedStudents} HV</strong>
                     </div>
+                    ${inactiveStudents > 0 ? `
+                        <div style="background:rgba(239,68,68,0.08);padding:6px 8px;border-radius:6px;border-left:3px solid var(--danger-500);cursor:pointer;transition:background 0.15s;" onclick="StudentsPage.filterByStatus('inactive')" title="Bấm để lọc danh sách nghỉ học">
+                            <span style="color:var(--text-muted);display:block;font-size:11px;">Đã nghỉ</span>
+                            <strong style="font-size:14px;color:var(--danger-600);">${inactiveStudents} HV</strong>
+                        </div>
+                    ` : ''}
                 </div>
             </div>
             <div class="stat-card">
@@ -194,11 +200,15 @@ Router.register('students', async (container) => {
         </div>
     </div>`;
 
+    let subtitleParts = [`${studyingStudents} đang học (có lớp)`, `${unassignedStudents} chờ sắp lớp`];
+    if (inactiveStudents > 0) subtitleParts.push(`${inactiveStudents} đã nghỉ`);
+    const subtitleText = `${subtitleParts.join(' • ')} (Tổng: ${students.length} học viên)`;
+
     container.innerHTML = `
         <div class="page-header">
             <div>
                 <h1 class="page-title"><i data-lucide="users"></i> Quản lý Học viên</h1>
-                <p class="page-subtitle">${studyingStudents} đang học • ${unassignedStudents} chờ sắp lớp (Tổng: ${students.length} học viên)</p>
+                <p class="page-subtitle">${subtitleText}</p>
             </div>
             <div class="page-actions" style="display:flex;gap:8px;">
                 <button class="btn btn-secondary" onclick="StudentsPage.showExportModal()"><i data-lucide="file-spreadsheet"></i> Xuất Excel</button>
@@ -221,7 +231,7 @@ Router.register('students', async (container) => {
                 <option value="">Tất cả trạng thái (${totalStudents})</option>
                 <option value="active_assigned">🟢 Đang học (Có lớp: ${studyingStudents})</option>
                 <option value="unassigned">🟡 Chờ sắp lớp (${unassignedStudents})</option>
-                ${inactiveStudents > 0 ? `<option value="inactive">🔴 Nghỉ học (${inactiveStudents})</option>` : ''}
+                ${inactiveStudents > 0 ? `<option value="inactive">🔴 Đã nghỉ học (${inactiveStudents})</option>` : ''}
             </select>
             <select class="select" style="max-width:200px;" onchange="StudentsPage.filterByClass(this.value)">
                 <option value="">Tất cả lớp (${classes.length})</option>
