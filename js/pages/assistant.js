@@ -559,6 +559,171 @@ Router.register('assistant', async (container) => {
         `;
     };
 
+    const renderClassProfitability = () => {
+        if (activeClasses.length === 0) {
+            return `<div class="p-4 text-center text-muted">Chưa có lớp học nào đang hoạt động.</div>`;
+        }
+
+        const classPnL = activeClasses.map(cls => {
+            // Students in this class
+            const classStudents = activeStudents.filter(s => s.classIds && s.classIds.includes(cls.id));
+            const studentCount = classStudents.length;
+
+            // Expected revenue
+            let expectedRev = 0;
+            classStudents.forEach(s => {
+                let fee = (s.customFees && s.customFees[cls.id] !== undefined) ? s.customFees[cls.id] : (cls.fee || 0);
+                if (s.discount) fee = fee * (1 - s.discount);
+                expectedRev += fee;
+            });
+
+            // Expected teacher salary
+            let expectedSal = 0;
+            (cls.teacherIds || []).forEach(tid => {
+                const t = teachers.find(x => x.id === tid);
+                if (t && t.salaryConfig && t.salaryConfig[cls.id]) {
+                    const conf = t.salaryConfig[cls.id];
+                    // Count scheduled sessions per month for this class (approx 4 weeks)
+                    const classSchedules = schedules.filter(s => s.classId === cls.id && !s.specificDate);
+                    const sessionsPerMonth = classSchedules.length * 4;
+                    expectedSal += (conf.perShift || 0) * sessionsPerMonth;
+                }
+            });
+
+            // Actual revenue from paid tuitions this month
+            const paidTuitions = allTuitions.filter(t => {
+                if (t.status !== 'paid') return false;
+                if (!t.dueDate || !t.dueDate.startsWith(currentMonthStr)) return false;
+                if (t.classId === cls.id) return true;
+                if (t.classId === 'Nhiều môn' && t.studentId) {
+                    const student = students.find(s => s.id === t.studentId);
+                    return student && (student.classIds || []).includes(cls.id);
+                }
+                return false;
+            });
+
+            const actualRev = paidTuitions.reduce((sum, t) => {
+                if (t.classId === cls.id) return sum + Number(t.amount || 0);
+                const student = students.find(s => s.id === t.studentId);
+                if (student && student.classIds && student.classIds.length > 1) {
+                    const thisFee = (student.customFees && student.customFees[cls.id] !== undefined) ? student.customFees[cls.id] : (cls.fee || 0);
+                    let totalFee = 0;
+                    student.classIds.forEach(cid => {
+                        const c2 = classes.find(cc => cc.id === cid);
+                        if (c2) totalFee += (student.customFees && student.customFees[cid] !== undefined) ? student.customFees[cid] : (c2.fee || 0);
+                    });
+                    if (totalFee > 0) return sum + Math.round(Number(t.amount || 0) * thisFee / totalFee);
+                }
+                return sum + Number(t.amount || 0);
+            }, 0);
+
+            // Actual teacher salary from attendance
+            const classTeacherAtt = teacherAttendanceCurrentMonth.filter(r => r.classId === cls.id);
+            let actualSal = 0;
+            classTeacherAtt.forEach(r => {
+                let rSalary = r.salary || 0;
+                if (r.salaryMultiplier !== undefined) rSalary *= r.salaryMultiplier;
+                if (r.penaltyAmount) rSalary -= r.penaltyAmount;
+                if (rSalary < 0) rSalary = 0;
+                actualSal += rSalary;
+            });
+
+            const expectedProfit = expectedRev - expectedSal;
+            const actualProfit = actualRev - actualSal;
+
+            return {
+                id: cls.id,
+                name: cls.name,
+                subject: cls.subject || '',
+                studentCount,
+                expectedRev,
+                expectedSal,
+                expectedProfit,
+                actualRev,
+                actualSal,
+                actualProfit,
+                margin: expectedRev > 0 ? ((expectedProfit / expectedRev) * 100) : 0
+            };
+        });
+
+        // Sort: losing classes first, then by profit ascending
+        classPnL.sort((a, b) => a.expectedProfit - b.expectedProfit);
+
+        const losing = classPnL.filter(c => c.expectedProfit < 0);
+        const breakingEven = classPnL.filter(c => c.expectedProfit === 0);
+        const profitable = classPnL.filter(c => c.expectedProfit > 0).sort((a, b) => b.expectedProfit - a.expectedProfit);
+
+        let html = '';
+
+        // Summary
+        html += `<div style="display:flex;gap:16px;margin-bottom:16px;flex-wrap:wrap;">`;
+        if (losing.length > 0) {
+            html += `<div style="flex:1;min-width:100px;padding:12px;border-radius:var(--radius-md);background:rgba(239,68,68,0.08);border-left:3px solid var(--danger-500);text-align:center;">
+                <div style="font-size:22px;font-weight:800;color:var(--danger-500);">${losing.length}</div>
+                <div style="font-size:12px;color:var(--text-muted);">Lớp đang lỗ</div>
+            </div>`;
+        }
+        html += `<div style="flex:1;min-width:100px;padding:12px;border-radius:var(--radius-md);background:rgba(34,197,94,0.08);border-left:3px solid var(--success-500);text-align:center;">
+            <div style="font-size:22px;font-weight:800;color:var(--success-500);">${profitable.length}</div>
+            <div style="font-size:12px;color:var(--text-muted);">Lớp có lãi</div>
+        </div>`;
+        html += `</div>`;
+
+        // Table
+        html += `<div class="table-container"><table><thead><tr>
+            <th>Lớp</th><th style="text-align:center;">Sĩ số</th>
+            <th style="text-align:right;">DT dự kiến</th><th style="text-align:right;">Lương GV</th>
+            <th style="text-align:right;">Lợi nhuận DK</th><th style="text-align:center;">Biên LN</th>
+            <th style="text-align:center;">Trạng thái</th>
+        </tr></thead><tbody>`;
+
+        // Show losing first, then profitable
+        const allSorted = [...losing, ...breakingEven, ...profitable];
+        allSorted.forEach(c => {
+            const isLoss = c.expectedProfit < 0;
+            const rowBg = isLoss ? 'rgba(239,68,68,0.04)' : '';
+            const profitColor = isLoss ? 'var(--danger-500)' : 'var(--success-500)';
+            const statusBadge = isLoss
+                ? `<span class="badge badge-danger">📉 Đang lỗ</span>`
+                : c.expectedProfit === 0
+                    ? `<span class="badge badge-warning">⚖️ Hoà vốn</span>`
+                    : c.margin >= 50
+                        ? `<span class="badge badge-success">🔥 Lãi tốt</span>`
+                        : `<span class="badge badge-success">✅ Có lãi</span>`;
+
+            html += `<tr style="background:${rowBg};cursor:pointer;" onclick="Router.navigate('classes')">
+                <td>
+                    <div style="font-weight:600;">${c.name}</div>
+                    ${c.subject ? `<div style="font-size:12px;color:var(--text-muted);">${c.subject}</div>` : ''}
+                </td>
+                <td style="text-align:center;">${c.studentCount} HV</td>
+                <td style="text-align:right;color:var(--info-500);">${DB.formatCurrency(c.expectedRev)}</td>
+                <td style="text-align:right;color:var(--danger-400);">${DB.formatCurrency(c.expectedSal)}</td>
+                <td style="text-align:right;font-weight:700;color:${profitColor};">${DB.formatCurrency(c.expectedProfit)}</td>
+                <td style="text-align:center;font-weight:600;color:${profitColor};">${c.margin.toFixed(0)}%</td>
+                <td style="text-align:center;">${statusBadge}</td>
+            </tr>`;
+        });
+
+        html += `</tbody></table></div>`;
+
+        // Tips for losing classes
+        if (losing.length > 0) {
+            html += `<div style="margin-top:16px;padding:14px;background:rgba(239,68,68,0.06);border-radius:var(--radius-md);border:1px dashed var(--danger-400);">`;
+            html += `<div style="font-weight:600;margin-bottom:8px;color:var(--danger-500);"><i data-lucide="lightbulb" style="width:16px;height:16px;margin-right:6px;vertical-align:text-bottom;"></i>Gợi ý cải thiện</div>`;
+            html += `<ul style="margin:0;padding-left:20px;font-size:13px;color:var(--text-secondary);line-height:1.8;">`;
+            losing.forEach(c => {
+                const minStudents = c.expectedSal > 0 && (c.expectedRev / (c.studentCount || 1)) > 0
+                    ? Math.ceil(c.expectedSal / (c.expectedRev / (c.studentCount || 1)))
+                    : '?';
+                html += `<li><strong>${c.name}</strong>: Cần tối thiểu <strong>${minStudents} HV</strong> để hoà vốn (hiện có ${c.studentCount} HV). Cân nhắc tuyển thêm hoặc giảm chi phí giảng dạy.</li>`;
+            });
+            html += `</ul></div>`;
+        }
+
+        return html;
+    };
+
     const renderExpenseChart = () => {
         return `
             <div style="position: relative; height: 200px; width: 100%;">
@@ -634,7 +799,7 @@ Router.register('assistant', async (container) => {
                 </div>
             </div>
 
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 24px;">
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 24px; margin-bottom: 24px;">
                 <div class="card slide-up">
                     <div class="card-header"><h3 style="margin:0;font-size:16px;font-weight:600;"><i data-lucide="bar-chart-2" style="width:18px;height:18px;margin-right:8px;vertical-align:text-bottom;"></i> Biến động so với tháng trước</h3></div>
                     <div class="card-body">${renderMonthlyTrends()}</div>
@@ -642,6 +807,13 @@ Router.register('assistant', async (container) => {
                 <div class="card slide-up">
                     <div class="card-header"><h3 style="margin:0;font-size:16px;font-weight:600;"><i data-lucide="donut" style="width:18px;height:18px;margin-right:8px;vertical-align:text-bottom;"></i> Cơ cấu chi phí</h3></div>
                     <div class="card-body">${renderExpenseChart()}</div>
+                </div>
+            </div>
+
+            <div style="margin-bottom: 24px;">
+                <div class="card slide-up">
+                    <div class="card-header"><h3 style="margin:0;font-size:16px;font-weight:600;"><i data-lucide="scale" style="width:18px;height:18px;margin-right:8px;vertical-align:text-bottom;"></i> Lãi / Lỗ theo từng lớp</h3></div>
+                    <div class="card-body" style="padding:0 0 16px 0;">${renderClassProfitability()}</div>
                 </div>
             </div>
         `;
