@@ -347,6 +347,10 @@ const DB = {
         return await window.db.collection('users').doc(userId).update({ salaryConfig });
     },
 
+    async deleteUser(userId) {
+        return await window.db.collection('users').doc(userId).delete();
+    },
+
     async updateTeacherAttendanceSalaries(teacherId, month, salaryConfig) {
         const snap = await window.db.collection('teacherAttendance')
             .where('teacherId', '==', teacherId)

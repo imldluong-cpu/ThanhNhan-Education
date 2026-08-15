@@ -25,12 +25,13 @@ Router.register('users', async (container) => {
                     <td>${u.email}</td>
                     <td><span class="badge badge-${u.role === 'owner' ? 'primary' : u.role === 'teacher' ? 'info' : u.role === 'staff' ? 'success' : 'warning'}">${Auth.getRoleDisplay(u.role)}</span></td>
                     <td><span class="badge badge-${u.status === 'active' ? 'success' : 'danger'}">${u.status === 'active' ? 'Hoạt động' : 'Đã khóa'}</span></td>
-                    <td><div class="table-actions">
+                    <td><div class="table-actions" style="display:flex;gap:6px;flex-wrap:wrap;">
                         ${!isOwner && !isMe ? `
                             <button class="btn btn-secondary btn-sm" onclick="UsersPage.editRole('${u.id}')">Phân quyền</button>
-                            <button class="btn btn-${u.status === 'active' ? 'danger' : 'success'} btn-sm" onclick="UsersPage.toggleStatus('${u.id}', '${u.status}')">${u.status === 'active' ? 'Khóa' : 'Mở khóa'}</button>
+                            <button class="btn btn-${u.status === 'active' ? 'warning' : 'success'} btn-sm" onclick="UsersPage.toggleStatus('${u.id}', '${u.status}')">${u.status === 'active' ? 'Khóa' : 'Mở khóa'}</button>
                             ${u.role === 'teacher' ? `<button class="btn btn-info btn-sm" onclick="UsersPage.editSalary('${u.id}')">💰 Cài lương</button>` : ''}
-                        ` : (isOwner && !isMe ? `<span class="text-sm text-muted">Không thể sửa Chủ TT</span>` : '')}
+                            <button class="btn btn-danger btn-sm" title="Xóa tài khoản" onclick="UsersPage.remove('${u.id}', '${(u.displayName || u.email).replace(/'/g, "\\'")}')">🗑️ Xóa</button>
+                        ` : (isOwner && !isMe ? `<span class="text-sm text-muted">Chủ TT (Bảo vệ)</span>` : '<span class="text-sm text-muted">Tài khoản của bạn</span>')}
                     </div></td>
                 </tr>`;
             }).join('')}</tbody>
@@ -84,6 +85,25 @@ Router.register('users', async (container) => {
                 users = await DB.getUsers();
                 render();
             } catch(e) { Toast.error('Lỗi', e.message); }
+        },
+
+        remove(id, name) {
+            Modal.confirm({
+                title: 'Xóa người dùng',
+                message: `Bạn có chắc chắn muốn xóa vĩnh viễn tài khoản <strong>${name}</strong> khỏi hệ thống?<br><br><span style="color:var(--danger-500);font-size:13px;">⚠️ Hành động này không thể hoàn tác.</span>`,
+                confirmText: 'Xóa người dùng',
+                danger: true
+            });
+            Modal.bindConfirm(async () => {
+                try {
+                    await DB.deleteUser(id);
+                    Toast.success('Đã xóa người dùng thành công');
+                    users = await DB.getUsers();
+                    render();
+                } catch(e) {
+                    Toast.error('Lỗi', e.message);
+                }
+            });
         },
 
         async editSalary(id) {
