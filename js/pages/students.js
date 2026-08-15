@@ -11,11 +11,21 @@ Router.register('students', async (container) => {
     } catch(e) { console.warn(e); }
 
     let filterClass = '';
+    let filterStatus = '';
     let searchTerm = '';
 
     function getFiltered() {
         let list = students;
         if (filterClass) list = list.filter(s => s.classIds && s.classIds.includes(filterClass));
+        if (filterStatus === 'active_assigned') {
+            list = list.filter(s => s.status === 'active' && s.classIds && s.classIds.length > 0);
+        } else if (filterStatus === 'unassigned') {
+            list = list.filter(s => s.status !== 'inactive' && (!s.classIds || s.classIds.length === 0));
+        } else if (filterStatus === 'inactive') {
+            list = list.filter(s => s.status === 'inactive');
+        } else if (filterStatus === 'active') {
+            list = list.filter(s => s.status === 'active');
+        }
         if (searchTerm) {
             const q = searchTerm.toLowerCase();
             list = list.filter(s => (s.name || '').toLowerCase().includes(q) || (s.parentPhone || '').includes(q));
@@ -69,27 +79,39 @@ Router.register('students', async (container) => {
         if (!tbody) return;
 
         if (filtered.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="${canEdit ? 9 : 8}"><div class="empty-state"><h3>Chưa có học viên</h3><p>Nhấn "Thêm học viên" để bắt đầu</p></div></td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="${canEdit ? 9 : 8}"><div class="empty-state"><h3>Chưa có học viên</h3><p>Nhấn "Thêm học viên" để bắt đầu hoặc chọn bộ lọc khác</p></div></td></tr>`;
         } else {
-            tbody.innerHTML = filtered.map((s, i) => `<tr>
-                ${canEdit ? `<td><input type="checkbox" class="student-cb" value="${s.id}" onchange="StudentsPage.toggleBulk()"></td>` : ''}
-                <td>${i + 1}</td>
-                <td><strong>${s.name || ''}</strong></td>
-                <td>${s.grade || '—'}</td>
-                <td>${s.school || '—'}</td>
-                <td>${s.parentPhone || '—'}</td>
-                <td>${getClassNames(s.classIds)}</td>
-                <td><span class="badge badge-${s.status === 'active' ? 'success' : s.status === 'pending' ? 'warning' : 'danger'}">${s.status === 'active' ? 'Đang học' : s.status === 'pending' ? 'Chờ sắp lớp' : 'Nghỉ học'}</span></td>
-                <td>
-                    <div class="table-actions">
-                        ${isOwnerAdmin ? `<button class="btn-icon" title="Báo cáo học tập" onclick="StudentsPage.showReport('${s.id}')"><i data-lucide="line-chart"></i></button>` : ''}
-                        ${canEdit ? `
-                            <button class="btn-icon" title="Sửa" onclick="StudentsPage.edit('${s.id}')"><i data-lucide="pencil"></i></button>
-                            <button class="btn-icon" title="Xóa" onclick="StudentsPage.remove('${s.id}', '${(s.name || '').replace(/'/g, "\\'")}')"><i data-lucide="trash-2"></i></button>
-                        ` : ''}
-                    </div>
-                </td>
-            </tr>`).join('');
+            tbody.innerHTML = filtered.map((s, i) => {
+                const hasClass = s.classIds && s.classIds.length > 0;
+                let statusBadge = '';
+                if (s.status === 'inactive') {
+                    statusBadge = '<span class="badge badge-danger">Nghỉ học</span>';
+                } else if (s.status === 'pending' || !hasClass) {
+                    statusBadge = '<span class="badge badge-warning" title="Chưa được gán vào lớp học nào">Chờ sắp lớp</span>';
+                } else {
+                    statusBadge = '<span class="badge badge-success">Đang học</span>';
+                }
+
+                return `<tr>
+                    ${canEdit ? `<td><input type="checkbox" class="student-cb" value="${s.id}" onchange="StudentsPage.toggleBulk()"></td>` : ''}
+                    <td>${i + 1}</td>
+                    <td><strong>${s.name || ''}</strong></td>
+                    <td>${s.grade || '—'}</td>
+                    <td>${s.school || '—'}</td>
+                    <td>${s.parentPhone || '—'}</td>
+                    <td>${getClassNames(s.classIds)}</td>
+                    <td>${statusBadge}</td>
+                    <td>
+                        <div class="table-actions">
+                            ${isOwnerAdmin ? `<button class="btn-icon" title="Báo cáo học tập" onclick="StudentsPage.showReport('${s.id}')"><i data-lucide="line-chart"></i></button>` : ''}
+                            ${canEdit ? `
+                                <button class="btn-icon" title="Sửa" onclick="StudentsPage.edit('${s.id}')"><i data-lucide="pencil"></i></button>
+                                <button class="btn-icon" title="Xóa" onclick="StudentsPage.remove('${s.id}', '${(s.name || '').replace(/'/g, "\\'")}')"><i data-lucide="trash-2"></i></button>
+                            ` : ''}
+                        </div>
+                    </td>
+                </tr>`;
+            }).join('');
         }
         if (window.lucide) lucide.createIcons();
         
@@ -105,59 +127,78 @@ Router.register('students', async (container) => {
         }
     }
 
-        const isOwnerAdmin = Auth.hasAnyRole('owner', 'admin', 'staff');
-        const totalStudents = students.length;
-        const gradeCounts = {};
-        const schoolCounts = {};
+    const isOwnerAdmin = Auth.hasAnyRole('owner', 'admin', 'staff');
+    const totalStudents = students.length;
+    const studyingStudents = students.filter(s => s.status === 'active' && s.classIds && s.classIds.length > 0).length;
+    const unassignedStudents = students.filter(s => s.status !== 'inactive' && (!s.classIds || s.classIds.length === 0)).length;
+    const inactiveStudents = students.filter(s => s.status === 'inactive').length;
 
-        students.forEach(s => {
-            const grade = s.grade || 'Chưa phân khối';
-            gradeCounts[grade] = (gradeCounts[grade] || 0) + 1;
-            if (s.school) {
-                const school = s.school.trim();
-                schoolCounts[school] = (schoolCounts[school] || 0) + 1;
-            }
-        });
+    const gradeCounts = {};
+    const schoolCounts = {};
 
-        const topSchools = Object.entries(schoolCounts).sort((a, b) => b[1] - a[1]).slice(0, 5);
+    students.forEach(s => {
+        const grade = s.grade || 'Chưa phân khối';
+        gradeCounts[grade] = (gradeCounts[grade] || 0) + 1;
+        if (s.school) {
+            const school = s.school.trim();
+            schoolCounts[school] = (schoolCounts[school] || 0) + 1;
+        }
+    });
 
-        let dashboardHTML = '<div class="stats-grid mb-6" style="grid-template-columns:repeat(auto-fit, minmax(250px, 1fr));">';
-        if (isOwnerAdmin) {
-            dashboardHTML += `
-                <div class="stat-card">
-                    <div class="stat-label">Tổng học viên toàn trung tâm</div>
-                    <div class="stat-value" style="font-size:2rem;color:var(--primary-600);">${totalStudents}</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-label mb-2" style="font-weight:600;color:var(--text-color);">Học viên theo khối</div>
-                    <div style="max-height:100px;overflow-y:auto;font-size:13px;padding-right:8px;">
-                        ${Object.entries(gradeCounts).sort((a,b)=>b[1]-a[1]).map(([g, count]) => `
-                            <div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border-color);">
-                                <span>${g}</span><strong>${count}</strong>
-                            </div>
-                        `).join('')}
+    const topSchools = Object.entries(schoolCounts).sort((a, b) => b[1] - a[1]).slice(0, 5);
+
+    let dashboardHTML = '<div class="stats-grid mb-6" style="grid-template-columns:repeat(auto-fit, minmax(260px, 1fr));">';
+    if (isOwnerAdmin) {
+        dashboardHTML += `
+            <div class="stat-card" style="display:flex;flex-direction:column;justify-content:space-between;">
+                <div>
+                    <div class="stat-label" style="font-weight:600;margin-bottom:2px;">Tổng học viên toàn trung tâm</div>
+                    <div style="display:flex;align-items:baseline;gap:8px;">
+                        <span class="stat-value" style="font-size:2rem;font-weight:800;color:var(--primary-600);">${totalStudents}</span>
+                        <span style="font-size:13px;color:var(--text-muted);">trong hệ thống</span>
                     </div>
                 </div>
-            `;
-        }
-        dashboardHTML += `
-            <div class="stat-card">
-                <div class="stat-label mb-2" style="font-weight:600;color:var(--text-color);">Top 5 Trường (Đông nhất)</div>
-                <div style="max-height:100px;overflow-y:auto;font-size:13px;padding-right:8px;">
-                    ${topSchools.length > 0 ? topSchools.map(([school, count], idx) => `
-                        <div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border-color);">
-                            <span>${idx + 1}. ${school}</span><strong>${count} hs</strong>
-                        </div>
-                    `).join('') : '<div class="text-secondary">Chưa có dữ liệu</div>'}
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px;padding-top:10px;border-top:1px dashed var(--border-color);font-size:12px;">
+                    <div style="background:rgba(34,197,94,0.08);padding:6px 10px;border-radius:6px;border-left:3px solid var(--success-500);cursor:pointer;transition:background 0.15s;" onclick="StudentsPage.filterByStatus('active_assigned')" title="Bấm để lọc danh sách đang học">
+                        <span style="color:var(--text-muted);display:block;font-size:11px;">Đang học (Có lớp)</span>
+                        <strong style="font-size:15px;color:var(--success-600);">${studyingStudents} HV</strong>
+                    </div>
+                    <div style="background:rgba(245,158,11,0.08);padding:6px 10px;border-radius:6px;border-left:3px solid var(--warning-500);cursor:pointer;transition:background 0.15s;" onclick="StudentsPage.filterByStatus('unassigned')" title="Bấm để lọc danh sách chưa xếp lớp">
+                        <span style="color:var(--text-muted);display:block;font-size:11px;">Chờ sắp lớp</span>
+                        <strong style="font-size:15px;color:var(--warning-600);">${unassignedStudents} HV</strong>
+                    </div>
                 </div>
             </div>
-        </div>`;
+            <div class="stat-card">
+                <div class="stat-label mb-2" style="font-weight:600;color:var(--text-color);">Học viên theo khối</div>
+                <div style="max-height:105px;overflow-y:auto;font-size:13px;padding-right:8px;">
+                    ${Object.entries(gradeCounts).sort((a,b)=>b[1]-a[1]).map(([g, count]) => `
+                        <div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border-color);">
+                            <span>${g}</span><strong>${count}</strong>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+    }
+    dashboardHTML += `
+        <div class="stat-card">
+            <div class="stat-label mb-2" style="font-weight:600;color:var(--text-color);">Top 5 Trường (Đông nhất)</div>
+            <div style="max-height:105px;overflow-y:auto;font-size:13px;padding-right:8px;">
+                ${topSchools.length > 0 ? topSchools.map(([school, count], idx) => `
+                    <div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border-color);">
+                        <span>${idx + 1}. ${school}</span><strong>${count} hs</strong>
+                    </div>
+                `).join('') : '<div class="text-secondary">Chưa có dữ liệu</div>'}
+            </div>
+        </div>
+    </div>`;
 
-        container.innerHTML = `
+    container.innerHTML = `
         <div class="page-header">
             <div>
                 <h1 class="page-title"><i data-lucide="users"></i> Quản lý Học viên</h1>
-                <p class="page-subtitle">${students.length} học viên trong hệ thống</p>
+                <p class="page-subtitle">${studyingStudents} đang học • ${unassignedStudents} chờ sắp lớp (Tổng: ${students.length} học viên)</p>
             </div>
             <div class="page-actions" style="display:flex;gap:8px;">
                 <button class="btn btn-secondary" onclick="StudentsPage.showExportModal()"><i data-lucide="file-spreadsheet"></i> Xuất Excel</button>
@@ -171,13 +212,19 @@ Router.register('students', async (container) => {
 
         ${dashboardHTML}
 
-        <div class="filter-bar">
-            <div class="search-box">
+        <div class="filter-bar" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+            <div class="search-box" style="flex:1;min-width:200px;">
                 <i data-lucide="search"></i>
                 <input type="text" class="input" placeholder="Tìm theo tên, SĐT..." oninput="StudentsPage.search(this.value)">
             </div>
+            <select class="select" id="filter-status-select" style="max-width:210px;" onchange="StudentsPage.filterByStatus(this.value)">
+                <option value="">Tất cả trạng thái (${totalStudents})</option>
+                <option value="active_assigned">🟢 Đang học (Có lớp: ${studyingStudents})</option>
+                <option value="unassigned">🟡 Chờ sắp lớp (${unassignedStudents})</option>
+                ${inactiveStudents > 0 ? `<option value="inactive">🔴 Nghỉ học (${inactiveStudents})</option>` : ''}
+            </select>
             <select class="select" style="max-width:200px;" onchange="StudentsPage.filterByClass(this.value)">
-                <option value="">Tất cả lớp</option>
+                <option value="">Tất cả lớp (${classes.length})</option>
                 ${classes.map(c => `<option value="${c.id}">${c.name}</option>`).join('')}
             </select>
         </div>
@@ -209,6 +256,12 @@ Router.register('students', async (container) => {
     window.StudentsPage = {
         search(val) { searchTerm = val; renderTable(); },
         filterByClass(val) { filterClass = val; renderTable(); },
+        filterByStatus(val) {
+            filterStatus = val;
+            const sel = document.getElementById('filter-status-select');
+            if (sel) sel.value = val;
+            renderTable();
+        },
 
         // === BULK ACTIONS ===
         toggleBulk() {
