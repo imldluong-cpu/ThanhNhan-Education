@@ -20,7 +20,7 @@ Router.register('students', async (container) => {
         if (filterStatus === 'active_assigned') {
             list = list.filter(s => s.status === 'active' && s.classIds && s.classIds.length > 0);
         } else if (filterStatus === 'unassigned') {
-            list = list.filter(s => s.status !== 'inactive' && (!s.classIds || s.classIds.length === 0));
+            list = list.filter(s => s.status === 'pending' || (s.status !== 'inactive' && (!s.classIds || s.classIds.length === 0)));
         } else if (filterStatus === 'inactive') {
             list = list.filter(s => s.status === 'inactive');
         } else if (filterStatus === 'active') {
@@ -130,7 +130,7 @@ Router.register('students', async (container) => {
     const isOwnerAdmin = Auth.hasAnyRole('owner', 'admin', 'staff');
     const totalStudents = students.length;
     const studyingStudents = students.filter(s => s.status === 'active' && s.classIds && s.classIds.length > 0).length;
-    const unassignedStudents = students.filter(s => s.status !== 'inactive' && (!s.classIds || s.classIds.length === 0)).length;
+    const unassignedStudents = students.filter(s => s.status === 'pending' || (s.status !== 'inactive' && (!s.classIds || s.classIds.length === 0))).length;
     const inactiveStudents = students.filter(s => s.status === 'inactive').length;
 
     const gradeCounts = {};
