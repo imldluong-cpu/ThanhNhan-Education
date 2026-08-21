@@ -9,6 +9,7 @@ Router.register('teacher-attendance', async (container) => {
     const currentMonth = DB.currentMonth();
     let selectedMonth = currentMonth;
     let filterTeacherId = ''; // For Owner to filter by a specific teacher
+    let filterClassId = ''; // For filtering by a specific class
     let mySalaryConfig = {};
 
     try {
@@ -84,9 +85,14 @@ Router.register('teacher-attendance', async (container) => {
     }
 
     function getMyRecords() {
-        if (isTeacher) return records.filter(r => isMyRecord(r));
-        if (filterTeacherId) return records.filter(r => isTeacherMatch(r, filterTeacherId));
-        return records;
+        let list = records;
+        if (isTeacher) list = list.filter(r => isMyRecord(r));
+        else if (filterTeacherId) list = list.filter(r => isTeacherMatch(r, filterTeacherId));
+        
+        if (filterClassId) {
+            list = list.filter(r => r.classId === filterClassId);
+        }
+        return list;
     }
 
     const shiftNames = {
@@ -101,6 +107,17 @@ Router.register('teacher-attendance', async (container) => {
         const area = document.getElementById('ta-area');
         if (!area) return;
         const displayedRecords = getMyRecords();
+        const baseTeacherRecords = isTeacher ? records.filter(r => isMyRecord(r)) : (filterTeacherId ? records.filter(r => isTeacherMatch(r, filterTeacherId)) : records);
+
+        // Group summary by class for the current teacher/view
+        const classSummary = {};
+        baseTeacherRecords.forEach(r => {
+            const cid = r.classId || 'other';
+            if (!classSummary[cid]) classSummary[cid] = { total: 0, hours: 0, salary: 0 };
+            classSummary[cid].total++;
+            classSummary[cid].hours += (r.hours || 0);
+            classSummary[cid].salary += (r.finalSalary || 0);
+        });
 
         const teacherAdjustments = {};
         adjustments.forEach(a => {
@@ -213,13 +230,38 @@ Router.register('teacher-attendance', async (container) => {
             `;
         }
 
+        // Render Class Filter Chips if multiple classes exist
+        const classIdsInSummary = Object.keys(classSummary);
+        if (classIdsInSummary.length > 0) {
+            html += `
+                <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px; align-items:center; background:var(--bg-card); padding:10px 14px; border-radius:10px; border:1px solid var(--border-color);">
+                    <span style="font-size:12px; font-weight:700; color:var(--text-secondary); display:flex; align-items:center; gap:6px;">
+                        <i data-lucide="layers" style="width:14px;height:14px;color:var(--primary-500);"></i> Xem theo lớp:
+                    </span>
+                    <button class="btn btn-sm ${!filterClassId ? 'btn-primary' : 'btn-secondary'}" style="border-radius:20px; font-size:12px; padding:4px 14px; font-weight:600;" onclick="TAPage.changeClass('')">
+                        Tất cả lớp (${baseTeacherRecords.length} ca)
+                    </button>
+                    ${classIdsInSummary.map(cid => {
+                        const cs = classSummary[cid];
+                        const isActive = filterClassId === cid;
+                        return `
+                            <button class="btn btn-sm ${isActive ? 'btn-primary' : 'btn-secondary'}" style="border-radius:20px; font-size:12px; padding:4px 14px; font-weight:600;" onclick="TAPage.changeClass('${cid}')">
+                                📚 ${getClassName(cid)} (${cs.total} ca • ${cs.hours.toFixed(1)}h)
+                            </button>
+                        `;
+                    }).join('')}
+                </div>
+            `;
+        }
+
         // Records table
         html += `
             <div class="card mb-4">
-                <div class="card-header" style="display:flex; justify-content:space-between; align-items:center;">
+                <div class="card-header" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
                     <h3 style="margin:0; font-size:15px; font-weight:700;">
-                        <i data-lucide="list"></i> Danh sách ca dạy ${filterTeacherId ? `- ${getTeacherName(filterTeacherId)}` : `(Tổng: ${displayedRecords.length} ca)`}
+                        <i data-lucide="list"></i> Danh sách ca dạy ${filterTeacherId ? `- ${getTeacherName(filterTeacherId)}` : ''} ${filterClassId ? `[Lớp: ${getClassName(filterClassId)}]` : ''} (Hiện có: ${displayedRecords.length} ca)
                     </h3>
+                    ${filterClassId ? `<button class="btn btn-sm btn-ghost" onclick="TAPage.changeClass('')">✕ Bỏ lọc lớp</button>` : ''}
                 </div>
                 <div class="table-container">
                     <table>
@@ -351,11 +393,15 @@ Router.register('teacher-attendance', async (container) => {
         <div class="filter-bar" style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
             <input type="month" class="input" style="max-width:180px;" value="${selectedMonth}" onchange="TAPage.changeMonth(this.value)">
             ${isOwner ? `
-                <select class="select" id="filter-teacher-select" style="max-width:260px;" onchange="TAPage.changeTeacher(this.value)">
+                <select class="select" id="filter-teacher-select" style="max-width:240px;" onchange="TAPage.changeTeacher(this.value)">
                     <option value="">-- Tất cả giáo viên (${teachers.length}) --</option>
                     ${teachers.map(t => `<option value="${t.id}" ${filterTeacherId === t.id ? 'selected' : ''}>👨‍🏫 ${t.displayName || t.email}</option>`).join('')}
                 </select>
             ` : ''}
+            <select class="select" id="filter-class-select" style="max-width:240px;" onchange="TAPage.changeClass(this.value)">
+                <option value="">-- Tất cả lớp học (${classes.length}) --</option>
+                ${classes.map(c => `<option value="${c.id}" ${filterClassId === c.id ? 'selected' : ''}>📚 ${c.name}</option>`).join('')}
+            </select>
         </div>
         <div id="ta-area"></div>
     `;
@@ -375,8 +421,18 @@ Router.register('teacher-attendance', async (container) => {
 
         changeTeacher(tid) {
             filterTeacherId = tid;
+            filterClassId = ''; // Reset class filter when changing teacher
             const sel = document.getElementById('filter-teacher-select');
             if (sel) sel.value = tid;
+            const classSel = document.getElementById('filter-class-select');
+            if (classSel) classSel.value = '';
+            render();
+        },
+
+        changeClass(cid) {
+            filterClassId = cid;
+            const sel = document.getElementById('filter-class-select');
+            if (sel) sel.value = cid;
             render();
         },
 
