@@ -1,5 +1,5 @@
 // ============================================
-// TEACHER ATTENDANCE - GPS, Salary, Schedule Filter
+// TEACHER ATTENDANCE - GPS, Salary, Teacher Filter & Auto 1h30m
 // ============================================
 
 Router.register('teacher-attendance', async (container) => {
@@ -8,6 +8,7 @@ Router.register('teacher-attendance', async (container) => {
     let records = [], teachers = [], classes = [], settings = {}, schedules = [], adjustments = [];
     const currentMonth = DB.currentMonth();
     let selectedMonth = currentMonth;
+    let filterTeacherId = ''; // For Owner to filter by a specific teacher
     let mySalaryConfig = {};
 
     try {
@@ -15,7 +16,7 @@ Router.register('teacher-attendance', async (container) => {
         records = await DB.getTeacherAttendance(selectedMonth).catch(() => []);
         adjustments = await DB.getSalaryAdjustments(selectedMonth).catch(() => []);
         schedules = await DB.getSchedules().catch(() => []);
-        classes = await DB.getClasses().catch(() => []); // Fetch all classes so teachers can substitute or check-in if assigned by custom name
+        classes = await DB.getClasses().catch(() => []);
         
         if (isOwner) teachers = await DB.getTeachers().catch(() => []);
         if (isTeacher && window.currentUser && window.currentUser.id) {
@@ -46,17 +47,30 @@ Router.register('teacher-attendance', async (container) => {
         const rTIdLower = rTId.toLowerCase();
         const rTNameLower = (r.teacherName || '').trim().toLowerCase();
         
-        // Exact UID or email match
         if (myId && rTId === myId) return true;
         if (myEmail && (rTIdLower === myEmail || rTNameLower === myEmail)) return true;
-        
-        // Name match (case-insensitive & trimmed)
         if (myName && (rTIdLower === myName || rTNameLower === myName)) return true;
-        
-        // Fuzzy / Substring name match (e.g. "Bảo Khuyên" vs "Lưu Ngọc Bảo Khuyên")
         if (myName && rTIdLower && (myName.includes(rTIdLower) || rTIdLower.includes(myName))) return true;
         if (myName && rTNameLower && (myName.includes(rTNameLower) || rTNameLower.includes(myName))) return true;
         
+        return false;
+    }
+
+    function isTeacherMatch(r, tid) {
+        if (!tid) return true;
+        const rTId = (r.teacherId || '').trim();
+        const rTIdLower = rTId.toLowerCase();
+        const rTNameLower = (r.teacherName || '').trim().toLowerCase();
+        
+        const t = teachers.find(x => x.id === tid);
+        const tName = ((t ? t.displayName : '') || '').trim().toLowerCase();
+        const tEmail = ((t ? t.email : '') || '').trim().toLowerCase();
+
+        if (rTId === tid) return true;
+        if (tEmail && (rTIdLower === tEmail || rTNameLower === tEmail)) return true;
+        if (tName && (rTIdLower === tName || rTNameLower === tName)) return true;
+        if (tName && rTIdLower && (tName.includes(rTIdLower) || rTIdLower.includes(tName))) return true;
+        if (tName && rTNameLower && (tName.includes(rTNameLower) || rTNameLower.includes(tName))) return true;
         return false;
     }
 
@@ -71,30 +85,22 @@ Router.register('teacher-attendance', async (container) => {
 
     function getMyRecords() {
         if (isTeacher) return records.filter(r => isMyRecord(r));
+        if (filterTeacherId) return records.filter(r => isTeacherMatch(r, filterTeacherId));
         return records;
     }
 
-    function getClassesForDate(dateStr) {
-        if (!dateStr) return [];
-        // Parse date locally to avoid UTC timezone offset issues
-        const [y, m, d] = dateStr.split('-');
-        const dateObj = new Date(y, m - 1, d);
-        const day = dateObj.getDay();
-        const firestoreDay = day === 0 ? 8 : day + 1;
-        
-        const scheduledClassIds = new Set(schedules.filter(s => {
-            if (s.specificDate) return s.specificDate === dateStr;
-            return Number(s.dayOfWeek) === firestoreDay;
-        }).map(s => s.classId));
-        return classes.filter(c => scheduledClassIds.has(c.id));
-    }
-
-    const shiftNames = { morning: 'Ca sáng', afternoon: 'Ca chiều', evening: 'Ca tối', custom: 'Tùy chỉnh' };
+    const shiftNames = {
+        lesson_1h30: 'Buổi 1h30p',
+        morning: 'Ca sáng (7:00-11:30)',
+        afternoon: 'Ca chiều (13:00-17:30)',
+        evening: 'Ca tối (18:00-21:00)',
+        custom: 'Tùy chỉnh'
+    };
 
     function render() {
         const area = document.getElementById('ta-area');
         if (!area) return;
-        const myRecords = getMyRecords();
+        const displayedRecords = getMyRecords();
 
         const teacherAdjustments = {};
         adjustments.forEach(a => {
@@ -103,14 +109,15 @@ Router.register('teacher-attendance', async (container) => {
             teacherAdjustments[tid].push(a);
         });
 
-        // Summary
-        const teacherSummary = {};
+        // Compute summary for all or specific teacher
+        const allTeachersSummary = {};
         let totalSalaryAll = 0;
-        myRecords.forEach(r => {
+
+        records.forEach(r => {
             const tid = getEffectiveTeacherId(r.teacherId);
-            if (!teacherSummary[tid]) teacherSummary[tid] = { total: 0, hours: 0, salary: 0 };
-            teacherSummary[tid].total++;
-            teacherSummary[tid].hours += (r.hours || 0);
+            if (!allTeachersSummary[tid]) allTeachersSummary[tid] = { total: 0, hours: 0, salary: 0 };
+            allTeachersSummary[tid].total++;
+            allTeachersSummary[tid].hours += (r.hours || 0);
             
             let rSalary = r.salary || 0;
             if (r.salaryMultiplier !== undefined) rSalary = rSalary * r.salaryMultiplier;
@@ -118,11 +125,11 @@ Router.register('teacher-attendance', async (container) => {
             if (rSalary < 0) rSalary = 0;
             r.finalSalary = rSalary;
 
-            teacherSummary[tid].salary += rSalary;
+            allTeachersSummary[tid].salary += rSalary;
             totalSalaryAll += rSalary;
         });
 
-        Object.entries(teacherSummary).forEach(([tid, s]) => {
+        Object.entries(allTeachersSummary).forEach(([tid, s]) => {
             const adjs = teacherAdjustments[tid] || [];
             let adjSum = 0;
             adjs.forEach(a => adjSum += Number(a.amount));
@@ -137,12 +144,12 @@ Router.register('teacher-attendance', async (container) => {
             html += `
                 <div class="card mb-4" style="border-left:3px solid var(--primary-500);">
                     <div class="card-body" style="padding:12px 16px;">
-                        <div style="display:flex;align-items:center;justify-content:space-between;">
+                        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
                             <div>
                                 <strong>📍 Vị trí trung tâm:</strong> 
                                 ${hasLocation ? `<span class="badge badge-success">Đã cài đặt (${settings.centerLat?.toFixed(4)}, ${settings.centerLng?.toFixed(4)})</span> Bán kính: ${settings.checkInRadius || 100}m` : '<span class="badge badge-warning">Chưa cài đặt</span>'}
                             </div>
-                            <button class="btn btn-secondary btn-sm" onclick="TAPage.setupLocation()">⚙️ Cài đặt vị trí</button>
+                            <button class="btn btn-secondary btn-sm" onclick="TAPage.setupLocation()"><i data-lucide="map-pin"></i> Cài đặt vị trí</button>
                         </div>
                     </div>
                 </div>
@@ -152,72 +159,182 @@ Router.register('teacher-attendance', async (container) => {
         if (isTeacher) {
             html += `
                 <div class="card mb-4" style="text-align:center;padding:24px;">
-                    <h3 style="margin-bottom:12px;">Chấm công hôm nay</h3>
-                    <button class="btn btn-primary btn-lg" onclick="TAPage.checkIn()" id="checkin-btn" style="font-size:16px;padding:12px 32px;">
-                        📍 Chấm công
+                    <h3 style="margin-bottom:8px;font-size:18px;font-weight:700;">Chấm công ca dạy hôm nay</h3>
+                    <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px;">Hệ thống sẽ tự động điền giờ hiện tại và tính giờ kết thúc sau 1h30p.</p>
+                    <button class="btn btn-primary btn-lg" onclick="TAPage.checkIn()" id="checkin-btn" style="font-size:16px;padding:12px 36px;box-shadow: 0 4px 12px rgba(37,99,235,0.25);">
+                        📍 Bấm Chấm công ngay
                     </button>
-                    <p style="font-size:12px;color:var(--text-muted);margin-top:8px;">Bạn cần ở tại trung tâm để chấm công. Chỉ hiển thị lớp có lịch hôm nay.</p>
+                </div>
+            `;
+        }
+
+        // If Owner selects a specific teacher: Show dedicated Teacher Header Card
+        if (isOwner && filterTeacherId) {
+            const selectedTeacher = teachers.find(t => t.id === filterTeacherId);
+            const teacherName = selectedTeacher ? selectedTeacher.displayName : filterTeacherId;
+            const tSummary = allTeachersSummary[filterTeacherId] || { total: 0, hours: 0, salary: 0 };
+            const tAdjs = teacherAdjustments[filterTeacherId] || [];
+
+            html += `
+                <div class="card mb-4" style="background: linear-gradient(to right, var(--bg-card), var(--bg-elevated)); border: 1px solid var(--primary-500);">
+                    <div class="card-body" style="padding: 20px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;">
+                            <div style="display:flex; align-items:center; gap:14px;">
+                                <div style="width:48px; height:48px; border-radius:50%; background:var(--primary-100); color:var(--primary-600); display:flex; align-items:center; justify-content:center; font-weight:800; font-size:18px;">
+                                    ${teacherName.charAt(0).toUpperCase()}
+                                </div>
+                                <div>
+                                    <h3 style="margin:0; font-size:18px; font-weight:700;">${teacherName}</h3>
+                                    <span style="font-size:13px; color:var(--text-muted);">${selectedTeacher?.email || ''}</span>
+                                </div>
+                            </div>
+                            <div style="display:flex; gap:12px; flex-wrap:wrap;">
+                                <div style="background:var(--bg-glass); padding:8px 14px; border-radius:var(--radius-md); text-align:center; border:1px solid var(--border-color);">
+                                    <div style="font-size:11px; color:var(--text-muted);">Số buổi dạy</div>
+                                    <div style="font-size:18px; font-weight:800; color:var(--primary-500);">${tSummary.total} buổi</div>
+                                </div>
+                                <div style="background:var(--bg-glass); padding:8px 14px; border-radius:var(--radius-md); text-align:center; border:1px solid var(--border-color);">
+                                    <div style="font-size:11px; color:var(--text-muted);">Tổng thời gian</div>
+                                    <div style="font-size:18px; font-weight:800; color:var(--info-500);">${tSummary.hours.toFixed(1)}h</div>
+                                </div>
+                                <div style="background:rgba(34,197,94,0.08); padding:8px 14px; border-radius:var(--radius-md); text-align:center; border:1px solid var(--success-500);">
+                                    <div style="font-size:11px; color:var(--text-muted);">Lương tháng ${selectedMonth}</div>
+                                    <div style="font-size:18px; font-weight:800; color:var(--success-500);">${DB.formatCurrency(tSummary.salary)}</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div style="display:flex; gap:8px; margin-top:16px; padding-top:12px; border-top:1px dashed var(--border-color);">
+                            <button class="btn btn-sm btn-primary" onclick="TAPage.showAddRecordForTeacher('${filterTeacherId}')"><i data-lucide="plus"></i> Thêm chấm công</button>
+                            <button class="btn btn-sm btn-secondary" onclick="TAPage.showAdjustment('${filterTeacherId}')"><i data-lucide="gift"></i> Thưởng / Phạt</button>
+                            <button class="btn btn-sm btn-ghost" onclick="TAPage.changeTeacher('')">✕ Xem tất cả giáo viên</button>
+                        </div>
+                    </div>
                 </div>
             `;
         }
 
         // Records table
-        html += `<div class="card"><div class="table-container"><table>
-            <thead><tr>${isOwner ? '<th>Giáo viên</th>' : ''}<th>Ngày</th><th>Ca/Giờ</th><th>Lớp</th><th>Số giờ</th><th>Lương</th><th>Ghi chú</th><th>Thao tác</th></tr></thead>
-            <tbody>`;
+        html += `
+            <div class="card mb-4">
+                <div class="card-header" style="display:flex; justify-content:space-between; align-items:center;">
+                    <h3 style="margin:0; font-size:15px; font-weight:700;">
+                        <i data-lucide="list"></i> Danh sách ca dạy ${filterTeacherId ? `- ${getTeacherName(filterTeacherId)}` : `(Tổng: ${displayedRecords.length} ca)`}
+                    </h3>
+                </div>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                ${isOwner && !filterTeacherId ? '<th>Giáo viên</th>' : ''}
+                                <th>Ngày</th>
+                                <th>Khung giờ / Ca</th>
+                                <th>Lớp học</th>
+                                <th style="text-align:center;">Số giờ</th>
+                                <th style="text-align:right;">Lương ca</th>
+                                <th>Ghi chú</th>
+                                <th style="text-align:right;">Thao tác</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+        `;
 
-        if (myRecords.length === 0) {
-            html += `<tr><td colspan="${isOwner ? 8 : 7}"><div class="empty-state"><p>Chưa có dữ liệu chấm công tháng này</p></div></td></tr>`;
+        if (displayedRecords.length === 0) {
+            html += `<tr><td colspan="${isOwner && !filterTeacherId ? 8 : 7}"><div class="empty-state"><p>Chưa có dữ liệu chấm công tháng này cho giáo viên được chọn</p></div></td></tr>`;
         } else {
-                html += myRecords.sort((a, b) => (b.date || '').localeCompare(a.date || '')).map(r => `<tr>
-                ${isOwner ? `<td>${getTeacherName(r.teacherId)}</td>` : ''}
-                <td>${DB.formatDate(r.date)}</td>
-                <td>${r.shift !== 'custom' ? shiftNames[r.shift] || r.shift : `${r.startTime || ''}-${r.endTime || ''}`}</td>
-                <td>${getClassName(r.classId)}</td>
-                <td><strong>${r.hours || 0}h</strong></td>
-                <td style="color:var(--success-500);font-weight:600;">
-                    ${DB.formatCurrency(r.finalSalary)}
-                    ${r.penaltyReason ? `<div style="color:var(--danger-500);font-size:11px;font-weight:400;margin-top:2px;">${r.penaltyReason}</div>` : ''}
-                </td>
-                <td class="text-sm">${r.note || ''}</td>
-                <td>
-                    <div class="table-actions">
-                        ${isOwner ? `<button class="btn-icon" title="Sửa lương/ca" onclick="TAPage.editRecord('${r.id}')"><i data-lucide="pencil"></i></button>` : ''}
-                        ${isOwner ? `<button class="btn-icon" title="Phạt vi phạm" onclick="TAPage.showPenalty('${r.id}')"><i data-lucide="alert-triangle" style="color:var(--danger-500);"></i></button>` : ''}
-                        <button class="btn-icon" title="Xóa" onclick="TAPage.removeRecord('${r.id}')"><i data-lucide="trash-2"></i></button>
-                    </div>
-                </td>
-            </tr>`).join('');
+            html += displayedRecords.sort((a, b) => (b.date || '').localeCompare(a.date || '')).map(r => `
+                <tr>
+                    ${isOwner && !filterTeacherId ? `<td><strong>${getTeacherName(r.teacherId)}</strong></td>` : ''}
+                    <td>${DB.formatDate(r.date)}</td>
+                    <td>
+                        <strong style="color:var(--text-primary);">${r.startTime && r.endTime ? `${r.startTime} - ${r.endTime}` : (shiftNames[r.shift] || r.shift)}</strong>
+                        ${r.shift === 'lesson_1h30' ? `<span class="badge badge-info" style="font-size:10px; margin-left:4px;">1.5h</span>` : ''}
+                    </td>
+                    <td><span class="badge badge-neutral">${getClassName(r.classId)}</span></td>
+                    <td style="text-align:center;"><strong>${(r.hours || 0).toFixed(1)}h</strong></td>
+                    <td style="text-align:right; color:var(--success-500); font-weight:700;">
+                        ${DB.formatCurrency(r.finalSalary)}
+                        ${r.isFirstSession ? `<div style="color:var(--warning-500);font-size:10px;">(Buổi đầu: 50%)</div>` : ''}
+                        ${r.penaltyReason ? `<div style="color:var(--danger-500);font-size:11px;font-weight:400;margin-top:2px;">⚠️ ${r.penaltyReason}</div>` : ''}
+                    </td>
+                    <td class="text-sm" style="color:var(--text-muted);">${r.note || '—'}</td>
+                    <td style="text-align:right;">
+                        <div class="table-actions" style="justify-content:flex-end;">
+                            ${isOwner ? `<button class="btn-icon" title="Sửa ca dạy" onclick="TAPage.editRecord('${r.id}')"><i data-lucide="pencil"></i></button>` : ''}
+                            ${isOwner ? `<button class="btn-icon" title="Phạt vi phạm" onclick="TAPage.showPenalty('${r.id}')"><i data-lucide="alert-triangle" style="color:var(--danger-500);"></i></button>` : ''}
+                            <button class="btn-icon" title="Xóa" onclick="TAPage.removeRecord('${r.id}')"><i data-lucide="trash-2"></i></button>
+                        </div>
+                    </td>
+                </tr>
+            `).join('');
         }
 
         html += '</tbody></table></div></div>';
 
-        // Summary cards
-        if (Object.keys(teacherSummary).length > 0) {
-            html += `<div style="display:flex;align-items:center;justify-content:space-between;margin-top:24px;margin-bottom:16px;">
-                <h3 style="margin:0;">Tổng hợp lương tháng ${selectedMonth} ${isOwner ? `(Tổng: ${DB.formatCurrency(totalSalaryAll)})` : ''}</h3>
-                ${isOwner ? `<button class="btn btn-primary" onclick="TAPage.finalizeSalary()"><i data-lucide="check-circle"></i> Chốt lương & Chi trả</button>` : ''}
-            </div>`;
-            html += '<div class="stats-grid" style="align-items:start;">';
-            Object.entries(teacherSummary).forEach(([tid, s]) => {
+        // Summary cards section
+        if (isOwner && !filterTeacherId && Object.keys(allTeachersSummary).length > 0) {
+            html += `
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-top:24px;margin-bottom:16px;flex-wrap:wrap;gap:8px;">
+                    <h3 style="margin:0;font-size:16px;font-weight:700;"><i data-lucide="wallet"></i> Tổng hợp lương theo từng giáo viên tháng ${selectedMonth} (Tổng: ${DB.formatCurrency(totalSalaryAll)})</h3>
+                    <button class="btn btn-primary" onclick="TAPage.finalizeSalary()"><i data-lucide="check-circle"></i> Chốt lương & Chi trả</button>
+                </div>
+                <div class="stats-grid" style="grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); align-items:start;">
+            `;
+
+            Object.entries(allTeachersSummary).forEach(([tid, s]) => {
                 const adjs = teacherAdjustments[tid] || [];
                 let adjsHtml = '';
                 adjs.forEach(a => {
                     adjsHtml += `<div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;margin-top:6px;padding-top:6px;border-top:1px dashed var(--border-color);">
-                        <span style="flex:1;">${a.reason}</span>
-                        <span style="color:${a.amount >= 0 ? 'var(--success-500)' : 'var(--danger-500)'};font-weight:600;margin-left:8px;">${a.amount > 0 ? '+' : ''}${DB.formatCurrency(a.amount)}</span>
-                        ${isOwner ? `<button class="btn-icon" style="padding:0;margin-left:4px;" onclick="TAPage.removeAdjustment('${a.id}')"><i data-lucide="x" style="width:14px;height:14px;color:var(--text-muted);"></i></button>` : ''}
+                        <span style="flex:1;color:var(--text-secondary);">${a.reason}</span>
+                        <span style="color:${a.amount >= 0 ? 'var(--success-500)' : 'var(--danger-500)'};font-weight:700;margin-left:8px;">${a.amount > 0 ? '+' : ''}${DB.formatCurrency(a.amount)}</span>
+                        <button class="btn-icon" style="padding:0;margin-left:4px;" onclick="TAPage.removeAdjustment('${a.id}')"><i data-lucide="x" style="width:12px;height:12px;color:var(--text-muted);"></i></button>
                     </div>`;
                 });
 
-                html += `<div class="stat-card" style="padding:16px;">
-                    <div class="stat-value" style="color:var(--success-500);">${DB.formatCurrency(s.salary)}</div>
-                    <div class="stat-label" style="margin-bottom:8px;">${getTeacherName(tid)} — ${s.total} buổi (${s.hours}h)</div>
-                    ${adjsHtml}
-                    ${isOwner ? `<button class="btn btn-secondary btn-sm" style="width:100%;margin-top:12px;font-size:12px;" onclick="TAPage.showAdjustment('${tid}')"><i data-lucide="plus-circle" style="width:14px;height:14px;"></i> Thêm thưởng/phạt</button>` : ''}
-                </div>`;
+                html += `
+                    <div class="stat-card" style="padding:16px; border: 1px solid var(--border-color); cursor:pointer;" onclick="if(event.target.tagName !== 'BUTTON' && event.target.tagName !== 'I') TAPage.changeTeacher('${tid}')">
+                        <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+                            <div>
+                                <div style="font-weight:700;font-size:15px;color:var(--text-primary);">${getTeacherName(tid)}</div>
+                                <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">${s.total} buổi dạy (${s.hours.toFixed(1)}h)</div>
+                            </div>
+                            <button class="btn btn-sm btn-ghost" title="Lọc riêng giáo viên này" onclick="event.stopPropagation(); TAPage.changeTeacher('${tid}')">Xem riêng →</button>
+                        </div>
+                        <div class="stat-value" style="color:var(--success-500);font-size:20px;margin-bottom:8px;">${DB.formatCurrency(s.salary)}</div>
+                        ${adjsHtml}
+                        <button class="btn btn-secondary btn-sm" style="width:100%;margin-top:12px;font-size:12px;" onclick="event.stopPropagation(); TAPage.showAdjustment('${tid}')"><i data-lucide="plus-circle" style="width:14px;height:14px;"></i> Thêm thưởng/phạt</button>
+                    </div>
+                `;
             });
             html += '</div>';
+        } else if (isTeacher) {
+            const myId = (window.currentUser ? window.currentUser.id : '') || '';
+            const s = allTeachersSummary[myId] || { total: 0, hours: 0, salary: 0 };
+            const myAdjs = teacherAdjustments[myId] || [];
+            let adjsHtml = '';
+            myAdjs.forEach(a => {
+                adjsHtml += `<div style="display:flex;justify-content:space-between;align-items:center;font-size:13px;margin-top:6px;padding-top:6px;border-top:1px dashed var(--border-color);">
+                    <span>${a.reason}</span>
+                    <span style="color:${a.amount >= 0 ? 'var(--success-500)' : 'var(--danger-500)'};font-weight:700;">${a.amount > 0 ? '+' : ''}${DB.formatCurrency(a.amount)}</span>
+                </div>`;
+            });
+
+            html += `
+                <div class="card mt-4" style="max-width: 500px; margin: 24px auto 0 auto;">
+                    <div class="card-header"><h3 style="margin:0;font-size:16px;font-weight:700;"><i data-lucide="wallet"></i> Tổng kết lương tháng ${selectedMonth}</h3></div>
+                    <div class="card-body">
+                        <div style="display:flex;justify-content:space-between;margin-bottom:8px;font-size:14px;">
+                            <span style="color:var(--text-secondary);">Số buổi đã dạy:</span>
+                            <strong>${s.total} buổi (${s.hours.toFixed(1)}h)</strong>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;margin-bottom:8px;font-size:14px;">
+                            <span style="color:var(--text-secondary);">Tổng lương tạm tính:</span>
+                            <strong style="color:var(--success-500);font-size:18px;">${DB.formatCurrency(s.salary)}</strong>
+                        </div>
+                        ${adjsHtml}
+                    </div>
+                </div>
+            `;
         }
 
         area.innerHTML = html;
@@ -226,13 +343,19 @@ Router.register('teacher-attendance', async (container) => {
 
     container.innerHTML = `
         <div class="page-header">
-            <div><h1 class="page-title"><i data-lucide="clock"></i> Chấm công & Lương</h1></div>
+            <div><h1 class="page-title"><i data-lucide="clock"></i> Chấm công & Lương Giáo viên</h1></div>
             <div class="page-actions">
                 ${isOwner ? `<button class="btn btn-primary" onclick="TAPage.showAddRecord()"><i data-lucide="plus"></i> Thêm chấm công</button>` : ''}
             </div>
         </div>
-        <div class="filter-bar">
-            <input type="month" class="input" style="max-width:200px;" value="${selectedMonth}" onchange="TAPage.changeMonth(this.value)">
+        <div class="filter-bar" style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+            <input type="month" class="input" style="max-width:180px;" value="${selectedMonth}" onchange="TAPage.changeMonth(this.value)">
+            ${isOwner ? `
+                <select class="select" id="filter-teacher-select" style="max-width:260px;" onchange="TAPage.changeTeacher(this.value)">
+                    <option value="">-- Tất cả giáo viên (${teachers.length}) --</option>
+                    ${teachers.map(t => `<option value="${t.id}" ${filterTeacherId === t.id ? 'selected' : ''}>👨‍🏫 ${t.displayName || t.email}</option>`).join('')}
+                </select>
+            ` : ''}
         </div>
         <div id="ta-area"></div>
     `;
@@ -250,9 +373,15 @@ Router.register('teacher-attendance', async (container) => {
             render();
         },
 
+        changeTeacher(tid) {
+            filterTeacherId = tid;
+            const sel = document.getElementById('filter-teacher-select');
+            if (sel) sel.value = tid;
+            render();
+        },
+
         async finalizeSalary() {
             if (!Auth.isOwner()) return;
-            const myRecords = getMyRecords();
             const summary = {};
             const teacherAdjustments = {};
             adjustments.forEach(a => {
@@ -260,13 +389,14 @@ Router.register('teacher-attendance', async (container) => {
                 teacherAdjustments[a.teacherId].push(a);
             });
 
-            myRecords.forEach(r => {
-                if (!summary[r.teacherId]) summary[r.teacherId] = { salary: 0 };
+            records.forEach(r => {
+                const tid = getEffectiveTeacherId(r.teacherId);
+                if (!summary[tid]) summary[tid] = { salary: 0 };
                 let rSalary = r.salary || 0;
                 if (r.salaryMultiplier !== undefined) rSalary = rSalary * r.salaryMultiplier;
                 if (r.penaltyAmount) rSalary = rSalary - r.penaltyAmount;
                 if (rSalary < 0) rSalary = 0;
-                summary[r.teacherId].salary += rSalary;
+                summary[tid].salary += rSalary;
             });
             Object.entries(summary).forEach(([tid, s]) => {
                 const adjs = teacherAdjustments[tid] || [];
@@ -303,23 +433,47 @@ Router.register('teacher-attendance', async (container) => {
             }
         },
 
+        // Auto calculate End Time = Start Time + 90 minutes
+        calcEndTimeFromStart(startTime) {
+            if (!startTime) return '';
+            const [h, m] = startTime.split(':').map(Number);
+            const endM = h * 60 + m + 90;
+            const eh = String(Math.floor(endM / 60) % 24).padStart(2, '0');
+            const em = String(endM % 60).padStart(2, '0');
+            return `${eh}:${em}`;
+        },
+
+        onStartTimeChange(val) {
+            const endInput = document.getElementById('ci-end');
+            if (endInput && val) {
+                endInput.value = this.calcEndTimeFromStart(val);
+            }
+        },
+
+        onManualStartTimeChange(val) {
+            const endInput = document.getElementById('ta-end');
+            if (endInput && val) {
+                endInput.value = this.calcEndTimeFromStart(val);
+            }
+        },
+
         // === GPS CHECK-IN ===
         async checkIn() {
             const btn = document.getElementById('checkin-btn');
-            btn.disabled = true;
-            btn.innerHTML = '⏳ Đang kiểm tra vị trí...';
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '⏳ Đang kiểm tra vị trí GPS...';
+            }
 
             if (!settings.centerLat || !settings.centerLng) {
-                Toast.error('Chưa cài đặt', 'Chủ trung tâm chưa cài đặt vị trí. Liên hệ quản lý.');
-                btn.disabled = false;
-                btn.innerHTML = '📍 Chấm công';
+                Toast.error('Chưa cài đặt', 'Chủ trung tâm chưa cài đặt vị trí. Vui lòng liên hệ quản lý.');
+                if (btn) { btn.disabled = false; btn.innerHTML = '📍 Bấm Chấm công ngay'; }
                 return;
             }
 
             if (!navigator.geolocation) {
                 Toast.error('Không hỗ trợ', 'Trình duyệt không hỗ trợ GPS');
-                btn.disabled = false;
-                btn.innerHTML = '📍 Chấm công';
+                if (btn) { btn.disabled = false; btn.innerHTML = '📍 Bấm Chấm công ngay'; }
                 return;
             }
 
@@ -329,58 +483,98 @@ Router.register('teacher-attendance', async (container) => {
                     const maxDist = settings.checkInRadius || 100;
 
                     if (dist > maxDist) {
-                        Toast.error('Ngoài phạm vi', `Bạn cách trung tâm ${Math.round(dist)}m (cho phép: ${maxDist}m)`);
-                        btn.disabled = false;
-                        btn.innerHTML = '📍 Chấm công';
+                        Toast.error('Ngoài phạm vi', `Bạn cách trung tâm ${Math.round(dist)}m (khoảng cách tối đa: ${maxDist}m)`);
+                        if (btn) { btn.disabled = false; btn.innerHTML = '📍 Bấm Chấm công ngay'; }
                         return;
                     }
 
                     this._showCheckInForm();
-                    btn.disabled = false;
-                    btn.innerHTML = '📍 Chấm công';
+                    if (btn) { btn.disabled = false; btn.innerHTML = '📍 Bấm Chấm công ngay'; }
                 },
                 (err) => {
-                    Toast.error('Lỗi GPS', 'Vui lòng bật GPS và cho phép truy cập vị trí');
-                    btn.disabled = false;
-                    btn.innerHTML = '📍 Chấm công';
+                    Toast.error('Lỗi GPS', 'Vui lòng bật định vị GPS và cho phép truy cập vị trí trên trình duyệt');
+                    if (btn) { btn.disabled = false; btn.innerHTML = '📍 Bấm Chấm công ngay'; }
                 }
             );
         },
 
         _showCheckInForm() {
+            // Get current local time & add 1h30m
+            const now = new Date();
+            const curH = String(now.getHours()).padStart(2, '0');
+            const curM = String(now.getMinutes()).padStart(2, '0');
+            const startTimeStr = `${curH}:${curM}`;
+            const endTimeStr = this.calcEndTimeFromStart(startTimeStr);
+
             const validClasses = classes;
             
             Modal.show({
-                title: '✅ Xác nhận chấm công hôm nay',
+                title: '✅ Xác nhận chấm công ca dạy',
                 content: `
-                    <p style="color:var(--success-400);margin-bottom:12px;">📍 Vị trí hợp lệ — Bạn đang ở trung tâm</p>
-                    <div class="form-group"><label class="form-label">Ca</label>
+                    <p style="color:var(--success-500);margin-bottom:14px;font-weight:600;">📍 Vị trí hợp lệ — Bạn đang ở tại trung tâm</p>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Loại ca dạy</label>
                         <select class="select" id="ci-shift" onchange="TAPage._shiftChange(this.value)">
-                            <option value="morning">Ca sáng (7:00-11:30)</option>
-                            <option value="afternoon">Ca chiều (13:00-17:30)</option>
-                            <option value="evening">Ca tối (18:00-21:00)</option>
-                            <option value="custom">Tùy chỉnh giờ</option>
-                        </select></div>
-                    <div id="ci-custom-time" style="display:none;">
+                            <option value="lesson_1h30" selected>⏱️ Buổi dạy 1h30p (${startTimeStr} - ${endTimeStr})</option>
+                            <option value="morning">Ca sáng (07:00 - 11:30)</option>
+                            <option value="afternoon">Ca chiều (13:00 - 17:30)</option>
+                            <option value="evening">Ca tối (18:00 - 21:00)</option>
+                            <option value="custom">Tùy chỉnh giờ khác...</option>
+                        </select>
+                    </div>
+
+                    <div id="ci-time-row" style="background:var(--bg-glass);padding:12px;border-radius:var(--radius-md);border:1px solid var(--border-color);margin-bottom:14px;">
                         <div class="form-row">
-                            <div class="form-group"><label class="form-label">Vào</label><input type="time" class="input" id="ci-start"></div>
-                            <div class="form-group"><label class="form-label">Ra</label><input type="time" class="input" id="ci-end"></div>
+                            <div class="form-group" style="margin-bottom:0;">
+                                <label class="form-label" style="font-size:12px;">Giờ vào (Check-in)</label>
+                                <input type="time" class="input" id="ci-start" value="${startTimeStr}" oninput="TAPage.onStartTimeChange(this.value)">
+                            </div>
+                            <div class="form-group" style="margin-bottom:0;">
+                                <label class="form-label" style="font-size:12px;">Giờ ra (Dự kiến +1h30p)</label>
+                                <input type="time" class="input" id="ci-end" value="${endTimeStr}">
+                            </div>
                         </div>
                     </div>
-                    <div class="form-group"><label class="form-label">Lớp dạy *</label>
+
+                    <div class="form-group">
+                        <label class="form-label">Lớp dạy hôm nay *</label>
                         <select class="select" id="ci-class">
                             <option value="">-- Chọn lớp học --</option>
                             ${validClasses.map(c => `<option value="${c.id}">${c.name}</option>`).join('')}
                         </select>
                     </div>
-                    <div class="form-group"><label class="form-label">Ghi chú</label><input type="text" class="input" id="ci-note"></div>
+
+                    <div class="form-group">
+                        <label class="form-label">Ghi chú (nếu có)</label>
+                        <input type="text" class="input" id="ci-note" placeholder="VD: Dạy bù / Dạy kèm thêm...">
+                    </div>
                 `,
-                footer: `<button class="btn btn-secondary" onclick="Modal.close()">Hủy</button><button class="btn btn-success" onclick="TAPage.confirmCheckIn()">✓ Xác nhận</button>`
+                footer: `<button class="btn btn-secondary" onclick="Modal.close()">Hủy</button><button class="btn btn-primary" onclick="TAPage.confirmCheckIn()">✓ Xác nhận chấm công</button>`
             });
         },
 
         _shiftChange(val) {
-            document.getElementById('ci-custom-time').style.display = val === 'custom' ? '' : 'none';
+            const startInput = document.getElementById('ci-start');
+            const endInput = document.getElementById('ci-end');
+            
+            if (val === 'morning') {
+                if (startInput) startInput.value = '07:00';
+                if (endInput) endInput.value = '11:30';
+            } else if (val === 'afternoon') {
+                if (startInput) startInput.value = '13:00';
+                if (endInput) endInput.value = '17:30';
+            } else if (val === 'evening') {
+                if (startInput) startInput.value = '18:00';
+                if (endInput) endInput.value = '21:00';
+            } else if (val === 'lesson_1h30') {
+                const now = new Date();
+                const curH = String(now.getHours()).padStart(2, '0');
+                const curM = String(now.getMinutes()).padStart(2, '0');
+                const startStr = `${curH}:${curM}`;
+                if (startInput) startInput.value = startStr;
+                if (endInput) endInput.value = this.calcEndTimeFromStart(startStr);
+            }
         },
 
         async confirmCheckIn() {
@@ -415,34 +609,36 @@ Router.register('teacher-attendance', async (container) => {
             }
             
             const shift = document.getElementById('ci-shift').value;
-            let hours = 0, startTime = '', endTime = '';
-            if (shift === 'morning') { hours = 4.5; startTime = '07:00'; endTime = '11:30'; }
-            else if (shift === 'afternoon') { hours = 4.5; startTime = '13:00'; endTime = '17:30'; }
-            else if (shift === 'evening') { hours = 3; startTime = '18:00'; endTime = '21:00'; }
-            else {
-                startTime = document.getElementById('ci-start').value;
-                endTime = document.getElementById('ci-end').value;
-                if (startTime && endTime) {
-                    const [sh, sm] = startTime.split(':').map(Number);
-                    const [eh, em] = endTime.split(':').map(Number);
-                    hours = Math.round(((eh * 60 + em) - (sh * 60 + sm)) / 60 * 10) / 10;
-                }
+            const startTime = document.getElementById('ci-start').value;
+            const endTime = document.getElementById('ci-end').value;
+            let hours = 1.5;
+
+            if (startTime && endTime) {
+                const [sh, sm] = startTime.split(':').map(Number);
+                const [eh, em] = endTime.split(':').map(Number);
+                hours = Math.round(((eh * 60 + em) - (sh * 60 + sm)) / 60 * 10) / 10;
+                if (hours < 0) hours = 1.5;
+            } else if (shift === 'morning' || shift === 'afternoon') {
+                hours = 4.5;
+            } else if (shift === 'evening') {
+                hours = 3.0;
             }
 
             const classConf = mySalaryConfig[classId] || {};
             let salary = 0;
-            if (shift === 'custom') {
-                salary = (classConf.perHour || 0) * hours;
-            } else {
-                salary = classConf.perShift || 0;
+            if (classConf.perShift) {
+                salary = classConf.perShift;
+            } else if (classConf.perHour) {
+                salary = classConf.perHour * hours;
             }
 
             try {
                 await DB.addTeacherAttendanceRecord({
                     teacherId: window.currentUser.id,
+                    teacherName: window.currentUser.displayName || '',
                     date: DB.today(),
                     shift, startTime, endTime, hours, salary,
-                    classId: document.getElementById('ci-class').value,
+                    classId,
                     note: document.getElementById('ci-note').value,
                     month: DB.currentMonth()
                 });
@@ -510,17 +706,26 @@ Router.register('teacher-attendance', async (container) => {
         },
 
         // === OWNER: ADD RECORD MANUALLY ===
-        showAddRecord() {
+        showAddRecordForTeacher(tid) {
+            this.showAddRecord(tid);
+        },
+
+        showAddRecord(preselectedTeacherId = '') {
             const initialDate = DB.today();
+            const now = new Date();
+            const curH = String(now.getHours()).padStart(2, '0');
+            const curM = String(now.getMinutes()).padStart(2, '0');
+            const startTimeStr = `${curH}:${curM}`;
+            const endTimeStr = this.calcEndTimeFromStart(startTimeStr);
             const classListHtml = classes.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
             
             Modal.show({
-                title: 'Thêm chấm công',
+                title: 'Thêm chấm công cho giáo viên',
                 content: `
                     <div class="form-group"><label class="form-label">Giáo viên *</label>
                         <select class="select" id="ta-teacher" onchange="if(this.value==='_custom') document.getElementById('ta-teacher-custom').style.display='block'; else document.getElementById('ta-teacher-custom').style.display='none';">
-                            <option value="">Chọn</option>
-                            ${teachers.map(t => `<option value="${t.id}">${t.displayName || t.email}</option>`).join('')}
+                            <option value="">-- Chọn giáo viên --</option>
+                            ${teachers.map(t => `<option value="${t.id}" ${(preselectedTeacherId || filterTeacherId) === t.id ? 'selected' : ''}>${t.displayName || t.email}</option>`).join('')}
                             <option value="_custom">Nhập tên khác...</option>
                         </select>
                         <input type="text" class="input" id="ta-teacher-custom" style="display:none;margin-top:8px;" placeholder="Nhập tên giáo viên">
@@ -528,14 +733,22 @@ Router.register('teacher-attendance', async (container) => {
                     <div class="form-row">
                         <div class="form-group"><label class="form-label">Ngày</label><input type="date" class="input" id="ta-date" value="${initialDate}"></div>
                         <div class="form-group"><label class="form-label">Ca</label>
-                            <select class="select" id="ta-shift"><option value="morning">Sáng</option><option value="afternoon">Chiều</option><option value="evening">Tối</option><option value="custom">Tùy chỉnh</option></select></div>
+                            <select class="select" id="ta-shift">
+                                <option value="lesson_1h30" selected>Buổi 1h30p</option>
+                                <option value="morning">Sáng (7:00-11:30)</option>
+                                <option value="afternoon">Chiều (13:00-17:30)</option>
+                                <option value="evening">Tối (18:00-21:00)</option>
+                                <option value="custom">Tùy chỉnh</option>
+                            </select>
+                        </div>
                     </div>
                     <div class="form-row">
-                        <div class="form-group"><label class="form-label">Giờ vào</label><input type="time" class="input" id="ta-start"></div>
-                        <div class="form-group"><label class="form-label">Giờ ra</label><input type="time" class="input" id="ta-end"></div>
+                        <div class="form-group"><label class="form-label">Giờ vào</label><input type="time" class="input" id="ta-start" value="${startTimeStr}" oninput="TAPage.onManualStartTimeChange(this.value)"></div>
+                        <div class="form-group"><label class="form-label">Giờ ra (Dự kiến +1h30p)</label><input type="time" class="input" id="ta-end" value="${endTimeStr}"></div>
                     </div>
-                    <div class="form-group"><label class="form-label">Lớp *</label>
-                        <select class="select" id="ta-class"><option value="">-- Chọn lớp học --</option>${classListHtml}</select></div>
+                    <div class="form-group"><label class="form-label">Lớp dạy *</label>
+                        <select class="select" id="ta-class"><option value="">-- Chọn lớp học --</option>${classListHtml}</select>
+                    </div>
                     <div class="form-group"><label style="display:flex;align-items:center;gap:8px;cursor:pointer;"><input type="checkbox" id="ta-first-session"> Buổi dạy đầu tiên (50% lương)</label></div>
                     <div class="form-group"><label class="form-label">Ghi chú</label><input type="text" class="input" id="ta-note"></div>
                 `,
@@ -553,22 +766,23 @@ Router.register('teacher-attendance', async (container) => {
             const shift = document.getElementById('ta-shift').value;
             const startTime = document.getElementById('ta-start').value;
             const endTime = document.getElementById('ta-end').value;
-            let hours = 0;
+            let hours = 1.5;
             if (startTime && endTime) {
                 const [sh, sm] = startTime.split(':').map(Number);
                 const [eh, em] = endTime.split(':').map(Number);
                 hours = Math.round(((eh*60+em)-(sh*60+sm))/60*10)/10;
+                if (hours < 0) hours = 1.5;
             } else if (shift === 'morning' || shift === 'afternoon') hours = 4.5;
-            else if (shift === 'evening') hours = 3;
+            else if (shift === 'evening') hours = 3.0;
 
             const t = teachers.find(x => x.id === teacherId);
             const salaryConfig = t ? (t.salaryConfig || {}) : {};
-            const classConf = salaryConfig[document.getElementById('ta-class').value] || {};
+            const classConf = salaryConfig[classId] || {};
             let salary = 0;
-            if (shift === 'custom') {
-                salary = (classConf.perHour || 0) * hours;
-            } else {
-                salary = classConf.perShift || 0;
+            if (classConf.perShift) {
+                salary = classConf.perShift;
+            } else if (classConf.perHour) {
+                salary = classConf.perHour * hours;
             }
 
             const isFirstSession = document.getElementById('ta-first-session') ? document.getElementById('ta-first-session').checked : false;
@@ -579,12 +793,12 @@ Router.register('teacher-attendance', async (container) => {
             try {
                 await DB.addTeacherAttendanceRecord({
                     teacherId, date, shift, startTime, endTime, hours, salary, isFirstSession,
-                    classId: document.getElementById('ta-class').value,
+                    classId,
                     note: document.getElementById('ta-note').value,
                     month: date.substring(0, 7)
                 });
                 Modal.close();
-                Toast.success('Đã thêm');
+                Toast.success('Đã thêm chấm công');
                 records = await DB.getTeacherAttendance(selectedMonth);
                 render();
             } catch(e) { Toast.error('Lỗi', e.message); }
@@ -603,7 +817,14 @@ Router.register('teacher-attendance', async (container) => {
                     <div class="form-row">
                         <div class="form-group"><label class="form-label">Ngày</label><input type="date" class="input" id="ta-edit-date" value="${r.date || ''}"></div>
                         <div class="form-group"><label class="form-label">Ca</label>
-                            <select class="select" id="ta-edit-shift"><option value="morning" ${r.shift === 'morning' ? 'selected' : ''}>Sáng</option><option value="afternoon" ${r.shift === 'afternoon' ? 'selected' : ''}>Chiều</option><option value="evening" ${r.shift === 'evening' ? 'selected' : ''}>Tối</option><option value="custom" ${r.shift === 'custom' ? 'selected' : ''}>Tùy chỉnh</option></select></div>
+                            <select class="select" id="ta-edit-shift">
+                                <option value="lesson_1h30" ${r.shift === 'lesson_1h30' ? 'selected' : ''}>Buổi 1h30p</option>
+                                <option value="morning" ${r.shift === 'morning' ? 'selected' : ''}>Sáng</option>
+                                <option value="afternoon" ${r.shift === 'afternoon' ? 'selected' : ''}>Chiều</option>
+                                <option value="evening" ${r.shift === 'evening' ? 'selected' : ''}>Tối</option>
+                                <option value="custom" ${r.shift === 'custom' ? 'selected' : ''}>Tùy chỉnh</option>
+                            </select>
+                        </div>
                     </div>
                     <div class="form-row">
                         <div class="form-group"><label class="form-label">Giờ vào</label><input type="time" class="input" id="ta-edit-start" value="${r.startTime || ''}"></div>
