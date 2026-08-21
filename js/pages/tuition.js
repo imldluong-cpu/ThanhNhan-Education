@@ -316,8 +316,9 @@ Router.register('tuition', async (container) => {
     container.innerHTML = `
         <div class="page-header">
             <div><h1 class="page-title"><i data-lucide="wallet"></i> Quản lý Học phí</h1></div>
-            <div class="page-actions" style="display:flex;gap:8px;">
-                <button class="btn btn-secondary" onclick="window.StudentsPage?.showExportModal ? window.StudentsPage.showExportModal() : App.navigate('students')"><i data-lucide="file-spreadsheet"></i> Xuất Excel Mẫu Mới</button>
+            <div class="page-actions" style="display:flex;gap:8px;flex-wrap:wrap;">
+                <button class="btn btn-secondary" style="background:linear-gradient(135deg, rgba(37,99,235,0.1), rgba(14,165,233,0.1));border-color:var(--primary-400);color:var(--primary-600);font-weight:600;" onclick="TuitionPage.showSyncPeriodsModal()"><i data-lucide="calendar-sync"></i> ⚡ Đồng bộ kỳ học T7 → T8 → T9</button>
+                <button class="btn btn-secondary" onclick="window.StudentsPage?.showExportModal ? window.StudentsPage.showExportModal() : App.navigate('students')"><i data-lucide="file-spreadsheet"></i> Xuất Excel</button>
                 <button class="btn btn-primary" onclick="TuitionPage.showAdd()"><i data-lucide="plus"></i> Thêm khoản thu</button>
             </div>
         </div>
@@ -958,6 +959,223 @@ Router.register('tuition', async (container) => {
             } catch (err) {
                 console.error(err);
                 Toast.error('Lỗi khi tính toán', err.message);
+            }
+        },
+
+        async showSyncPeriodsModal() {
+            Toast.info('Đang phân tích dữ liệu kỳ học...');
+            
+            // Build sync plan
+            const syncPlan = [];
+            const activeStudents = students.filter(s => s.status === 'active' && s.classIds && s.classIds.length > 0);
+
+            for (const student of activeStudents) {
+                const sTuitions = tuitions.filter(t => t.studentId === student.id);
+                
+                // Find July, August, September records
+                let julRecord = sTuitions.find(t => (t.dueDate && (t.dueDate.startsWith('2026-07') || t.dueDate.startsWith('2025-07'))) || (t.startDate && (t.startDate.startsWith('2026-07') || t.startDate.startsWith('2025-07'))) || (t.note && (t.note.includes('tháng 7') || t.note.includes('T7'))));
+                let augRecord = sTuitions.find(t => (t.dueDate && (t.dueDate.startsWith('2026-08') || t.dueDate.startsWith('2025-08'))) || (t.startDate && (t.startDate.startsWith('2026-08') || t.startDate.startsWith('2025-08'))) || (t.note && (t.note.includes('tháng 8') || t.note.includes('T8'))));
+                let sepRecord = sTuitions.find(t => (t.dueDate && (t.dueDate.startsWith('2026-09') || t.dueDate.startsWith('2025-09'))) || (t.startDate && (t.startDate.startsWith('2026-09') || t.startDate.startsWith('2025-09'))) || (t.note && (t.note.includes('tháng 9') || t.note.includes('T9'))));
+
+                // 1. Determine July Period
+                let julEnd = julRecord ? (julRecord.endDate || julRecord.dueDate) : null;
+                let julStart = julRecord ? julRecord.startDate : null;
+                
+                if (julRecord && (!julStart || !julEnd)) {
+                    const jPeriod = await calculateNextTuitionPeriod(student.id, '2026-06-30', 8);
+                    if (jPeriod) {
+                        julStart = julStart || jPeriod.startDate;
+                        julEnd = julEnd || jPeriod.endDate;
+                    }
+                }
+
+                // 2. Compute August Period from July End
+                let augPeriod = null;
+                if (julEnd) {
+                    augPeriod = await calculateNextTuitionPeriod(student.id, julEnd, 8);
+                } else if (augRecord && (augRecord.startDate || augRecord.dueDate)) {
+                    const baseStart = augRecord.startDate || augRecord.dueDate;
+                    const prevD = new Date(baseStart);
+                    prevD.setDate(prevD.getDate() - 1);
+                    augPeriod = await calculateNextTuitionPeriod(student.id, prevD.toISOString().split('T')[0], 8);
+                }
+
+                // 3. Compute September Period from August End
+                let sepPeriod = null;
+                const augEnd = augPeriod ? augPeriod.endDate : (augRecord ? (augRecord.endDate || augRecord.dueDate) : null);
+                if (augEnd) {
+                    sepPeriod = await calculateNextTuitionPeriod(student.id, augEnd, 8);
+                }
+
+                if (augPeriod || sepPeriod) {
+                    syncPlan.push({
+                        student,
+                        julRecord,
+                        julStart,
+                        julEnd,
+                        augRecord,
+                        augPeriod,
+                        sepRecord,
+                        sepPeriod
+                    });
+                }
+            }
+
+            if (syncPlan.length === 0) {
+                Toast.warning('Không tìm thấy học viên có lịch học cần đồng bộ.');
+                return;
+            }
+
+            // Render Preview Modal
+            Modal.show({
+                title: '⚡ Đồng bộ & Chuẩn hóa kỳ học (T7 ➔ T8 ➔ T9)',
+                content: `
+                    <div style="margin-bottom:14px; font-size:13px; color:var(--text-secondary); background:var(--bg-glass); padding:10px 14px; border-radius:8px; border:1px solid var(--border-color);">
+                        💡 Hệ thống sẽ tự động đối soát TKB để xâu chuỗi kỳ học: <br>
+                        <strong>Phiếu Tháng 7</strong> ➔ (Buổi kế tiếp + 8 buổi) ➔ <strong>Phiếu Tháng 8</strong> ➔ (Buổi kế tiếp + 8 buổi) ➔ <strong>Phiếu Tháng 9</strong>.
+                    </div>
+                    <div class="table-container" style="max-height: 380px; overflow-y: auto;">
+                        <table style="font-size:12px;">
+                            <thead>
+                                <tr>
+                                    <th>Học viên</th>
+                                    <th>Kỳ Tháng 7</th>
+                                    <th>Kỳ Tháng 8 (Tự động 8 buổi)</th>
+                                    <th>Kỳ Tháng 9 (Tự động 8 buổi)</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${syncPlan.map(item => `
+                                    <tr>
+                                        <td>
+                                            <strong>${item.student.name}</strong>
+                                            <div style="font-size:11px;color:var(--text-muted);">${(item.student.classIds || []).map(cid => (classes.find(c => c.id === cid) || {}).name).filter(Boolean).join(', ')}</div>
+                                        </td>
+                                        <td>
+                                            ${item.julEnd ? `<span class="badge badge-neutral">${DB.formatDate(item.julStart || '')} → ${DB.formatDate(item.julEnd)}</span>` : '<span style="color:var(--text-muted);">—</span>'}
+                                        </td>
+                                        <td>
+                                            ${item.augPeriod ? `
+                                                <strong style="color:var(--primary-600);">${DB.formatDate(item.augPeriod.startDate)} → ${DB.formatDate(item.augPeriod.endDate)}</strong>
+                                                <div style="font-size:10px;color:var(--text-muted);">${item.augRecord ? '📝 Cập nhật phiếu hiện có' : '➕ Tạo phiếu T8 mới'}</div>
+                                            ` : '—'}
+                                        </td>
+                                        <td>
+                                            ${item.sepPeriod ? `
+                                                <strong style="color:var(--success-600);">${DB.formatDate(item.sepPeriod.startDate)} → ${DB.formatDate(item.sepPeriod.endDate)}</strong>
+                                                <div style="font-size:10px;color:var(--text-muted);">${item.sepRecord ? '📝 Cập nhật phiếu hiện có' : '➕ Tạo phiếu T9 mới'}</div>
+                                            ` : '—'}
+                                        </td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                `,
+                footer: `
+                    <button class="btn btn-secondary" onclick="Modal.close()">Hủy</button>
+                    <button class="btn btn-primary" onclick="TuitionPage.executeSyncPeriods()">✓ Xác nhận áp dụng cho ${syncPlan.length} học viên</button>
+                `
+            });
+
+            window._pendingSyncPlan = syncPlan;
+        },
+
+        async executeSyncPeriods() {
+            const plan = window._pendingSyncPlan;
+            if (!plan || plan.length === 0) return;
+
+            Modal.close();
+            Toast.info('Đang lưu dữ liệu kỳ học...');
+
+            try {
+                const promises = [];
+
+                for (const item of plan) {
+                    const student = item.student;
+                    let totalFee = 0;
+                    let classNames = [];
+                    student.classIds.forEach(cid => {
+                        const cls = classes.find(c => c.id === cid);
+                        if (cls) {
+                            const fee = (student.customFees && student.customFees[cid] !== undefined) ? student.customFees[cid] : (cls.fee || 0);
+                            totalFee += fee;
+                            classNames.push(cls.name);
+                        }
+                    });
+                    const discount = student.discount || 0;
+                    let finalAmount = Math.round(totalFee * (1 - discount));
+                    finalAmount = DB.roundTuition(finalAmount);
+                    const classIdStr = student.classIds.length === 1 ? student.classIds[0] : 'Nhiều môn';
+
+                    // 1. Update July record if missing startDate / endDate
+                    if (item.julRecord && (!item.julRecord.startDate || !item.julRecord.endDate)) {
+                        promises.push(DB.updateTuition(item.julRecord.id, {
+                            startDate: item.julStart,
+                            endDate: item.julEnd
+                        }));
+                    }
+
+                    // 2. Sync August Record
+                    if (item.augPeriod) {
+                        const noteStr = `Học phí (${DB.formatDate(item.augPeriod.startDate)} - ${DB.formatDate(item.augPeriod.endDate)}: 8 buổi) - ${classNames.join(', ')}`;
+                        if (item.augRecord) {
+                            promises.push(DB.updateTuition(item.augRecord.id, {
+                                startDate: item.augPeriod.startDate,
+                                endDate: item.augPeriod.endDate,
+                                dueDate: item.augPeriod.endDate,
+                                note: noteStr
+                            }));
+                        } else {
+                            promises.push(DB.addTuition({
+                                studentId: student.id,
+                                studentName: student.name,
+                                classId: classIdStr,
+                                amount: finalAmount,
+                                startDate: item.augPeriod.startDate,
+                                endDate: item.augPeriod.endDate,
+                                dueDate: item.augPeriod.endDate,
+                                status: 'pending',
+                                reminderSent: false,
+                                note: noteStr
+                            }));
+                        }
+                    }
+
+                    // 3. Sync September Record
+                    if (item.sepPeriod) {
+                        const noteStr = `Học phí (${DB.formatDate(item.sepPeriod.startDate)} - ${DB.formatDate(item.sepPeriod.endDate)}: 8 buổi) - ${classNames.join(', ')}`;
+                        if (item.sepRecord) {
+                            promises.push(DB.updateTuition(item.sepRecord.id, {
+                                startDate: item.sepPeriod.startDate,
+                                endDate: item.sepPeriod.endDate,
+                                dueDate: item.sepPeriod.endDate,
+                                note: noteStr
+                            }));
+                        } else {
+                            promises.push(DB.addTuition({
+                                studentId: student.id,
+                                studentName: student.name,
+                                classId: classIdStr,
+                                amount: finalAmount,
+                                startDate: item.sepPeriod.startDate,
+                                endDate: item.sepPeriod.endDate,
+                                dueDate: item.sepPeriod.endDate,
+                                status: 'pending',
+                                reminderSent: false,
+                                note: noteStr
+                            }));
+                        }
+                    }
+                }
+
+                await Promise.all(promises);
+                Toast.success('Thành công', 'Đã đồng bộ và chuẩn hóa toàn bộ kỳ học T7, T8 và T9!');
+                tuitions = await DB.getTuitions();
+                render();
+            } catch(e) {
+                console.error(e);
+                Toast.error('Lỗi khi đồng bộ', e.message);
             }
         },
 
