@@ -72,16 +72,56 @@ Router.register('tuition', async (container) => {
             schedules = await DB.getSchedules();
         } catch(e) { console.warn('Could not load schedules:', e); }
 
-        const scheduledDays = new Set();
-        student.classIds.forEach(cid => {
-            const classSchedules = schedules.filter(s => s.classId === cid);
-            classSchedules.forEach(s => {
-                if (s.dayOfWeek) scheduledDays.add(parseInt(s.dayOfWeek));
-            });
-        });
+        let minStartDate = null;
+        let maxEndDate = null;
 
-        // If no schedule configured, fallback to standard 28-day window (4 weeks)
-        if (scheduledDays.size === 0) {
+        for (const cid of student.classIds) {
+            const classSchedules = schedules.filter(s => s.classId === cid);
+            const classDays = new Set();
+            classSchedules.forEach(s => {
+                if (s.dayOfWeek) classDays.add(parseInt(s.dayOfWeek));
+            });
+
+            if (classDays.size > 0) {
+                let checkDate = prevEndDateStr ? new Date(prevEndDateStr) : new Date();
+                checkDate.setDate(checkDate.getDate() + 1);
+
+                let classFirstLesson = null;
+                let classLastLesson = null;
+                let lessonsFound = 0;
+                let safetyLimit = 0;
+
+                while (lessonsFound < lessonsCount && safetyLimit < 365) {
+                    const jsDay = checkDate.getDay();
+                    const ourDay = jsDay === 0 ? 8 : jsDay + 1; // 2=Mon, ..., 8=Sun
+
+                    if (classDays.has(ourDay)) {
+                        if (!classFirstLesson) {
+                            classFirstLesson = new Date(checkDate);
+                        }
+                        lessonsFound++;
+                        if (lessonsFound === lessonsCount) {
+                            classLastLesson = new Date(checkDate);
+                            break;
+                        }
+                    }
+                    checkDate.setDate(checkDate.getDate() + 1);
+                    safetyLimit++;
+                }
+
+                if (classFirstLesson && classLastLesson) {
+                    if (!minStartDate || classFirstLesson < minStartDate) {
+                        minStartDate = classFirstLesson;
+                    }
+                    if (!maxEndDate || classLastLesson > maxEndDate) {
+                        maxEndDate = classLastLesson;
+                    }
+                }
+            }
+        }
+
+        // If no schedules found for any class, fallback to 28-day window (4 weeks)
+        if (!minStartDate || !maxEndDate) {
             let baseStart = prevEndDateStr ? new Date(prevEndDateStr) : new Date();
             baseStart.setDate(baseStart.getDate() + 1);
             let baseEnd = new Date(baseStart);
@@ -93,41 +133,11 @@ Router.register('tuition', async (container) => {
             };
         }
 
-        // Start checking from the day AFTER previous end date (or today if first time)
-        let checkDate = prevEndDateStr ? new Date(prevEndDateStr) : new Date();
-        checkDate.setDate(checkDate.getDate() + 1);
-
-        let firstLessonDate = null;
-        let lastLessonDate = null;
-        let lessonsFound = 0;
-        let safetyLimit = 0;
-
-        while (lessonsFound < lessonsCount && safetyLimit < 365) {
-            const jsDay = checkDate.getDay();
-            const ourDay = jsDay === 0 ? 8 : jsDay + 1; // 2=Mon, ..., 8=Sun
-
-            if (scheduledDays.has(ourDay)) {
-                if (!firstLessonDate) {
-                    firstLessonDate = new Date(checkDate);
-                }
-                lessonsFound++;
-                if (lessonsFound === lessonsCount) {
-                    lastLessonDate = new Date(checkDate);
-                    break;
-                }
-            }
-            checkDate.setDate(checkDate.getDate() + 1);
-            safetyLimit++;
-        }
-
-        if (firstLessonDate && lastLessonDate) {
-            return {
-                startDate: firstLessonDate.toISOString().split('T')[0],
-                endDate: lastLessonDate.toISOString().split('T')[0],
-                lessonsCount: lessonsCount
-            };
-        }
-        return null;
+        return {
+            startDate: minStartDate.toISOString().split('T')[0],
+            endDate: maxEndDate.toISOString().split('T')[0],
+            lessonsCount: lessonsCount
+        };
     }
 
     function getFiltered() {
