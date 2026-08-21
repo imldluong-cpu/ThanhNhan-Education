@@ -101,7 +101,12 @@ Router.register('tuition', async (container) => {
         let maxEndDate = null;
 
         for (const cid of checkClassIds) {
-            const classSchedules = schedules.filter(s => s.classId === cid);
+            // Prioritize recurring weekly schedules over one-off/makeup dates
+            let classSchedules = schedules.filter(s => s.classId === cid && !s.specificDate && !s.isOneOff);
+            if (classSchedules.length === 0) {
+                classSchedules = schedules.filter(s => s.classId === cid);
+            }
+            
             const classDays = new Set();
             classSchedules.forEach(s => {
                 if (s.dayOfWeek) classDays.add(parseInt(s.dayOfWeek));
