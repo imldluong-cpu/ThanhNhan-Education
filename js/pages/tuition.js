@@ -364,7 +364,6 @@ Router.register('tuition', async (container) => {
         <div class="page-header">
             <div><h1 class="page-title"><i data-lucide="wallet"></i> Quản lý Học phí</h1></div>
             <div class="page-actions" style="display:flex;gap:8px;flex-wrap:wrap;">
-                <button class="btn btn-secondary" style="background:linear-gradient(135deg, rgba(37,99,235,0.1), rgba(14,165,233,0.1));border-color:var(--primary-400);color:var(--primary-600);font-weight:600;" onclick="TuitionPage.showSyncPeriodsModal()"><i data-lucide="calendar-sync"></i> ⚡ Đồng bộ kỳ học T7 → T8 → T9</button>
                 <button class="btn btn-secondary" onclick="window.StudentsPage?.showExportModal ? window.StudentsPage.showExportModal() : App.navigate('students')"><i data-lucide="file-spreadsheet"></i> Xuất Excel</button>
                 <button class="btn btn-primary" onclick="TuitionPage.showAdd()"><i data-lucide="plus"></i> Thêm khoản thu</button>
             </div>
