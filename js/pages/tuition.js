@@ -29,8 +29,14 @@ Router.register('tuition', async (container) => {
     let searchTerm = '';
     
     function getTuitionMonth(t) {
+        if (t && t.startDate && t.startDate.length >= 7) {
+            return t.startDate.substring(0, 7);
+        }
         if (t && t.dueDate && t.dueDate.length >= 7) {
             return t.dueDate.substring(0, 7);
+        }
+        if (t && t.paidDate && t.paidDate.length >= 7) {
+            return t.paidDate.substring(0, 7);
         }
         return DB.currentMonth();
     }
