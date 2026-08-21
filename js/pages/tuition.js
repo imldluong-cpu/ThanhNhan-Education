@@ -62,6 +62,74 @@ Router.register('tuition', async (container) => {
         return name.replace(/\s*\(Từ .*? đến .*?\)/gi, '').trim();
     }
 
+    async function calculateNextTuitionPeriod(studentId, prevEndDateStr, lessonsCount = 8) {
+        if (!studentId) return null;
+        const student = students.find(s => s.id === studentId);
+        if (!student || !student.classIds || student.classIds.length === 0) return null;
+
+        let schedules = [];
+        try {
+            schedules = await DB.getSchedules();
+        } catch(e) { console.warn('Could not load schedules:', e); }
+
+        const scheduledDays = new Set();
+        student.classIds.forEach(cid => {
+            const classSchedules = schedules.filter(s => s.classId === cid);
+            classSchedules.forEach(s => {
+                if (s.dayOfWeek) scheduledDays.add(parseInt(s.dayOfWeek));
+            });
+        });
+
+        // If no schedule configured, fallback to standard 28-day window (4 weeks)
+        if (scheduledDays.size === 0) {
+            let baseStart = prevEndDateStr ? new Date(prevEndDateStr) : new Date();
+            baseStart.setDate(baseStart.getDate() + 1);
+            let baseEnd = new Date(baseStart);
+            baseEnd.setDate(baseEnd.getDate() + 28);
+            return {
+                startDate: baseStart.toISOString().split('T')[0],
+                endDate: baseEnd.toISOString().split('T')[0],
+                lessonsCount: lessonsCount
+            };
+        }
+
+        // Start checking from the day AFTER previous end date (or today if first time)
+        let checkDate = prevEndDateStr ? new Date(prevEndDateStr) : new Date();
+        checkDate.setDate(checkDate.getDate() + 1);
+
+        let firstLessonDate = null;
+        let lastLessonDate = null;
+        let lessonsFound = 0;
+        let safetyLimit = 0;
+
+        while (lessonsFound < lessonsCount && safetyLimit < 365) {
+            const jsDay = checkDate.getDay();
+            const ourDay = jsDay === 0 ? 8 : jsDay + 1; // 2=Mon, ..., 8=Sun
+
+            if (scheduledDays.has(ourDay)) {
+                if (!firstLessonDate) {
+                    firstLessonDate = new Date(checkDate);
+                }
+                lessonsFound++;
+                if (lessonsFound === lessonsCount) {
+                    lastLessonDate = new Date(checkDate);
+                    break;
+                }
+            }
+            checkDate.setDate(checkDate.getDate() + 1);
+            safetyLimit++;
+        }
+
+        if (firstLessonDate && lastLessonDate) {
+            return {
+                startDate: firstLessonDate.toISOString().split('T')[0],
+                endDate: lastLessonDate.toISOString().split('T')[0],
+                lessonsCount: lessonsCount
+            };
+        }
+        return null;
+    }
+
     function getFiltered() {
         let list = tuitions;
         if (activeMonth) {
@@ -204,25 +272,39 @@ Router.register('tuition', async (container) => {
         } else {
             // Table view
             content += `<div class="card"><div class="table-container"><table>
-                <thead><tr><th>Học viên</th><th>Lớp</th><th>Số tiền</th><th>Hạn đóng</th><th>Ngày đóng</th><th>Trạng thái</th><th>Thao tác</th></tr></thead>
+                <thead><tr><th>Học viên</th><th>Lớp / Kỳ học</th><th>Số tiền</th><th>Hạn đóng</th><th>Ngày đóng</th><th>Trạng thái</th><th>Thao tác</th></tr></thead>
                 <tbody>`;
             if (filtered.length === 0) {
                 content += '<tr><td colspan="7"><div class="empty-state"><p>Không có dữ liệu</p></div></td></tr>';
             } else {
-                content += filtered.map(t => `<tr>
-                    <td><strong>${getStudentName(t.studentId)}</strong></td>
-                    <td>${getClassName(t.classId, t)}</td>
-                    <td>${DB.formatCurrency(t.amount)}</td>
-                    <td>${DB.formatDate(t.dueDate)}</td>
-                    <td>${t.paidDate ? DB.formatDate(t.paidDate) : '—'}</td>
-                    <td><span class="badge badge-${t._displayStatus === 'paid' ? 'success' : t._displayStatus === 'overdue' ? 'danger' : t._displayStatus === 'upcoming' ? 'info' : 'warning'}">${t._displayStatus === 'paid' ? 'Đã đóng' : t._displayStatus === 'overdue' ? 'Quá hạn' : t._displayStatus === 'upcoming' ? 'Chưa đến hạn' : 'Chưa đóng'}</span></td>
-                    <td><div class="table-actions">
-                        ${t.status !== 'paid' ? `<button class="btn btn-success btn-sm" onclick="TuitionPage.markPaid('${t.id}')">Đã đóng</button>` : ''}
-                        <button class="btn-icon" title="In phiếu" onclick="TuitionPage.showInvoice('${t.id}')"><i data-lucide="printer"></i></button>
-                        <button class="btn-icon" onclick="TuitionPage.edit('${t.id}')"><i data-lucide="pencil"></i></button>
-                        <button class="btn-icon" onclick="TuitionPage.remove('${t.id}')"><i data-lucide="trash-2"></i></button>
-                    </div></td>
-                </tr>`).join('');
+                content += filtered.map(t => {
+                    let periodSubtext = '';
+                    if (t.startDate && t.endDate) {
+                        periodSubtext = `<div style="font-size:11px;color:var(--text-muted);margin-top:2px;">📅 ${DB.formatDate(t.startDate)} → ${DB.formatDate(t.endDate)}</div>`;
+                    } else if (t.note && (t.note.includes('Từ ') || t.note.includes(' - '))) {
+                        const rx = /\((.*?)\)/;
+                        const match = t.note.match(rx);
+                        if (match) periodSubtext = `<div style="font-size:11px;color:var(--text-muted);margin-top:2px;">📅 ${match[1]}</div>`;
+                    }
+
+                    return `<tr>
+                        <td><strong>${getStudentName(t.studentId)}</strong></td>
+                        <td>
+                            <div>${getClassName(t.classId, t)}</div>
+                            ${periodSubtext}
+                        </td>
+                        <td><strong>${DB.formatCurrency(t.amount)}</strong></td>
+                        <td>${DB.formatDate(t.dueDate)}</td>
+                        <td>${t.paidDate ? DB.formatDate(t.paidDate) : '—'}</td>
+                        <td><span class="badge badge-${t._displayStatus === 'paid' ? 'success' : t._displayStatus === 'overdue' ? 'danger' : t._displayStatus === 'upcoming' ? 'info' : 'warning'}">${t._displayStatus === 'paid' ? 'Đã đóng' : t._displayStatus === 'overdue' ? 'Quá hạn' : t._displayStatus === 'upcoming' ? 'Chưa đến hạn' : 'Chưa đóng'}</span></td>
+                        <td><div class="table-actions">
+                            ${t.status !== 'paid' ? `<button class="btn btn-success btn-sm" onclick="TuitionPage.markPaid('${t.id}')">Đã đóng</button>` : ''}
+                            <button class="btn-icon" title="In phiếu thu" onclick="TuitionPage.showInvoice('${t.id}')"><i data-lucide="printer"></i></button>
+                            <button class="btn-icon" title="Sửa" onclick="TuitionPage.edit('${t.id}')"><i data-lucide="pencil"></i></button>
+                            <button class="btn-icon" title="Xóa" onclick="TuitionPage.remove('${t.id}')"><i data-lucide="trash-2"></i></button>
+                        </div></td>
+                    </tr>`;
+                }).join('');
             }
             content += '</tbody></table></div></div>';
         }
@@ -309,27 +391,39 @@ Router.register('tuition', async (container) => {
                 }
 
                 if (createNext && t) {
-                    const [y, m, d] = t.dueDate.split('-');
-                    const nextDue = new Date(y, m - 1, d);
-                    nextDue.setMonth(nextDue.getMonth() + 1);
-                    const nextY = nextDue.getFullYear();
-                    const nextM = String(nextDue.getMonth() + 1).padStart(2, '0');
-                    const nextD = String(nextDue.getDate()).padStart(2, '0');
-                    const nextDueStr = `${nextY}-${nextM}-${nextD}`;
+                    const lastEnd = t.endDate || t.dueDate;
+                    const nextPeriod = await calculateNextTuitionPeriod(t.studentId, lastEnd, 8);
+                    
+                    let nextStartStr = nextPeriod ? nextPeriod.startDate : '';
+                    let nextEndStr = nextPeriod ? nextPeriod.endDate : '';
+                    let nextDueStr = nextEndStr || nextStartStr;
+                    
+                    if (!nextDueStr && t.dueDate) {
+                        const [y, m, d] = t.dueDate.split('-');
+                        const nextDue = new Date(y, m - 1, d);
+                        nextDue.setMonth(nextDue.getMonth() + 1);
+                        nextDueStr = nextDue.toISOString().split('T')[0];
+                    }
+                    
+                    let noteStr = nextStartStr && nextEndStr 
+                        ? `Học phí (${DB.formatDate(nextStartStr)} - ${DB.formatDate(nextEndStr)}: 8 buổi)`
+                        : `Học phí tháng kế tiếp (Tự động)`;
                     
                     await DB.addTuition({
                         studentId: t.studentId,
-                        studentName: t.studentName,
+                        studentName: t.studentName || getStudentName(t.studentId),
                         classId: t.classId || 'Nhiều môn',
                         amount: t.amount,
+                        startDate: nextStartStr,
+                        endDate: nextEndStr,
                         dueDate: nextDueStr,
                         status: 'pending',
                         reminderSent: false,
-                        note: `Học phí tháng ${nextM}/${nextY} (Tạo tự động)`
+                        note: noteStr
                     });
                 }
 
-                Toast.success('Thành công', createNext ? 'Đã xác nhận và tạo phiếu tháng sau' : 'Đã xác nhận thanh toán');
+                Toast.success('Thành công', createNext ? 'Đã xác nhận và tự động tạo phiếu 8 buổi kế tiếp' : 'Đã xác nhận thanh toán');
                 tuitions = await DB.getTuitions();
                 render();
             } catch(e) { Toast.error('Lỗi', e.message); }
@@ -350,15 +444,15 @@ Router.register('tuition', async (container) => {
                 title: 'Thêm khoản thu',
                 content: `
                     <div class="form-group"><label class="form-label">Học viên *</label>
-                        <select class="select" id="t-student"><option value="">Chọn</option>${students.filter(s => s.status === 'active').map(s => `<option value="${s.id}">${s.name}</option>`).join('')}</select></div>
+                        <select class="select" id="t-student"><option value="">-- Chọn học viên --</option>${students.filter(s => s.status === 'active').map(s => `<option value="${s.id}">${s.name}</option>`).join('')}</select></div>
                     <div class="form-group"><label class="form-label">Lớp</label>
-                        <select class="select" id="t-class"><option value="">Chọn</option>${classes.map(c => `<option value="${c.id}">${c.name} ${c.fee ? '(' + DB.formatCurrency(c.fee) + ')' : ''}</option>`).join('')}</select></div>
+                        <select class="select" id="t-class"><option value="">-- Chọn lớp --</option>${classes.map(c => `<option value="${c.id}">${c.name} ${c.fee ? '(' + DB.formatCurrency(c.fee) + ')' : ''}</option>`).join('')}</select></div>
                     <div class="form-row">
                         <div class="form-group"><label class="form-label">Số tiền *</label><input type="number" class="input" id="t-amount" placeholder="0"></div>
                         <div class="form-group"><label class="form-label">Hạn đóng *</label><input type="date" class="input" id="t-due"></div>
                     </div>
-                    <div class="form-group" style="padding: 10px; background: var(--bg-card); border-radius: 8px; border: 1px solid var(--border-color); margin-bottom: 12px;">
-                        <label class="form-label" style="margin-bottom: 8px;">Tự động tính ngày (tùy chọn)</label>
+                    <div class="form-group" style="padding: 12px; background: var(--bg-card); border-radius: 8px; border: 1px solid var(--border-color); margin-bottom: 12px;">
+                        <label class="form-label" style="margin-bottom: 8px; font-weight: 600;">📅 Tự động tính kỳ học (Theo thời khóa biểu)</label>
                         <div class="form-row">
                             <div class="form-group" style="margin-bottom: 0;">
                                 <label class="form-label" style="font-size: 12px;">Tính từ ngày</label>
@@ -372,19 +466,21 @@ Router.register('tuition', async (container) => {
                                 <button class="btn btn-secondary" style="width: 100%; padding: 0 10px;" onclick="TuitionPage.calculateEndDate()"><i data-lucide="calculator"></i> Tính</button>
                             </div>
                         </div>
+                        <div id="t-auto-calc-info" style="color:var(--info-500); font-size: 12px; margin-top: 6px;"></div>
                     </div>
-                    <div class="form-group"><label class="form-label">Ghi chú</label><input type="text" class="input" id="t-note" placeholder="VD: Học phí tháng 6"></div>
+                    <div class="form-group"><label class="form-label">Ghi chú</label><input type="text" class="input" id="t-note" placeholder="VD: Học phí..."></div>
                     <input type="hidden" id="t-hidden-start">
                     <input type="hidden" id="t-hidden-end">
                 `,
                 footer: `<button class="btn btn-secondary" onclick="Modal.close()">Hủy</button><button class="btn btn-primary" onclick="TuitionPage.saveNew()">Lưu</button>`
             });
+            
             document.getElementById('t-class')?.addEventListener('change', function() {
                 const cls = classes.find(c => c.id === this.value);
                 if (cls?.fee) document.getElementById('t-amount').value = cls.fee;
             });
             
-            document.getElementById('t-student')?.addEventListener('change', function() {
+            document.getElementById('t-student')?.addEventListener('change', async function() {
                 const studentId = this.value;
                 if (!studentId) return;
                 
@@ -423,7 +519,32 @@ Router.register('tuition', async (container) => {
                         classSelect.value = 'Nhiều môn';
                     }
                     
-                    if (classNames.length > 0) {
+                    // Look up previous tuition to auto-calculate next 8 sessions
+                    const studentTuitions = tuitions.filter(t => t.studentId === studentId)
+                        .sort((a, b) => (b.endDate || b.dueDate || '').localeCompare(a.endDate || a.dueDate || ''));
+                    
+                    const lastT = studentTuitions[0];
+                    const lastEnd = lastT ? (lastT.endDate || lastT.dueDate) : null;
+                    
+                    const period = await calculateNextTuitionPeriod(studentId, lastEnd, 8);
+                    if (period) {
+                        document.getElementById('t-start-date').value = period.startDate;
+                        document.getElementById('t-lessons-count').value = period.lessonsCount;
+                        document.getElementById('t-hidden-start').value = period.startDate;
+                        document.getElementById('t-hidden-end').value = period.endDate;
+                        document.getElementById('t-due').value = period.endDate;
+                        
+                        const startFmt = DB.formatDate(period.startDate);
+                        const endFmt = DB.formatDate(period.endDate);
+                        document.getElementById('t-note').value = `Học phí (${startFmt} - ${endFmt}: 8 buổi) - ${classNames.join(', ')}`;
+                        
+                        const infoEl = document.getElementById('t-auto-calc-info');
+                        if (infoEl) {
+                            infoEl.innerHTML = lastEnd
+                                ? `✨ Kế thừa từ phiếu trước (đến ${DB.formatDate(lastEnd)}): Bắt đầu ${startFmt} → ${endFmt} (8 buổi)`
+                                : `✨ Tự động tính theo TKB: Bắt đầu ${startFmt} → ${endFmt} (8 buổi)`;
+                        }
+                    } else {
                         const month = new Date().getMonth() + 1;
                         document.getElementById('t-note').value = 'Học phí T' + month + ' - ' + classNames.join(', ');
                     }
@@ -473,8 +594,8 @@ Router.register('tuition', async (container) => {
                         <div class="form-group"><label class="form-label">Số tiền</label><input type="number" class="input" id="t-amount" value="${t.amount || 0}"></div>
                         <div class="form-group"><label class="form-label">Hạn đóng</label><input type="date" class="input" id="t-due" value="${t.dueDate || ''}"></div>
                     </div>
-                    <div class="form-group" style="padding: 10px; background: var(--bg-card); border-radius: 8px; border: 1px solid var(--border-color); margin-bottom: 12px;">
-                        <label class="form-label" style="margin-bottom: 8px;">Tự động tính ngày (tùy chọn)</label>
+                    <div class="form-group" style="padding: 12px; background: var(--bg-card); border-radius: 8px; border: 1px solid var(--border-color); margin-bottom: 12px;">
+                        <label class="form-label" style="margin-bottom: 8px; font-weight: 600;">📅 Tự động tính kỳ học (Theo thời khóa biểu)</label>
                         <div class="form-row">
                             <div class="form-group" style="margin-bottom: 0;">
                                 <label class="form-label" style="font-size: 12px;">Tính từ ngày</label>
@@ -488,6 +609,7 @@ Router.register('tuition', async (container) => {
                                 <button class="btn btn-secondary" style="width: 100%; padding: 0 10px;" onclick="TuitionPage.calculateEndDate()"><i data-lucide="calculator"></i> Tính</button>
                             </div>
                         </div>
+                        <div id="t-auto-calc-info" style="color:var(--info-500); font-size: 12px; margin-top: 6px;"></div>
                     </div>
                     <div class="form-group"><label class="form-label">Trạng thái</label>
                         <select class="select" id="t-status"><option value="pending" ${t.status === 'pending' ? 'selected' : ''}>Chưa đóng</option><option value="overdue" ${t.status === 'overdue' ? 'selected' : ''}>Quá hạn</option><option value="paid" ${t.status === 'paid' ? 'selected' : ''}>Đã đóng</option></select></div>
@@ -797,82 +919,39 @@ Router.register('tuition', async (container) => {
         async calculateEndDate() {
             const studentId = document.getElementById('t-student').value;
             const startDateStr = document.getElementById('t-start-date').value;
-            const lessonsCount = parseInt(document.getElementById('t-lessons-count').value);
+            const lessonsCount = parseInt(document.getElementById('t-lessons-count').value) || 8;
             
-            if (!studentId || !startDateStr || !lessonsCount || lessonsCount <= 0) {
-                Toast.warning('Vui lòng chọn học viên, ngày bắt đầu và số buổi học lớn hơn 0.');
-                return;
-            }
-            
-            const student = students.find(s => s.id === studentId);
-            if (!student || !student.classIds || student.classIds.length === 0) {
-                Toast.warning('Học viên này chưa được xếp vào lớp nào.');
+            if (!studentId || !startDateStr) {
+                Toast.warning('Vui lòng chọn học viên và ngày bắt đầu.');
                 return;
             }
             
             try {
-                // Fetch schedules if not already cached. Assuming DB.getSchedules exists or we can fetch them.
-                const schedules = await DB.getSchedules();
+                const prevDate = new Date(startDateStr);
+                prevDate.setDate(prevDate.getDate() - 1);
+                const prevStr = prevDate.toISOString().split('T')[0];
                 
-                let maxEndDate = null;
-                
-                // For each class the student is in
-                student.classIds.forEach(classId => {
-                    // Find schedules for this class
-                    const classSchedules = schedules.filter(s => s.classId === classId);
-                    if (classSchedules.length === 0) return;
+                const period = await calculateNextTuitionPeriod(studentId, prevStr, lessonsCount);
+                if (period) {
+                    document.getElementById('t-hidden-start').value = period.startDate;
+                    document.getElementById('t-hidden-end').value = period.endDate;
+                    document.getElementById('t-due').value = period.endDate;
                     
-                    // Extract days of week (0-6 where 0 is Sunday or 2-8 where 2 is Monday). 
-                    // In schedule.js, dayMap uses 2=Mon, 3=Tue, 4=Wed, 5=Thu, 6=Fri, 7=Sat, 8=Sun
-                    const scheduledDays = classSchedules.map(s => parseInt(s.dayOfWeek)); // 2 to 8
+                    const startFmt = DB.formatDate(period.startDate);
+                    const endFmt = DB.formatDate(period.endDate);
                     
-                    let currentDate = new Date(startDateStr);
-                    let lessonsFound = 0;
-                    
-                    // Safety limit to avoid infinite loops (e.g. 1 year)
-                    let safetyCounter = 0;
-                    while (lessonsFound < lessonsCount && safetyCounter < 365) {
-                        const jsDay = currentDate.getDay(); // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
-                        // Convert JS day to our system day (2-8)
-                        const ourDay = jsDay === 0 ? 8 : jsDay + 1;
-                        
-                        if (scheduledDays.includes(ourDay)) {
-                            lessonsFound++;
-                        }
-                        
-                        if (lessonsFound < lessonsCount) {
-                            currentDate.setDate(currentDate.getDate() + 1);
-                        }
-                        safetyCounter++;
-                    }
-                    
-                    if (lessonsFound === lessonsCount) {
-                        if (!maxEndDate || currentDate > maxEndDate) {
-                            maxEndDate = new Date(currentDate);
-                        }
-                    }
-                });
-                
-                if (maxEndDate) {
-                    const startObj = new Date(startDateStr);
-                    const formatDt = (d) => {
-                        return String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0') + '/' + d.getFullYear();
-                    };
-                    
-                    const startFmt = formatDt(startObj);
-                    const endFmt = formatDt(maxEndDate);
-                    
-                    // Clean dateStr from note input if present so it doesn't duplicate in Lớp - Môn
                     const noteInput = document.getElementById('t-note');
-                    if (noteInput && noteInput.value) {
-                        noteInput.value = noteInput.value.replace(/\s*\(Từ .*? đến .*?\)/gi, '').trim();
+                    if (noteInput) {
+                        let currentVal = noteInput.value.replace(/\s*\(.*?\)/gi, '').trim();
+                        noteInput.value = `${currentVal} (${startFmt} - ${endFmt}: ${lessonsCount} buổi)`.trim();
                     }
                     
-                    // Save to hidden fields
-                    document.getElementById('t-hidden-start').value = startObj.toISOString().split('T')[0];
-                    document.getElementById('t-hidden-end').value = maxEndDate.toISOString().split('T')[0];
+                    const infoEl = document.getElementById('t-auto-calc-info');
+                    if (infoEl) {
+                        infoEl.innerHTML = `✨ Đã tính: Từ ngày ${startFmt} đến ngày ${endFmt} (${lessonsCount} buổi)`;
+                    }
                     
-                    Toast.success(`Đã tính: Đến ngày ${endFmt}`);
+                    Toast.success(`Đã tính: Đến ngày ${endFmt} (${lessonsCount} buổi)`);
                 } else {
                     Toast.warning('Không tìm thấy lịch học phù hợp để tính toán.');
                 }
