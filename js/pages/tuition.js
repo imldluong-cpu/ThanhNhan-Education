@@ -62,20 +62,45 @@ Router.register('tuition', async (container) => {
         return name.replace(/\s*\(Từ .*? đến .*?\)/gi, '').trim();
     }
 
-    async function calculateNextTuitionPeriod(studentId, prevEndDateStr, lessonsCount = 8) {
+    function parseLocalDate(dateStr) {
+        if (!dateStr) return new Date();
+        const parts = dateStr.split('-').map(Number);
+        if (parts.length === 3) {
+            return new Date(parts[0], parts[1] - 1, parts[2]);
+        }
+        return new Date(dateStr);
+    }
+
+    function formatLocalDate(d) {
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    }
+
+    async function calculateNextTuitionPeriod(studentId, targetClassId, refDateStr, lessonsCount = 8, isStartDate = false) {
         if (!studentId) return null;
         const student = students.find(s => s.id === studentId);
-        if (!student || !student.classIds || student.classIds.length === 0) return null;
+        if (!student) return null;
 
         let schedules = [];
         try {
             schedules = await DB.getSchedules();
         } catch(e) { console.warn('Could not load schedules:', e); }
 
+        let checkClassIds = [];
+        if (targetClassId && targetClassId !== 'Nhiều môn') {
+            checkClassIds = [targetClassId];
+        } else if (student.classIds && student.classIds.length > 0) {
+            checkClassIds = student.classIds;
+        }
+
+        if (checkClassIds.length === 0) return null;
+
         let minStartDate = null;
         let maxEndDate = null;
 
-        for (const cid of student.classIds) {
+        for (const cid of checkClassIds) {
             const classSchedules = schedules.filter(s => s.classId === cid);
             const classDays = new Set();
             classSchedules.forEach(s => {
@@ -83,8 +108,10 @@ Router.register('tuition', async (container) => {
             });
 
             if (classDays.size > 0) {
-                let checkDate = prevEndDateStr ? new Date(prevEndDateStr) : new Date();
-                checkDate.setDate(checkDate.getDate() + 1);
+                let checkDate = parseLocalDate(refDateStr);
+                if (!isStartDate) {
+                    checkDate.setDate(checkDate.getDate() + 1);
+                }
 
                 let classFirstLesson = null;
                 let classLastLesson = null;
@@ -97,11 +124,11 @@ Router.register('tuition', async (container) => {
 
                     if (classDays.has(ourDay)) {
                         if (!classFirstLesson) {
-                            classFirstLesson = new Date(checkDate);
+                            classFirstLesson = new Date(checkDate.getTime());
                         }
                         lessonsFound++;
                         if (lessonsFound === lessonsCount) {
-                            classLastLesson = new Date(checkDate);
+                            classLastLesson = new Date(checkDate.getTime());
                             break;
                         }
                     }
@@ -120,22 +147,21 @@ Router.register('tuition', async (container) => {
             }
         }
 
-        // If no schedules found for any class, fallback to 28-day window (4 weeks)
         if (!minStartDate || !maxEndDate) {
-            let baseStart = prevEndDateStr ? new Date(prevEndDateStr) : new Date();
-            baseStart.setDate(baseStart.getDate() + 1);
-            let baseEnd = new Date(baseStart);
+            let baseStart = parseLocalDate(refDateStr);
+            if (!isStartDate) baseStart.setDate(baseStart.getDate() + 1);
+            let baseEnd = new Date(baseStart.getTime());
             baseEnd.setDate(baseEnd.getDate() + 28);
             return {
-                startDate: baseStart.toISOString().split('T')[0],
-                endDate: baseEnd.toISOString().split('T')[0],
+                startDate: formatLocalDate(baseStart),
+                endDate: formatLocalDate(baseEnd),
                 lessonsCount: lessonsCount
             };
         }
 
         return {
-            startDate: minStartDate.toISOString().split('T')[0],
-            endDate: maxEndDate.toISOString().split('T')[0],
+            startDate: formatLocalDate(minStartDate),
+            endDate: formatLocalDate(maxEndDate),
             lessonsCount: lessonsCount
         };
     }
@@ -403,17 +429,16 @@ Router.register('tuition', async (container) => {
 
                 if (createNext && t) {
                     const lastEnd = t.endDate || t.dueDate;
-                    const nextPeriod = await calculateNextTuitionPeriod(t.studentId, lastEnd, 8);
+                    const nextPeriod = await calculateNextTuitionPeriod(t.studentId, t.classId, lastEnd, 8, false);
                     
                     let nextStartStr = nextPeriod ? nextPeriod.startDate : '';
                     let nextEndStr = nextPeriod ? nextPeriod.endDate : '';
                     let nextDueStr = nextEndStr || nextStartStr;
                     
                     if (!nextDueStr && t.dueDate) {
-                        const [y, m, d] = t.dueDate.split('-');
-                        const nextDue = new Date(y, m - 1, d);
+                        const nextDue = parseLocalDate(t.dueDate);
                         nextDue.setMonth(nextDue.getMonth() + 1);
-                        nextDueStr = nextDue.toISOString().split('T')[0];
+                        nextDueStr = formatLocalDate(nextDue);
                     }
                     
                     let noteStr = nextStartStr && nextEndStr 
@@ -486,9 +511,26 @@ Router.register('tuition', async (container) => {
                 footer: `<button class="btn btn-secondary" onclick="Modal.close()">Hủy</button><button class="btn btn-primary" onclick="TuitionPage.saveNew()">Lưu</button>`
             });
             
-            document.getElementById('t-class')?.addEventListener('change', function() {
-                const cls = classes.find(c => c.id === this.value);
-                if (cls?.fee) document.getElementById('t-amount').value = cls.fee;
+            document.getElementById('t-class')?.addEventListener('change', async function() {
+                const studentId = document.getElementById('t-student')?.value;
+                const clsId = this.value;
+                const cls = classes.find(c => c.id === clsId);
+                const student = students.find(s => s.id === studentId);
+                if (student && cls) {
+                    const fee = (student.customFees && student.customFees[clsId] !== undefined) ? student.customFees[clsId] : (cls.fee || 0);
+                    const discount = student.discount || 0;
+                    let finalAmount = Math.round(fee * (1 - discount));
+                    document.getElementById('t-amount').value = DB.roundTuition(finalAmount);
+                } else if (cls?.fee) {
+                    document.getElementById('t-amount').value = cls.fee;
+                }
+                
+                if (studentId) {
+                    const startDateVal = document.getElementById('t-start-date')?.value;
+                    if (startDateVal) {
+                        TuitionPage.calculateEndDate();
+                    }
+                }
             });
             
             document.getElementById('t-student')?.addEventListener('change', async function() {
@@ -536,8 +578,9 @@ Router.register('tuition', async (container) => {
                     
                     const lastT = studentTuitions[0];
                     const lastEnd = lastT ? (lastT.endDate || lastT.dueDate) : null;
+                    const targetClassId = classSelect.value;
                     
-                    const period = await calculateNextTuitionPeriod(studentId, lastEnd, 8);
+                    const period = await calculateNextTuitionPeriod(studentId, targetClassId, lastEnd, 8, false);
                     if (period) {
                         document.getElementById('t-start-date').value = period.startDate;
                         document.getElementById('t-lessons-count').value = period.lessonsCount;
@@ -601,6 +644,12 @@ Router.register('tuition', async (container) => {
                 title: 'Sửa khoản thu',
                 content: `
                     <div class="form-group"><label class="form-label">Học viên</label><select class="select" id="t-student">${students.map(s => `<option value="${s.id}" ${s.id === t.studentId ? 'selected' : ''}>${s.name}</option>`).join('')}</select></div>
+                    <div class="form-group"><label class="form-label">Lớp</label>
+                        <select class="select" id="t-edit-class">
+                            <option value="Nhiều môn" ${t.classId === 'Nhiều môn' ? 'selected' : ''}>Nhiều môn</option>
+                            ${classes.map(c => `<option value="${c.id}" ${c.id === t.classId ? 'selected' : ''}>${c.name} ${c.fee ? '(' + DB.formatCurrency(c.fee) + ')' : ''}</option>`).join('')}
+                        </select>
+                    </div>
                     <div class="form-row">
                         <div class="form-group"><label class="form-label">Số tiền</label><input type="number" class="input" id="t-amount" value="${t.amount || 0}"></div>
                         <div class="form-group"><label class="form-label">Hạn đóng</label><input type="date" class="input" id="t-due" value="${t.dueDate || ''}"></div>
@@ -651,6 +700,7 @@ Router.register('tuition', async (container) => {
                 const updates = { 
                     studentId: document.getElementById('t-student').value, 
                     studentName: getStudentName(document.getElementById('t-student').value), 
+                    classId: document.getElementById('t-edit-class')?.value || oldT?.classId || 'Nhiều môn',
                     amount: parseInt(document.getElementById('t-amount').value) || 0, 
                     dueDate: document.getElementById('t-due').value, 
                     status, 
@@ -928,9 +978,10 @@ Router.register('tuition', async (container) => {
         },
         
         async calculateEndDate() {
-            const studentId = document.getElementById('t-student').value;
-            const startDateStr = document.getElementById('t-start-date').value;
-            const lessonsCount = parseInt(document.getElementById('t-lessons-count').value) || 8;
+            const studentId = document.getElementById('t-student')?.value;
+            const classId = document.getElementById('t-edit-class')?.value || document.getElementById('t-class')?.value || null;
+            const startDateStr = document.getElementById('t-start-date')?.value;
+            const lessonsCount = parseInt(document.getElementById('t-lessons-count')?.value) || 8;
             
             if (!studentId || !startDateStr) {
                 Toast.warning('Vui lòng chọn học viên và ngày bắt đầu.');
@@ -938,15 +989,14 @@ Router.register('tuition', async (container) => {
             }
             
             try {
-                const prevDate = new Date(startDateStr);
-                prevDate.setDate(prevDate.getDate() - 1);
-                const prevStr = prevDate.toISOString().split('T')[0];
-                
-                const period = await calculateNextTuitionPeriod(studentId, prevStr, lessonsCount);
+                const period = await calculateNextTuitionPeriod(studentId, classId, startDateStr, lessonsCount, true);
                 if (period) {
-                    document.getElementById('t-hidden-start').value = period.startDate;
-                    document.getElementById('t-hidden-end').value = period.endDate;
-                    document.getElementById('t-due').value = period.endDate;
+                    const hiddenStart = document.getElementById('t-hidden-start');
+                    const hiddenEnd = document.getElementById('t-hidden-end');
+                    const dueInput = document.getElementById('t-due');
+                    if (hiddenStart) hiddenStart.value = period.startDate;
+                    if (hiddenEnd) hiddenEnd.value = period.endDate;
+                    if (dueInput) dueInput.value = period.endDate;
                     
                     const startFmt = DB.formatDate(period.startDate);
                     const endFmt = DB.formatDate(period.endDate);
@@ -987,12 +1037,14 @@ Router.register('tuition', async (container) => {
                 let augRecord = sTuitions.find(t => (t.dueDate && (t.dueDate.startsWith('2026-08') || t.dueDate.startsWith('2025-08'))) || (t.startDate && (t.startDate.startsWith('2026-08') || t.startDate.startsWith('2025-08'))) || (t.note && (t.note.includes('tháng 8') || t.note.includes('T8'))));
                 let sepRecord = sTuitions.find(t => (t.dueDate && (t.dueDate.startsWith('2026-09') || t.dueDate.startsWith('2025-09'))) || (t.startDate && (t.startDate.startsWith('2026-09') || t.startDate.startsWith('2025-09'))) || (t.note && (t.note.includes('tháng 9') || t.note.includes('T9'))));
 
+                const classId = (augRecord?.classId) || (julRecord?.classId) || (student.classIds.length === 1 ? student.classIds[0] : 'Nhiều môn');
+
                 // 1. Determine July Period
                 let julEnd = julRecord ? (julRecord.endDate || julRecord.dueDate) : null;
                 let julStart = julRecord ? julRecord.startDate : null;
                 
                 if (julRecord && (!julStart || !julEnd)) {
-                    const jPeriod = await calculateNextTuitionPeriod(student.id, '2026-06-30', 8);
+                    const jPeriod = await calculateNextTuitionPeriod(student.id, classId, '2026-06-30', 8, false);
                     if (jPeriod) {
                         julStart = julStart || jPeriod.startDate;
                         julEnd = julEnd || jPeriod.endDate;
@@ -1002,24 +1054,23 @@ Router.register('tuition', async (container) => {
                 // 2. Compute August Period from July End
                 let augPeriod = null;
                 if (julEnd) {
-                    augPeriod = await calculateNextTuitionPeriod(student.id, julEnd, 8);
+                    augPeriod = await calculateNextTuitionPeriod(student.id, classId, julEnd, 8, false);
                 } else if (augRecord && (augRecord.startDate || augRecord.dueDate)) {
                     const baseStart = augRecord.startDate || augRecord.dueDate;
-                    const prevD = new Date(baseStart);
-                    prevD.setDate(prevD.getDate() - 1);
-                    augPeriod = await calculateNextTuitionPeriod(student.id, prevD.toISOString().split('T')[0], 8);
+                    augPeriod = await calculateNextTuitionPeriod(student.id, classId, baseStart, 8, true);
                 }
 
                 // 3. Compute September Period from August End
                 let sepPeriod = null;
                 const augEnd = augPeriod ? augPeriod.endDate : (augRecord ? (augRecord.endDate || augRecord.dueDate) : null);
                 if (augEnd) {
-                    sepPeriod = await calculateNextTuitionPeriod(student.id, augEnd, 8);
+                    sepPeriod = await calculateNextTuitionPeriod(student.id, classId, augEnd, 8, false);
                 }
 
                 if (augPeriod || sepPeriod) {
                     syncPlan.push({
                         student,
+                        classId,
                         julRecord,
                         julStart,
                         julEnd,
