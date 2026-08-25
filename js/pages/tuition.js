@@ -758,30 +758,50 @@ Router.register('tuition', async (container) => {
             const currentMonth = String(d.getMonth() + 1).padStart(2, '0');
             const currentYear = d.getFullYear();
             
-            const dueDateObj = new Date(t.dueDate);
-            const monthStr = String(dueDateObj.getMonth() + 1).padStart(2, '0');
-            const yearStr = dueDateObj.getFullYear();
-            
-            let fromDateStr = `01/${monthStr}/${yearStr}`;
-            let toDateStr = `30/${monthStr}/${yearStr}`;
-            
             const formatDt = (dateString) => {
-                const d = new Date(dateString);
-                return String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0') + '/' + d.getFullYear();
+                const dateObj = parseLocalDate(dateString);
+                return String(dateObj.getDate()).padStart(2, '0') + '/' + String(dateObj.getMonth() + 1).padStart(2, '0') + '/' + dateObj.getFullYear();
             };
+
+            let fromDateStr = '';
+            let toDateStr = '';
             
             if (t.startDate && t.endDate) {
                 fromDateStr = formatDt(t.startDate);
                 toDateStr = formatDt(t.endDate);
             } else if (t.note) {
-                // Parse note for "(Từ dd/mm/yyyy đến dd/mm/yyyy)"
-                const rx = /Từ (\d{2}\/\d{2}\/\d{4}) đến (\d{2}\/\d{2}\/\d{4})/;
+                const rx = /(?:Từ\s+)?(\d{2}\/\d{2}\/\d{4})\s*(?:đến|-)\s*(\d{2}\/\d{2}\/\d{4})/;
                 const match = t.note.match(rx);
                 if (match) {
                     fromDateStr = match[1];
                     toDateStr = match[2];
                 }
             }
+
+            if (!fromDateStr) {
+                const fallbackDate = t.dueDate ? parseLocalDate(t.dueDate) : new Date();
+                const m = String(fallbackDate.getMonth() + 1).padStart(2, '0');
+                const y = fallbackDate.getFullYear();
+                fromDateStr = `01/${m}/${y}`;
+                toDateStr = `30/${m}/${y}`;
+            }
+
+            // Calculate tuition month & year based on START of study period
+            let periodDateObj = null;
+            if (t.startDate) {
+                periodDateObj = parseLocalDate(t.startDate);
+            } else if (fromDateStr && fromDateStr.length === 10) {
+                const parts = fromDateStr.split('/');
+                if (parts.length === 3) {
+                    periodDateObj = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
+                }
+            }
+            if (!periodDateObj || isNaN(periodDateObj.getTime())) {
+                periodDateObj = t.dueDate ? parseLocalDate(t.dueDate) : new Date();
+            }
+
+            const monthStr = String(periodDateObj.getMonth() + 1).padStart(2, '0');
+            const yearStr = periodDateObj.getFullYear();
 
             Modal.show({
                 title: 'Phiếu thu học phí',
@@ -904,8 +924,6 @@ Router.register('tuition', async (container) => {
                 const amountText = document.getElementById('inv-amount').innerText;
                 const fromDateText = document.getElementById('inv-from-date').innerText;
                 const toDateText = document.getElementById('inv-to-date').innerText;
-                const monthText = document.getElementById('inv-month').innerText.padStart(2, '0');
-                const yearText = document.getElementById('inv-year').innerText;
                 
                 const amount = parseInt(amountText.replace(/[^\d]/g, '')) || 0;
                 
@@ -921,22 +939,20 @@ Router.register('tuition', async (container) => {
                 const t = tuitions.find(x => x.id === id);
                 if (!t) return;
                 
-                const d = new Date(t.dueDate);
-                d.setFullYear(parseInt(yearText) || d.getFullYear());
-                d.setMonth((parseInt(monthText) || 1) - 1);
+                const newDueDate = endDate || t.dueDate || startDate;
                 
                 const updates = { 
                     amount: amount, 
-                    startDate: startDate, 
-                    endDate: endDate,
-                    dueDate: d.toISOString()
+                    startDate: startDate || t.startDate || '', 
+                    endDate: endDate || t.endDate || '',
+                    dueDate: newDueDate
                 };
                 
                 await DB.updateTuition(id, updates);
                 
                 t.amount = amount;
-                t.startDate = startDate;
-                t.endDate = endDate;
+                if (startDate) t.startDate = startDate;
+                if (endDate) t.endDate = endDate;
                 t.dueDate = updates.dueDate;
                 
                 render();
