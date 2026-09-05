@@ -1275,9 +1275,78 @@ Router.register('schedule', async (container) => {
             }
         },
 
+        async restoreSchedulesFromAttendance(silent = false) {
+            try {
+                const allClasses = await DB.getClasses();
+                const allSchedules = await DB.getSchedules();
+                const allAttendanceSnap = await window.db.collection('attendance').get();
+
+                const attendanceDocs = allAttendanceSnap.docs.map(d => d.data());
+                let restoredCount = 0;
+
+                for (const c of allClasses) {
+                    const classId = c.id;
+                    const classAtt = attendanceDocs.filter(a => a.classId === classId && a.date && a.date <= '2026-09-06');
+                    if (classAtt.length === 0) continue;
+
+                    const daysOfWeekFound = new Set();
+                    classAtt.forEach(a => {
+                        const [y, m, d] = a.date.split('-').map(Number);
+                        const dt = new Date(y, m - 1, d);
+                        let jsDay = dt.getDay() + 1;
+                        if (jsDay === 1) jsDay = 8;
+                        daysOfWeekFound.add(jsDay);
+                    });
+
+                    const existingClassSchs = allSchedules.filter(s => s.classId === classId && !s.specificDate);
+                    const oldSchs = existingClassSchs.filter(s => s.endDate === '2026-09-06');
+
+                    for (const dayOfWeek of daysOfWeekFound) {
+                        const hasOldDay = oldSchs.some(s => s.dayOfWeek === dayOfWeek);
+                        if (!hasOldDay) {
+                            const templateSch = existingClassSchs.find(s => s.dayOfWeek === dayOfWeek) || existingClassSchs[0];
+                            const startTime = templateSch ? templateSch.startTime : '17:30';
+                            const endTime = templateSch ? templateSch.endTime : '19:00';
+                            const room = templateSch ? templateSch.room : (c.room || '');
+
+                            await DB.addSchedule({
+                                classId,
+                                dayOfWeek,
+                                startTime,
+                                endTime,
+                                room,
+                                endDate: '2026-09-06'
+                            });
+                            restoredCount++;
+                        }
+                    }
+
+                    const currentSchs = existingClassSchs.filter(s => !s.endDate && !s.startDate);
+                    for (const s of currentSchs) {
+                        await DB.updateSchedule(s.id, { startDate: '2026-09-07' });
+                    }
+                }
+
+                schedules = await DB.getSchedules();
+                render();
+                if (!silent) {
+                    if (restoredCount > 0) {
+                        Toast.success('Đã khôi phục từ Điểm danh!', `Đã khôi phục ${restoredCount} ca học quá khứ từ dữ liệu điểm danh thực tế.`);
+                    } else {
+                        Toast.info('Thông báo', 'Dữ liệu lịch học quá khứ đã được khôi phục đầy đủ.');
+                    }
+                }
+            } catch(e) {
+                console.warn('Restore from attendance:', e);
+                if (!silent) Toast.error('Lỗi khôi phục lịch', e.message);
+            }
+        },
+
         async autoFixAllClassSchedules() {
             try {
-                if (localStorage.getItem('sched_autofix_20260907_v3')) return;
+                if (localStorage.getItem('sched_autofix_20260907_v4')) return;
+
+                await this.restoreSchedulesFromAttendance(true);
 
                 const allDB = await DB.getSchedules();
                 let fixedAny = false;
@@ -1296,11 +1365,9 @@ Router.register('schedule', async (container) => {
                     if (!hasSplit && schs.length > 0) {
                         for (const s of schs) {
                             if (!s.endDate && !s.startDate) {
-                                // 1. Keep existing record for dates <= 2026-09-06
                                 await DB.updateSchedule(s.id, { endDate: '2026-09-06' });
                                 s.endDate = '2026-09-06';
 
-                                // 2. Create parallel new record for dates >= 2026-09-07
                                 await DB.addSchedule({
                                     classId: s.classId,
                                     dayOfWeek: s.dayOfWeek,
@@ -1315,7 +1382,7 @@ Router.register('schedule', async (container) => {
                     }
                 }
 
-                localStorage.setItem('sched_autofix_20260907_v3', 'true');
+                localStorage.setItem('sched_autofix_20260907_v4', 'true');
                 if (fixedAny) {
                     schedules = await DB.getSchedules();
                     render();
