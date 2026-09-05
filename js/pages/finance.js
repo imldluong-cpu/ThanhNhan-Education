@@ -39,7 +39,7 @@ Router.register('finance', async (container) => {
                 toDate = customEnd;
             }
 
-            const tSnap = await window.db.collection('tuition').where('paymentDate', '>=', fromDate).where('paymentDate', '<=', toDate).get();
+            const tSnap = await window.db.collection('tuition').where('paidDate', '>=', fromDate).where('paidDate', '<=', toDate).get();
             const taSnap = await window.db.collection('teacherAttendance').where('date', '>=', fromDate).where('date', '<=', toDate).get();
 
             const pnlMap = {};
