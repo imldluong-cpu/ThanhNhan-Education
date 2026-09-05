@@ -11,71 +11,7 @@ Router.register('schedule', async (container) => {
         scheduleExceptions = await DB.getScheduleExceptions();
     } catch(e) { console.warn(e); }
 
-    // ===== AUTO-RECOVER SCHEDULES (Ground Truth) =====
-    if (!sessionStorage.getItem('schedule_recovery_v4_final')) {
-        try {
-            const allSnap = await window.db.collection('schedules').get();
-            const recurringCount = allSnap.docs.filter(d => !d.data().specificDate).length;
 
-            if (recurringCount < 5) {
-                console.log('⚠️ Đang khôi phục lịch học gốc 100%...');
-                const findClassId = (name) => {
-                    const c = classes.find(x => x.name.trim().toLowerCase() === name.trim().toLowerCase());
-                    return c ? c.id : null;
-                };
-
-                const originalSchedules = [
-                    { className: 'Lý 12', dayOfWeek: 3, startTime: '09:00', endTime: '10:30', room: 'P.T1' },
-                    { className: 'Lý 12', dayOfWeek: 8, startTime: '09:00', endTime: '10:30', room: 'P.T1' },
-                    { className: 'Toán 8', dayOfWeek: 4, startTime: '09:00', endTime: '10:30', room: 'P.T1' },
-                    { className: 'Toán 8', dayOfWeek: 8, startTime: '15:00', endTime: '16:30', room: 'P.T1' },
-                    { className: 'Văn 6', dayOfWeek: 2, startTime: '17:30', endTime: '19:00', room: 'P.T1' },
-                    { className: 'Văn 6', dayOfWeek: 7, startTime: '17:30', endTime: '19:00', room: 'P.T1' },
-                    { className: 'Anh Văn 6', dayOfWeek: 3, startTime: '17:30', endTime: '19:00', room: 'P.T2' },
-                    { className: 'Anh Văn 6', dayOfWeek: 5, startTime: '17:30', endTime: '19:00', room: 'P.T2' },
-                    { className: 'Toán 6', dayOfWeek: 4, startTime: '17:30', endTime: '19:00', room: 'P.T2' },
-                    { className: 'Toán 6', dayOfWeek: 7, startTime: '17:30', endTime: '19:00', room: 'P.T2' },
-                    { className: 'Anh Văn 8', dayOfWeek: 3, startTime: '17:30', endTime: '19:00', room: 'P.T1' },
-                    { className: 'Anh Văn 8', dayOfWeek: 6, startTime: '17:30', endTime: '19:00', room: 'P.T1' },
-                    { className: 'Hóa 11', dayOfWeek: 4, startTime: '17:30', endTime: '19:00', room: 'P.T2' },
-                    { className: 'Hóa 11', dayOfWeek: 8, startTime: '17:30', endTime: '19:00', room: 'P.T2' },
-                    { className: 'Lý 10', dayOfWeek: 2, startTime: '17:30', endTime: '19:00', room: 'P.T2' },
-                    { className: 'Lý 10', dayOfWeek: 6, startTime: '17:30', endTime: '19:00', room: 'P.T2' },
-                    { className: 'Ngữ Văn 10', dayOfWeek: 3, startTime: '17:30', endTime: '19:00', room: 'P.T1' },
-                    { className: 'Ngữ Văn 10', dayOfWeek: 5, startTime: '17:30', endTime: '19:00', room: 'P.T1' }
-                ];
-
-                const existing = new Set();
-                allSnap.docs.forEach(doc => {
-                    const d = doc.data();
-                    if (!d.specificDate) existing.add(`${d.classId}_${d.dayOfWeek}`);
-                });
-
-                const toAdd = [];
-                originalSchedules.forEach(item => {
-                    const cid = findClassId(item.className);
-                    if (cid && !existing.has(`${cid}_${item.dayOfWeek}`)) {
-                        toAdd.push({
-                            classId: cid,
-                            dayOfWeek: item.dayOfWeek,
-                            startTime: item.startTime,
-                            endTime: item.endTime,
-                            room: item.room
-                        });
-                    }
-                });
-
-                if (toAdd.length > 0) {
-                    await DB.addSchedulesBatch(toAdd);
-                    schedules = await DB.getSchedules();
-                    console.log(`✅ Khôi phục thành công ${toAdd.length} lịch định kỳ chuẩn!`);
-                    Toast.success(`Đã tự động khôi phục hoàn chỉnh!`, `Toàn bộ lịch gốc trước 21:00 PM đã được phục hồi chính xác 100%.`);
-                }
-            }
-        } catch(e) { console.error('Recovery error:', e); }
-        sessionStorage.setItem('schedule_recovery_v4_final', '1');
-    }
-    // ===== END AUTO-RECOVER =====
 
     let filterClassId = '';
 
