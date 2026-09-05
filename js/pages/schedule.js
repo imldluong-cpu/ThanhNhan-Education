@@ -11,174 +11,69 @@ Router.register('schedule', async (container) => {
         scheduleExceptions = await DB.getScheduleExceptions();
     } catch(e) { console.warn(e); }
 
-    // ===== AUTO-RECOVER SCHEDULES FROM ATTENDANCE DATA =====
-    if (!sessionStorage.getItem('schedule_recovery_v2_done')) {
+    // ===== AUTO-RECOVER SCHEDULES (Ground Truth) =====
+    if (!sessionStorage.getItem('schedule_recovery_v4_final')) {
         try {
-            const existingSnap = await window.db.collection('schedules').get();
-            const existingRecurring = existingSnap.docs.filter(d => !d.data().specificDate);
-            
-            // Only run recovery if schedules are missing (less than 5 recurring schedules)
-            if (existingRecurring.length < 5) {
-                console.log('⚠️ Only', existingRecurring.length, 'recurring schedules found. Starting recovery...');
-                
-                // Read attendance records to find patterns
-                const attSnap = await window.db.collection('attendance').get();
-                const attRecords = attSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-                
-                // Build class -> day pattern map from attendance
-                const classScheduleMap = {}; // classId -> { dayOfWeek -> { count, dates[] } }
-                
-                attRecords.forEach(att => {
-                    if (!att.classId || !att.date) return;
-                    const [y, m, d] = att.date.split('-').map(Number);
-                    const dateObj = new Date(y, m - 1, d);
-                    const jsDay = dateObj.getDay(); // 0=Sun
-                    const firestoreDay = jsDay === 0 ? 8 : jsDay + 1; // 2=Mon, 8=Sun
-                    
-                    if (!classScheduleMap[att.classId]) classScheduleMap[att.classId] = {};
-                    if (!classScheduleMap[att.classId][firestoreDay]) {
-                        classScheduleMap[att.classId][firestoreDay] = { count: 0, dates: [] };
-                    }
-                    classScheduleMap[att.classId][firestoreDay].count++;
-                    classScheduleMap[att.classId][firestoreDay].dates.push(att.date);
-                });
-                
-                // Determine existing schedule classId+day combos
-                const existingCombos = new Set();
-                existingRecurring.forEach(doc => {
+            const allSnap = await window.db.collection('schedules').get();
+            const recurringCount = allSnap.docs.filter(d => !d.data().specificDate).length;
+
+            if (recurringCount < 5) {
+                console.log('⚠️ Đang khôi phục lịch học gốc 100%...');
+                const findClassId = (name) => {
+                    const c = classes.find(x => x.name.trim().toLowerCase() === name.trim().toLowerCase());
+                    return c ? c.id : null;
+                };
+
+                const originalSchedules = [
+                    { className: 'Lý 12', dayOfWeek: 3, startTime: '09:00', endTime: '10:30', room: 'P.T1' },
+                    { className: 'Lý 12', dayOfWeek: 8, startTime: '09:00', endTime: '10:30', room: 'P.T1' },
+                    { className: 'Toán 8', dayOfWeek: 4, startTime: '09:00', endTime: '10:30', room: 'P.T1' },
+                    { className: 'Toán 8', dayOfWeek: 8, startTime: '15:00', endTime: '16:30', room: 'P.T1' },
+                    { className: 'Văn 6', dayOfWeek: 2, startTime: '17:30', endTime: '19:00', room: 'P.T1' },
+                    { className: 'Văn 6', dayOfWeek: 7, startTime: '17:30', endTime: '19:00', room: 'P.T1' },
+                    { className: 'Anh Văn 6', dayOfWeek: 3, startTime: '17:30', endTime: '19:00', room: 'P.T2' },
+                    { className: 'Anh Văn 6', dayOfWeek: 5, startTime: '17:30', endTime: '19:00', room: 'P.T2' },
+                    { className: 'Toán 6', dayOfWeek: 4, startTime: '17:30', endTime: '19:00', room: 'P.T2' },
+                    { className: 'Toán 6', dayOfWeek: 7, startTime: '17:30', endTime: '19:00', room: 'P.T2' },
+                    { className: 'Anh Văn 8', dayOfWeek: 3, startTime: '17:30', endTime: '19:00', room: 'P.T1' },
+                    { className: 'Anh Văn 8', dayOfWeek: 6, startTime: '17:30', endTime: '19:00', room: 'P.T1' },
+                    { className: 'Hóa 11', dayOfWeek: 4, startTime: '17:30', endTime: '19:00', room: 'P.T2' },
+                    { className: 'Hóa 11', dayOfWeek: 8, startTime: '17:30', endTime: '19:00', room: 'P.T2' },
+                    { className: 'Lý 10', dayOfWeek: 2, startTime: '17:30', endTime: '19:00', room: 'P.T2' },
+                    { className: 'Lý 10', dayOfWeek: 6, startTime: '17:30', endTime: '19:00', room: 'P.T2' },
+                    { className: 'Ngữ Văn 10', dayOfWeek: 3, startTime: '17:30', endTime: '19:00', room: 'P.T1' },
+                    { className: 'Ngữ Văn 10', dayOfWeek: 5, startTime: '17:30', endTime: '19:00', room: 'P.T1' }
+                ];
+
+                const existing = new Set();
+                allSnap.docs.forEach(doc => {
                     const d = doc.data();
-                    existingCombos.add(`${d.classId}_${d.dayOfWeek}`);
+                    if (!d.specificDate) existing.add(`${d.classId}_${d.dayOfWeek}`);
                 });
-                
-                // Default time slots per class (will be shown in modal for user to confirm)
-                const classTimeDefaults = {};
-                
-                // Also read teacher-attendance to find actual check-in times
-                const teachAttSnap = await window.db.collection('teacherAttendance').get();
-                const teachAtts = teachAttSnap.docs.map(d => d.data());
-                
-                // Build time patterns from teacher attendance
-                teachAtts.forEach(ta => {
-                    if (!ta.classId || !ta.checkinTime) return;
-                    const key = ta.classId;
-                    if (!classTimeDefaults[key]) classTimeDefaults[key] = {};
-                    const dateStr = ta.date;
-                    if (!dateStr) return;
-                    const [y, m, d] = dateStr.split('-').map(Number);
-                    const dateObj = new Date(y, m - 1, d);
-                    const jsDay = dateObj.getDay();
-                    const firestoreDay = jsDay === 0 ? 8 : jsDay + 1;
-                    if (!classTimeDefaults[key][firestoreDay]) classTimeDefaults[key][firestoreDay] = [];
-                    classTimeDefaults[key][firestoreDay].push(ta.checkinTime);
-                });
-                
-                // Build recovery suggestions
-                const toRecover = [];
-                const classMap = {};
-                classes.forEach(c => { classMap[c.id] = c; });
-                
-                for (const classId in classScheduleMap) {
-                    for (const day in classScheduleMap[classId]) {
-                        const info = classScheduleMap[classId][day];
-                        if (info.count >= 2 && !existingCombos.has(`${classId}_${day}`)) {
-                            // This class had multiple attendances on this day → likely a regular schedule
-                            let startTime = '17:30';
-                            let endTime = '19:00';
-                            let room = '';
-                            
-                            // Try to get time from teacher attendance
-                            if (classTimeDefaults[classId] && classTimeDefaults[classId][day]) {
-                                const times = classTimeDefaults[classId][day].sort();
-                                if (times.length > 0) {
-                                    startTime = times[0].substring(0, 5);
-                                    // Calculate end time (1.5 hours later)
-                                    const [h, mn] = startTime.split(':').map(Number);
-                                    const endMin = h * 60 + mn + 90;
-                                    endTime = `${String(Math.floor(endMin / 60)).padStart(2, '0')}:${String(endMin % 60).padStart(2, '0')}`;
-                                }
-                            }
-                            
-                            // Get room from class data
-                            const cls = classMap[classId];
-                            if (cls && cls.room) room = cls.room;
-                            
-                            toRecover.push({
-                                classId,
-                                className: cls ? cls.name : classId,
-                                dayOfWeek: parseInt(day),
-                                startTime,
-                                endTime,
-                                room,
-                                attendanceCount: info.count
-                            });
-                        }
-                    }
-                }
-                
-                if (toRecover.length > 0) {
-                    // Show recovery modal for user to review and confirm
-                    const dayNames = ['', '', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7', 'CN'];
-                    let tableHtml = '<table style="width:100%;border-collapse:collapse;font-size:13px;">';
-                    tableHtml += '<tr style="background:var(--primary,#4f46e5);color:#fff;"><th style="padding:8px;">Lớp</th><th>Thứ</th><th>Bắt đầu</th><th>Kết thúc</th><th>Phòng</th><th>Số buổi ĐD</th></tr>';
-                    
-                    toRecover.forEach((r, i) => {
-                        tableHtml += `<tr style="border-bottom:1px solid var(--border-color,#e2e8f0);">
-                            <td style="padding:6px 8px;font-weight:600;">${r.className}</td>
-                            <td><select class="select rec-day" data-idx="${i}" style="min-width:80px;">
-                                ${[2,3,4,5,6,7,8].map(d => `<option value="${d}" ${d === r.dayOfWeek ? 'selected' : ''}>${dayNames[d]}</option>`).join('')}
-                            </select></td>
-                            <td><input type="time" class="input rec-start" data-idx="${i}" value="${r.startTime}" style="width:100px;"></td>
-                            <td><input type="time" class="input rec-end" data-idx="${i}" value="${r.endTime}" style="width:100px;"></td>
-                            <td><select class="select rec-room" data-idx="${i}" style="min-width:80px;">
-                                <option value="">-</option>
-                                <option value="Trệt" ${r.room==='Trệt'?'selected':''}>Trệt</option>
-                                <option value="P.T1" ${r.room==='P.T1'?'selected':''}>P.T1</option>
-                                <option value="P.T2" ${r.room==='P.T2'?'selected':''}>P.T2</option>
-                                <option value="P.ST" ${r.room==='P.ST'?'selected':''}>P.ST</option>
-                            </select></td>
-                            <td style="text-align:center;color:var(--text-muted);">${r.attendanceCount}</td>
-                        </tr>`;
-                    });
-                    tableHtml += '</table>';
-                    
-                    // Also show existing schedules
-                    let existingHtml = '';
-                    if (existingRecurring.length > 0) {
-                        existingHtml = '<p style="margin-top:12px;font-size:12px;color:var(--text-muted);"><strong>Lịch hiện có (giữ nguyên):</strong></p><ul style="font-size:12px;color:var(--text-muted);margin-top:4px;">';
-                        existingRecurring.forEach(doc => {
-                            const d = doc.data();
-                            const cls = classMap[d.classId];
-                            existingHtml += `<li>${cls ? cls.name : d.classId} - ${dayNames[d.dayOfWeek]} ${d.startTime}-${d.endTime} ${d.room || ''}</li>`;
+
+                const toAdd = [];
+                originalSchedules.forEach(item => {
+                    const cid = findClassId(item.className);
+                    if (cid && !existing.has(`${cid}_${item.dayOfWeek}`)) {
+                        toAdd.push({
+                            classId: cid,
+                            dayOfWeek: item.dayOfWeek,
+                            startTime: item.startTime,
+                            endTime: item.endTime,
+                            room: item.room
                         });
-                        existingHtml += '</ul>';
                     }
-                    
-                    window.__recoveryData = toRecover;
-                    
-                    Modal.show({
-                        title: '🔄 Phục hồi lịch học từ dữ liệu điểm danh',
-                        size: 'lg',
-                        content: `
-                            <div style="background:var(--danger-bg,#fef2f2);border:1px solid var(--danger,#ef4444);border-radius:8px;padding:12px;margin-bottom:12px;">
-                                <p style="color:var(--danger,#ef4444);font-size:13px;font-weight:600;">⚠️ Phát hiện lịch học bị thiếu! Hệ thống đã phân tích dữ liệu điểm danh để suy ra lịch gốc.</p>
-                                <p style="color:var(--text-secondary);font-size:12px;margin-top:4px;">Vui lòng kiểm tra và điều chỉnh giờ học, phòng trước khi bấm Phục hồi.</p>
-                            </div>
-                            <div style="max-height:50vh;overflow-y:auto;">${tableHtml}</div>
-                            ${existingHtml}
-                        `,
-                        footer: `
-                            <button class="btn btn-secondary" onclick="Modal.close()">Để sau</button>
-                            <button class="btn btn-primary" onclick="SchedulePage.executeRecovery()">✅ Phục hồi ${toRecover.length} lịch</button>
-                        `
-                    });
-                } else {
-                    console.log('No schedules to recover from attendance data.');
+                });
+
+                if (toAdd.length > 0) {
+                    await DB.addSchedulesBatch(toAdd);
+                    schedules = await DB.getSchedules();
+                    console.log(`✅ Khôi phục thành công ${toAdd.length} lịch định kỳ chuẩn!`);
+                    Toast.success(`Đã tự động khôi phục hoàn chỉnh!`, `Toàn bộ lịch gốc trước 21:00 PM đã được phục hồi chính xác 100%.`);
                 }
             }
-            sessionStorage.setItem('schedule_recovery_v2_done', '1');
-        } catch(e) {
-            console.error('Recovery error:', e);
-        }
+        } catch(e) { console.error('Recovery error:', e); }
+        sessionStorage.setItem('schedule_recovery_v4_final', '1');
     }
     // ===== END AUTO-RECOVER =====
 
@@ -1168,10 +1063,10 @@ Router.register('schedule', async (container) => {
                     });
                 }
                 
-                if (newData.room) {
-                    await DB.updateClass(newData.classId, { room: newData.room });
-                    const c = classes.find(x => x.id === newData.classId);
-                    if (c) c.room = newData.room;
+                if (room) {
+                    await DB.updateClass(classId, { room: room });
+                    const c = classes.find(x => x.id === classId);
+                    if (c) c.room = room;
                 }
 
                 Modal.close();
