@@ -157,125 +157,126 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    // 6. Firebase Integration
-    window.globalTeacherMap = {};
-    window.fetchTeachersDataPromise = fetchTeachersData();
-    
-    const firebaseConfig = {
-        apiKey: "AIzaSyB0X4HHNv-TqJAsyE9XKRXIxzB7yRO6v84",
-        authDomain: "thanhnhaneducation-29a2f.firebaseapp.com",
-        projectId: "thanhnhaneducation-29a2f",
-        storageBucket: "thanhnhaneducation-29a2f.firebasestorage.app",
-        messagingSenderId: "849842230265",
-        appId: "1:849842230265:web:b4f852137e83633318a328"
-    };
+    // 6. Google Sheets Classes Integration
+    // Link Google Sheets xuất bản dạng TSV cho Lớp Học
+    const classesSheetUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRQqEkB66KPPZZotJLPyosS8A_coYHWx7ghereXtBTNrMrRPrDyIQ2iBaz-J86OdN-j9llEh5XUPilp/pub?gid=403979586&single=true&output=tsv';
 
-    if (window.firebase) {
-        firebase.initializeApp(firebaseConfig);
-        const db = firebase.firestore();
-        
-        async function fetchClassesData() {
-            try {
-                if (window.fetchTeachersDataPromise) {
-                    await window.fetchTeachersDataPromise;
-                }
-                // Fetch Teachers
-                const teachersSnap = await db.collection('users').where('role', '==', 'teacher').get();
-                const teachers = {};
-                teachersSnap.forEach(doc => {
-                    teachers[doc.id] = doc.data();
-                });
-
-                // Fetch Classes
-                const classesSnap = await db.collection('classes').get();
-                const activeClasses = [];
-                const upcomingClasses = [];
-                
-                classesSnap.forEach(doc => {
-                    let data = doc.data();
-                    
-                    // Đồng bộ định dạng năm học giống phần mềm quản lý
-                    if (data.academicYear && data.academicYear.indexOf(' - ') === -1) {
-                        data.academicYear = data.academicYear.replace('-', ' - ');
-                    }
-                    if (!data.academicYear) data.academicYear = '2025 - 2026';
-                    
-                    // Lọc chỉ lấy năm học hiện tại
-                    if (data.academicYear === '2026 - 2027') {
-                        if (data.status === 'active') activeClasses.push({ id: doc.id, ...data });
-                        else if (data.status === 'upcoming') upcomingClasses.push({ id: doc.id, ...data });
-                    }
-                });
-                
-                function formatCurrency(amount) {
-                    return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount || 0);
-                }
-                
-                function formatDate(dateStr) {
-                    if (!dateStr) return '';
-                    const d = new Date(dateStr);
-                    return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
-                }
-                
-                function getTeacherNames(teacherIds) {
-                    if (!teacherIds || teacherIds.length === 0) return 'Chưa phân công';
-                    return teacherIds.map(id => {
-                        if (!teachers[id]) return '';
-                        const rawName = (teachers[id].displayName || teachers[id].email || '').trim();
-                        const key = rawName.toLowerCase();
-                        return window.globalTeacherMap && window.globalTeacherMap[key] ? window.globalTeacherMap[key] : rawName;
-                    }).filter(Boolean).join(', ') || 'Chưa phân công';
-                }
-
-                function renderClassCard(c, isUpcoming = false) {
-                    const badgeHtml = isUpcoming ? `<div class="class-badge upcoming">Mới</div>` : '';
-                    const startDateHtml = isUpcoming && c.startDate ? `<li><i data-lucide="clock"></i> Khai giảng: <strong>${formatDate(c.startDate)}</strong></li>` : '';
-                    
-                    return `
-                        <div class="class-card">
-                            ${badgeHtml}
-                            <h3 class="class-title">${c.name}</h3>
-                            <ul class="class-details">
-                                ${startDateHtml}
-                                <li><i data-lucide="book-open"></i> Môn: ${c.subject || 'Đang cập nhật'}</li>
-                                <li><i data-lucide="user"></i> GV: ${getTeacherNames(c.teacherIds)}</li>
-                                <li><i data-lucide="wallet"></i> Học phí: ${c.fee ? formatCurrency(c.fee) + '/tháng' : 'Theo bảng giá'}</li>
-                            </ul>
-                            <a href="https://zalo.me/0388877543" target="_blank" class="btn ${isUpcoming ? 'btn-primary' : 'btn-outline'}">${isUpcoming ? 'Giữ chỗ ngay' : 'Đăng ký bổ sung'}</a>
-                        </div>
-                    `;
-                }
-
-                const gridActive = document.getElementById('grid-lop-dang-day');
-                const gridUpcoming = document.getElementById('grid-lop-sap-mo');
-
-                if (gridActive) {
-                    if (activeClasses.length > 0) {
-                        gridActive.innerHTML = activeClasses.map(c => renderClassCard(c, false)).join('');
-                    } else {
-                        gridActive.innerHTML = '<div style="grid-column: 1/-1; text-align: center; color: var(--text-muted);">Hiện chưa có lớp nào đang dạy.</div>';
-                    }
-                }
-                
-                if (gridUpcoming) {
-                    if (upcomingClasses.length > 0) {
-                        gridUpcoming.innerHTML = upcomingClasses.map(c => renderClassCard(c, true)).join('');
-                    } else {
-                        gridUpcoming.innerHTML = '<div style="grid-column: 1/-1; text-align: center; color: var(--text-muted);">Hiện chưa có lớp nào chuẩn bị khai giảng.</div>';
-                    }
-                }
-                
-                lucide.createIcons();
-                
-            } catch (error) {
-                console.error("Lỗi khi tải dữ liệu từ Firebase:", error);
-                document.getElementById('grid-lop-dang-day').innerHTML = '<div style="grid-column: 1/-1; text-align: center; color: var(--primary-red);">Lỗi kết nối dữ liệu. Vui lòng thử lại sau.</div>';
-                document.getElementById('grid-lop-sap-mo').innerHTML = '<div style="grid-column: 1/-1; text-align: center; color: var(--primary-red);">Lỗi kết nối dữ liệu. Vui lòng thử lại sau.</div>';
-            }
+    function formatFee(feeStr) {
+        if (!feeStr || feeStr.trim() === '') return '';
+        let clean = feeStr.trim();
+        let num = Number(clean.replace(/[^\d]/g, ''));
+        if (!isNaN(num) && num > 0 && !clean.includes('đ') && !clean.includes('/tháng') && !clean.toLowerCase().includes('bảng giá')) {
+            return new Intl.NumberFormat('vi-VN').format(num) + 'đ/tháng';
         }
-        
-        fetchClassesData();
+        return clean;
     }
+
+    async function fetchClassesData() {
+        const gridActive = document.getElementById('grid-lop-dang-day');
+        const gridUpcoming = document.getElementById('grid-lop-sap-mo');
+        if (!gridActive && !gridUpcoming) return;
+
+        try {
+            const response = await fetch(classesSheetUrl);
+            if (!response.ok) throw new Error('Chưa thể kết nối Google Sheets lớp học');
+            const data = await response.text();
+            
+            // Parse TSV
+            const rows = data.split('\n').filter(r => r.trim());
+            if (rows.length === 0) return;
+
+            // Đọc dòng tiêu đề để tự động map vị trí cột linh hoạt theo tên cột
+            const headerCols = rows.shift().split('\t').map(h => h.trim().toLowerCase());
+            
+            const findCol = (keywords, defaultIdx = -1) => {
+                const idx = headerCols.findIndex(h => keywords.some(k => h === k || h.startsWith(k + ' ') || h.endsWith(' ' + k) || h.includes(' ' + k + ' ')));
+                return idx !== -1 ? idx : defaultIdx;
+            };
+
+            const nameIdx = findCol(['tên lớp', 'lớp', 'tên'], 0);
+            const teacherIdx = findCol(['giáo viên', 'gv', 'thầy', 'cô', 'giảng viên'], 1);
+            const scheduleIdx = findCol(['lịch học', 'lịch', 'thời gian'], 2);
+            const startDateIdx = findCol(['ngày khai giảng', 'khai giảng', 'ngày mở'], 3);
+            const feeIdx = findCol(['học phí', 'chi phí', 'tiền học', 'giá tiền'], -1);
+            const statusIdx = findCol(['trạng thái', 'tình trạng', 'status'], -1);
+
+            const activeClasses = [];
+            const upcomingClasses = [];
+
+            rows.forEach(row => {
+                const cols = row.split('\t');
+                const name = nameIdx !== -1 && cols[nameIdx] ? cols[nameIdx].trim() : '';
+                if (!name) return;
+
+                const teacher = teacherIdx !== -1 && cols[teacherIdx] && cols[teacherIdx].trim() ? cols[teacherIdx].trim() : 'Chưa phân công';
+                const schedule = scheduleIdx !== -1 && cols[scheduleIdx] && cols[scheduleIdx].trim() ? cols[scheduleIdx].trim() : '';
+                let startDate = startDateIdx !== -1 && cols[startDateIdx] && cols[startDateIdx].trim() ? cols[startDateIdx].trim() : '';
+                const fee = feeIdx !== -1 && cols[feeIdx] && cols[feeIdx].trim() ? formatFee(cols[feeIdx]) : '';
+                
+                // Trạng thái: đọc từ cột Trạng thái nếu có
+                let status = 'đang dạy';
+                if (statusIdx !== -1 && cols[statusIdx] && cols[statusIdx].trim()) {
+                    status = cols[statusIdx].trim().toLowerCase();
+                } else if (startDate && !startDate.toLowerCase().includes('đã khai giảng')) {
+                    status = 'chuẩn bị khai giảng';
+                }
+
+                const classObj = { name, teacher, schedule, startDate, fee };
+
+                if (status.includes('khai giảng') || status.includes('chuẩn bị') || status.includes('upcoming') || status.includes('sắp mở') || status.includes('mới')) {
+                    upcomingClasses.push(classObj);
+                } else {
+                    activeClasses.push(classObj);
+                }
+            });
+
+            function renderClassCard(c, isUpcoming = false) {
+                const badgeHtml = isUpcoming ? `<div class="class-badge upcoming">Mới</div>` : '';
+                const startDateHtml = isUpcoming && c.startDate && !c.startDate.toLowerCase().includes('đã khai giảng') ? `<li><i data-lucide="clock"></i> Khai giảng: <strong>${c.startDate}</strong></li>` : '';
+                const scheduleHtml = c.schedule ? `<li><i data-lucide="calendar"></i> Lịch học: ${c.schedule}</li>` : '';
+                const feeHtml = c.fee ? `<li><i data-lucide="wallet"></i> Học phí: ${c.fee}</li>` : '';
+                
+                return `
+                    <div class="class-card">
+                        ${badgeHtml}
+                        <h3 class="class-title">${c.name}</h3>
+                        <ul class="class-details">
+                            ${startDateHtml}
+                            ${scheduleHtml}
+                            <li><i data-lucide="user"></i> GV: ${c.teacher}</li>
+                            ${feeHtml}
+                        </ul>
+                        <a href="https://zalo.me/0388877543" target="_blank" class="btn ${isUpcoming ? 'btn-primary' : 'btn-outline'}">${isUpcoming ? 'Giữ chỗ ngay' : 'Đăng ký bổ sung'}</a>
+                    </div>
+                `;
+            }
+
+            if (gridActive) {
+                if (activeClasses.length > 0) {
+                    gridActive.innerHTML = activeClasses.map(c => renderClassCard(c, false)).join('');
+                } else {
+                    gridActive.innerHTML = '<div style="grid-column: 1/-1; text-align: center; color: var(--text-muted);">Hiện chưa có lớp nào đang dạy.</div>';
+                }
+            }
+            
+            if (gridUpcoming) {
+                if (upcomingClasses.length > 0) {
+                    gridUpcoming.innerHTML = upcomingClasses.map(c => renderClassCard(c, true)).join('');
+                } else {
+                    gridUpcoming.innerHTML = '<div style="grid-column: 1/-1; text-align: center; color: var(--text-muted);">Hiện chưa có lớp nào chuẩn bị khai giảng.</div>';
+                }
+            }
+
+            lucide.createIcons();
+
+        } catch (error) {
+            console.warn("Chờ cập nhật link Google Sheets Lớp Học:", error);
+            if (gridActive) gridActive.innerHTML = '<div style="grid-column: 1/-1; text-align: center; color: var(--text-muted);">Đang kết nối danh sách lớp học từ Google Sheets...</div>';
+            if (gridUpcoming) gridUpcoming.innerHTML = '<div style="grid-column: 1/-1; text-align: center; color: var(--text-muted);">Đang kết nối danh sách lớp học từ Google Sheets...</div>';
+        }
+    }
+
+    fetchClassesData();
 
     // 7. Google Sheets Teachers Integration
     async function fetchTeachersData() {
@@ -320,14 +321,6 @@ document.addEventListener('DOMContentLoaded', () => {
                         objectPosition = cols[4].trim();
                     }
                     
-                    // Xây dựng map tên hiển thị cho Firebase
-                    if (cols.length >= 6 && cols[5].trim()) {
-                        const firebaseNames = cols[5].split(',');
-                        firebaseNames.forEach(fn => {
-                            window.globalTeacherMap[fn.trim().toLowerCase()] = name;
-                        });
-                    }
-                    
                     let imageStyle = `style="object-position: ${objectPosition};"`;
                     let imgContainerStyle = '';
                     
@@ -362,4 +355,6 @@ document.addEventListener('DOMContentLoaded', () => {
             container.innerHTML = '<div style="grid-column: 1/-1; text-align: center; color: var(--primary-red);">Lỗi tải dữ liệu giáo viên. Vui lòng thử lại sau.</div>';
         }
     }
+
+    fetchTeachersData();
 });

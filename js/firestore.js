@@ -407,6 +407,7 @@ const DB = {
     },
 
     async updateSchedule(id, data) {
+        data.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
         return await window.db.collection('schedules').doc(id).update(data);
     },
 

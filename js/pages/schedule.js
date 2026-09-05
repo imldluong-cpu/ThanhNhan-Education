@@ -158,7 +158,13 @@ Router.register('schedule', async (container) => {
                     
                     dayEvents.forEach(s => {
                         const c = classes.find(x => x.id === s.classId);
-                        if (c && c.startDate && dateStr < c.startDate) return; // Skip if before start date
+                        if (c && c.startDate && dateStr < c.startDate) return; // Skip if before class start date
+                        if (c && c.endDate && dateStr > c.endDate) return;
+
+                        // Check schedule-level start/effective and end boundaries
+                        const sStart = s.startDate || s.effectiveFrom;
+                        if (sStart && dateStr < sStart) return;
+                        if (s.endDate && dateStr > s.endDate) return;
 
                         const exception = scheduleExceptions.find(ex => ex.scheduleId === s.id && ex.originalDate === dateStr);
                         if (exception) return; // Skip if exception exists
@@ -256,7 +262,7 @@ Router.register('schedule', async (container) => {
                     if (closeIcon) closeIcon.onclick = revertFn;
                 }
 
-                // Nút giữa: Dời cố định
+                // Nút giữa: Dời cố định từ ngày chỉ định
                 Modal.bindMiddle(async () => {
                     try {
                         if (isException) {
@@ -264,20 +270,34 @@ Router.register('schedule', async (container) => {
                             scheduleExceptions = scheduleExceptions.filter(e => e.id !== ev.extendedProps.exceptionId);
                         }
 
-                        await DB.updateSchedule(ev.groupId, {
-                            dayOfWeek: dayOfWeek,
-                            startTime: startTime,
-                            endTime: endTime
-                        });
-                        
                         const sch = schedules.find(s => s.id === ev.groupId);
                         if (sch) {
-                            sch.dayOfWeek = dayOfWeek;
-                            sch.startTime = startTime;
-                            sch.endTime = endTime;
+                            const effDateObj = new Date(newDateStr + 'T00:00:00');
+                            effDateObj.setDate(effDateObj.getDate() - 1);
+                            const prevDayStr = effDateObj.toISOString().split('T')[0];
+
+                            if (sch.startDate && newDateStr <= sch.startDate) {
+                                await DB.updateSchedule(ev.groupId, {
+                                    dayOfWeek: dayOfWeek,
+                                    startTime: startTime,
+                                    endTime: endTime,
+                                    startDate: newDateStr
+                                });
+                            } else {
+                                await DB.updateSchedule(ev.groupId, { endDate: prevDayStr });
+                                await DB.addSchedule({
+                                    classId: sch.classId,
+                                    dayOfWeek: dayOfWeek,
+                                    startTime: startTime,
+                                    endTime: endTime,
+                                    room: sch.room || '',
+                                    startDate: newDateStr
+                                });
+                            }
                         }
-                        Toast.success('Đã cập nhật lịch cố định');
-                        window.calendar.refetchEvents();
+                        schedules = await DB.getSchedules();
+                        Toast.success('Đã cập nhật lịch cố định từ ngày ' + newDateStr);
+                        render();
                     } catch(e) {
                         info.revert();
                         throw e;
@@ -360,12 +380,13 @@ Router.register('schedule', async (container) => {
                 ${canEdit ? `<button class="btn btn-primary" onclick="SchedulePage.showAddSchedule()"><i data-lucide="plus"></i> Thêm lịch học</button>` : ''}
             </div>
         </div>
-        <div class="filter-bar">
+        <div class="filter-bar" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
             <select class="select" style="max-width:250px;" onchange="SchedulePage.filterClass(this.value)">
                 <option value="">Tất cả lớp</option>
                 ${classes.map(c => `<option value="${c.id}">${c.name}</option>`).join('')}
             </select>
-            ${canEdit ? `<p style="font-size:12px;color:var(--text-muted);margin-left:8px;">💡 Kéo thả để dời lịch • Nhấp đúp để sửa</p>` : ''}
+            ${canEdit ? `<p style="font-size:12px;color:var(--text-muted);margin-left:4px;">💡 Kéo thả để dời lịch • Nhấp đúp / Click để sửa</p>` : ''}
+            ${canEdit ? `<button class="btn btn-secondary btn-sm" style="margin-left:auto;" onclick="SchedulePage.repairTodayEdits()"><i data-lucide="calendar-check"></i> Áp dụng các lịch chỉnh hôm nay từ 07/09</button>` : ''}
         </div>
         <div id="schedule-grid" class="schedule-wrapper"></div>
     `;
@@ -775,15 +796,17 @@ Router.register('schedule', async (container) => {
                 return;
             }
 
+            const defaultEffDate = sch.startDate || '2026-09-07';
+
             Modal.show({
                 title: 'Sửa lịch học định kỳ',
                 content: `
                     <div class="form-group"><label class="form-label">Lớp</label>
                         <select class="select" id="se-class">${classes.map(c => `<option value="${c.id}" ${c.id === sch.classId ? 'selected' : ''}>${c.name}</option>`).join('')}</select></div>
                     <div class="form-row">
-                        <div class="form-group"><label class="form-label">Thứ</label>
+                        <div class="form-group"><label class="form-label">Thứ trong tuần</label>
                             <select class="select" id="se-day">${dayNames.map((d, j) => `<option value="${j+2}" ${j+2 === sch.dayOfWeek ? 'selected' : ''}>${d}</option>`).join('')}</select></div>
-                        <div class="form-group"><label class="form-label">Phòng</label>
+                        <div class="form-group"><label class="form-label">Phòng học</label>
                             <select class="select" id="se-room">
                                 <option value="" ${!sch.room ? 'selected' : ''}>Phòng</option>
                                 <option value="Trệt" ${sch.room === 'Trệt' ? 'selected' : ''}>Trệt</option>
@@ -799,13 +822,41 @@ Router.register('schedule', async (container) => {
                         <div class="form-group"><label class="form-label">Kết thúc</label>
                             <input type="time" class="input" id="se-end" value="${sch.endTime}"></div>
                     </div>
+
+                    <div style="margin-top:14px;padding:12px;background:var(--bg-hover, #f8fafc);border-radius:8px;border:1px solid var(--border-color,#e2e8f0);">
+                        <label class="form-label" style="font-weight:600;display:flex;align-items:center;gap:6px;margin-bottom:8px;color:var(--primary,#4f46e5);">
+                            📅 Phạm vi áp dụng lịch mới
+                        </label>
+                        <div style="display:flex;flex-direction:column;gap:8px;">
+                            <label style="display:flex;align-items:flex-start;gap:8px;font-size:13px;cursor:pointer;">
+                                <input type="radio" name="se-scope" value="from_date" checked style="margin-top:2px;" onchange="document.getElementById('se-date-wrap').style.display='block'">
+                                <div>
+                                    <strong>Áp dụng từ ngày chỉ định trở đi</strong>
+                                    <div style="font-size:11px;color:var(--text-muted);">Giữ nguyên lịch cũ trong các tuần trước ngày này</div>
+                                </div>
+                            </label>
+                            <div id="se-date-wrap" style="margin-left:24px;margin-top:2px;">
+                                <div style="display:flex;align-items:center;gap:8px;">
+                                    <span style="font-size:13px;color:var(--text-secondary);">Lịch mới áp dụng từ ngày:</span>
+                                    <input type="date" class="input" id="se-effective-date" value="${defaultEffDate}" style="max-width:180px;">
+                                </div>
+                            </div>
+                            <label style="display:flex;align-items:flex-start;gap:8px;font-size:13px;cursor:pointer;margin-top:4px;">
+                                <input type="radio" name="se-scope" value="all" style="margin-top:2px;" onchange="document.getElementById('se-date-wrap').style.display='none'">
+                                <div>
+                                    <strong>Thay đổi toàn bộ lịch</strong>
+                                    <div style="font-size:11px;color:var(--text-muted);">Cập nhật cho tất cả các tuần trong quá khứ và tương lai</div>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
                 `,
                 footer: `
                     <div style="display:flex;justify-content:space-between;width:100%;">
                         <button class="btn btn-ghost" onclick="SchedulePage.showAddSchedule('${sch.classId}', 'one-off')"><i data-lucide="plus"></i> Thêm buổi khác</button>
                         <div style="display:flex;gap:8px;">
                             <button class="btn btn-secondary" onclick="Modal.close()">Hủy</button>
-                            <button class="btn btn-primary" onclick="SchedulePage.saveEdit('${id}')">Cập nhật</button>
+                            <button class="btn btn-primary" onclick="SchedulePage.saveEdit('${id}')">💾 Cập nhật lịch</button>
                         </div>
                     </div>
                 `
@@ -842,30 +893,68 @@ Router.register('schedule', async (container) => {
 
         async saveEdit(id) {
             try {
-                const newData = {
-                    classId: document.getElementById('se-class').value,
-                    dayOfWeek: parseInt(document.getElementById('se-day').value),
-                    startTime: document.getElementById('se-start').value,
-                    endTime: document.getElementById('se-end').value,
-                    room: document.getElementById('se-room').value
-                };
+                const sch = schedules.find(s => s.id === id);
+                if (!sch) return;
 
-                if (newData.room) {
+                const classId = document.getElementById('se-class').value;
+                const dayOfWeek = parseInt(document.getElementById('se-day').value);
+                const startTime = document.getElementById('se-start').value;
+                const endTime = document.getElementById('se-end').value;
+                const room = document.getElementById('se-room').value;
+
+                const scopeEl = document.querySelector('input[name="se-scope"]:checked');
+                const applyScope = scopeEl ? scopeEl.value : 'from_date';
+                const effectiveDateStr = document.getElementById('se-effective-date')?.value || '2026-09-07';
+
+                if (!startTime || !endTime) { Toast.warning('Nhập giờ', 'Vui lòng chọn đầy đủ giờ học'); return; }
+                if (startTime >= endTime) { Toast.warning('Giờ không hợp lệ', 'Giờ bắt đầu phải trước giờ kết thúc'); return; }
+
+                if (room) {
                     const allDB = await DB.getSchedules();
                     const conflict = allDB.find(s => 
                         s.id !== id &&
                         !s.specificDate &&
-                        s.dayOfWeek === newData.dayOfWeek && 
-                        s.room === newData.room && 
-                        newData.startTime < s.endTime && newData.endTime > s.startTime
+                        s.dayOfWeek === dayOfWeek && 
+                        s.room === room && 
+                        startTime < s.endTime && endTime > s.startTime &&
+                        (!s.endDate || s.endDate >= effectiveDateStr) &&
+                        (!s.startDate || s.startDate <= effectiveDateStr)
                     );
                     if (conflict) { 
-                        Toast.error('Trùng phòng học', `Phòng ${newData.room} đã có lớp từ ${conflict.startTime} đến ${conflict.endTime}`); 
+                        Toast.error('Trùng phòng học', `Phòng ${room} đã có lớp từ ${conflict.startTime} đến ${conflict.endTime}`); 
                         return; 
                     }
                 }
 
-                await DB.updateSchedule(id, newData);
+                if (applyScope === 'from_date' && effectiveDateStr) {
+                    const effDateObj = new Date(effectiveDateStr + 'T00:00:00');
+                    effDateObj.setDate(effDateObj.getDate() - 1);
+                    const prevDayStr = effDateObj.toISOString().split('T')[0];
+
+                    if (sch.startDate && effectiveDateStr <= sch.startDate) {
+                        await DB.updateSchedule(id, {
+                            classId, dayOfWeek, startTime, endTime, room, startDate: effectiveDateStr
+                        });
+                    } else {
+                        // 1. End old schedule on prevDayStr
+                        await DB.updateSchedule(id, { endDate: prevDayStr });
+
+                        // 2. Create new schedule starting from effectiveDateStr
+                        await DB.addSchedule({
+                            classId,
+                            dayOfWeek,
+                            startTime,
+                            endTime,
+                            room: room || '',
+                            startDate: effectiveDateStr
+                        });
+                    }
+                } else {
+                    await DB.updateSchedule(id, {
+                        classId, dayOfWeek, startTime, endTime, room,
+                        endDate: null
+                    });
+                }
                 
                 if (newData.room) {
                     await DB.updateClass(newData.classId, { room: newData.room });
@@ -956,6 +1045,45 @@ Router.register('schedule', async (container) => {
                 }
                 render();
             } catch(e) { Toast.error('Lỗi', e.message); }
+        },
+
+        async repairTodayEdits() {
+            try {
+                const targetEffDate = '2026-09-07';
+                let updatedCount = 0;
+
+                const allSchedules = await DB.getSchedules();
+                
+                for (const s of allSchedules) {
+                    if (s.specificDate) continue;
+
+                    let isRecentEdit = false;
+                    if (s.updatedAt) {
+                        const uDate = typeof s.updatedAt.toDate === 'function' ? s.updatedAt.toDate() : new Date(s.updatedAt);
+                        const uStr = uDate.toISOString().split('T')[0];
+                        if (uStr === '2026-09-05' || uStr === '2026-09-06') isRecentEdit = true;
+                    } else {
+                        // If modified today without updatedAt tag
+                        isRecentEdit = true;
+                    }
+                    
+                    if (isRecentEdit && !s.startDate) {
+                        await DB.updateSchedule(s.id, { startDate: targetEffDate });
+                        s.startDate = targetEffDate;
+                        updatedCount++;
+                    }
+                }
+
+                schedules = await DB.getSchedules();
+                render();
+                if (updatedCount > 0) {
+                    Toast.success('Đã áp dụng lịch mới', `Đã cập nhật ${updatedCount} ca học áp dụng từ thứ 2 07/09/2026 trở đi, các tuần trước giữ nguyên vị trí cũ.`);
+                } else {
+                    Toast.info('Thông báo', 'Các ca học đã ở đúng vị trí áp dụng từ 07/09/2026.');
+                }
+            } catch(e) {
+                Toast.error('Lỗi đồng bộ', e.message);
+            }
         }
     };
 });
