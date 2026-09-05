@@ -163,7 +163,11 @@ Router.register('schedule', async (container) => {
 
                         // Check schedule-level start/effective and end boundaries
                         const sStart = s.startDate || s.effectiveFrom;
-                        if (sStart && dateStr < sStart) return;
+                        if (sStart && dateStr < sStart) {
+                            // Only skip if an older schedule record exists for this class before sStart
+                            const hasOlderRecord = filtered.some(other => other.id !== s.id && other.classId === s.classId && (!other.endDate || other.endDate >= dateStr));
+                            if (hasOlderRecord) return;
+                        }
                         if (s.endDate && dateStr > s.endDate) return;
 
                         const exception = scheduleExceptions.find(ex => ex.scheduleId === s.id && ex.originalDate === dateStr);
@@ -386,7 +390,7 @@ Router.register('schedule', async (container) => {
                 ${classes.map(c => `<option value="${c.id}">${c.name}</option>`).join('')}
             </select>
             ${canEdit ? `<p style="font-size:12px;color:var(--text-muted);margin-left:4px;">💡 Kéo thả để dời lịch • Nhấp đúp / Click để sửa</p>` : ''}
-            ${canEdit ? `<button class="btn btn-secondary btn-sm" style="margin-left:auto;" onclick="SchedulePage.repairTodayEdits()"><i data-lucide="calendar-check"></i> Áp dụng các lịch chỉnh hôm nay từ 07/09</button>` : ''}
+            ${canEdit ? `<button class="btn btn-secondary btn-sm" style="margin-left:auto;" onclick="SchedulePage.repairTodayEdits()"><i data-lucide="refresh-cw"></i> Khôi phục lịch các tuần trước</button>` : ''}
         </div>
         <div id="schedule-grid" class="schedule-wrapper"></div>
     `;
@@ -1049,40 +1053,28 @@ Router.register('schedule', async (container) => {
 
         async repairTodayEdits() {
             try {
-                const targetEffDate = '2026-09-07';
-                let updatedCount = 0;
-
+                let restoredCount = 0;
                 const allSchedules = await DB.getSchedules();
-                
+
                 for (const s of allSchedules) {
                     if (s.specificDate) continue;
 
-                    let isRecentEdit = false;
-                    if (s.updatedAt) {
-                        const uDate = typeof s.updatedAt.toDate === 'function' ? s.updatedAt.toDate() : new Date(s.updatedAt);
-                        const uStr = uDate.toISOString().split('T')[0];
-                        if (uStr === '2026-09-05' || uStr === '2026-09-06') isRecentEdit = true;
-                    } else {
-                        // If modified today without updatedAt tag
-                        isRecentEdit = true;
-                    }
-                    
-                    if (isRecentEdit && !s.startDate) {
-                        await DB.updateSchedule(s.id, { startDate: targetEffDate });
-                        s.startDate = targetEffDate;
-                        updatedCount++;
+                    if (s.startDate === '2026-09-07' || s.effectiveFrom === '2026-09-07') {
+                        await DB.updateSchedule(s.id, {
+                            startDate: firebase.firestore.FieldValue.delete(),
+                            effectiveFrom: firebase.firestore.FieldValue.delete()
+                        });
+                        delete s.startDate;
+                        delete s.effectiveFrom;
+                        restoredCount++;
                     }
                 }
 
                 schedules = await DB.getSchedules();
                 render();
-                if (updatedCount > 0) {
-                    Toast.success('Đã áp dụng lịch mới', `Đã cập nhật ${updatedCount} ca học áp dụng từ thứ 2 07/09/2026 trở đi, các tuần trước giữ nguyên vị trí cũ.`);
-                } else {
-                    Toast.info('Thông báo', 'Các ca học đã ở đúng vị trí áp dụng từ 07/09/2026.');
-                }
+                Toast.success('Đã khôi phục đầy đủ các tuần!', 'Tất cả các tuần trước đã được hiển thị lại bình thường.');
             } catch(e) {
-                Toast.error('Lỗi đồng bộ', e.message);
+                Toast.error('Lỗi khôi phục', e.message);
             }
         }
     };
