@@ -392,12 +392,6 @@ Router.register('schedule', async (container) => {
                 ${classes.map(c => `<option value="${c.id}">${c.name}</option>`).join('')}
             </select>
             ${canEdit ? `<p style="font-size:12px;color:var(--text-muted);margin-left:4px;">💡 Kéo thả để dời lịch • Click để sửa</p>` : ''}
-            ${canEdit ? `
-                <div style="margin-left:auto;display:flex;gap:8px;">
-                    <button class="btn btn-warning btn-sm" onclick="SchedulePage.showRevertTo2100Modal()"><i data-lucide="rotate-ccw"></i> ⏪ Khôi phục toàn bộ Lịch về 21:00 PM</button>
-                    <button class="btn btn-primary btn-sm" onclick="SchedulePage.showRestoreOldScheduleModal()"><i data-lucide="git-branch"></i> Tách lịch cũ & mới</button>
-                </div>
-            ` : ''}
         </div>
         <div id="schedule-grid" class="schedule-wrapper"></div>
     `;
