@@ -771,7 +771,7 @@ Router.register('schedule', async (container) => {
                         item.startTime < s.endTime && item.endTime > s.startTime
                     );
                     if (conflict) { 
-                        Toast.error('Trùng phòng học', `Phòng ${item.room} đã có lớp từ ${conflict.startTime} đến ${conflict.endTime}`); 
+                        Toast.error('Trùng phòng học', `Phòng ${item.room} đã có lớp ${getClassName(conflict.classId)} từ ${conflict.startTime} đến ${conflict.endTime}`); 
                         return; 
                     }
                 }
@@ -964,7 +964,7 @@ Router.register('schedule', async (container) => {
                         (!s.startDate || s.startDate <= effectiveDateStr)
                     );
                     if (conflict) { 
-                        Toast.error('Trùng phòng học', `Phòng ${room} đã có lớp từ ${conflict.startTime} đến ${conflict.endTime}`); 
+                        Toast.error('Trùng phòng học', `Phòng ${room} đã có lớp ${getClassName(conflict.classId)} từ ${conflict.startTime} đến ${conflict.endTime}`); 
                         return; 
                     }
                 }
