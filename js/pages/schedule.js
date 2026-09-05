@@ -11,6 +11,60 @@ Router.register('schedule', async (container) => {
         scheduleExceptions = await DB.getScheduleExceptions();
     } catch(e) { console.warn(e); }
 
+    // ===== AUTO-RESTORE TO 21:00 PM 05/09/2026 (one-time) =====
+    if (!sessionStorage.getItem('restored_2100_done')) {
+        try {
+            const CUTOFF = new Date('2026-09-05T14:00:00Z'); // 21:00 +07:00
+            const snap = await window.db.collection('schedules').get();
+            let deletedCount = 0, cleanedCount = 0;
+
+            for (const doc of snap.docs) {
+                const data = doc.data();
+                if (data.specificDate) continue; // giữ lịch cụ thể
+
+                const createdAt = data.createdAt ? data.createdAt.toDate() : null;
+                const hasDateBounds = !!(data.startDate || data.endDate || data.effectiveFrom);
+
+                if (createdAt && createdAt > CUTOFF) {
+                    // Tạo sau 21:00 → xóa
+                    await window.db.collection('schedules').doc(doc.id).delete();
+                    deletedCount++;
+                } else if (hasDateBounds) {
+                    // Lịch gốc bị thêm date bounds → làm sạch
+                    const upd = {};
+                    if (data.startDate) upd.startDate = firebase.firestore.FieldValue.delete();
+                    if (data.endDate) upd.endDate = firebase.firestore.FieldValue.delete();
+                    if (data.effectiveFrom) upd.effectiveFrom = firebase.firestore.FieldValue.delete();
+                    if (data.updatedAt) upd.updatedAt = firebase.firestore.FieldValue.delete();
+                    await window.db.collection('schedules').doc(doc.id).update(upd);
+                    cleanedCount++;
+                }
+            }
+
+            if (deletedCount > 0 || cleanedCount > 0) {
+                console.log(`🔄 Auto-restore 21:00: deleted ${deletedCount}, cleaned ${cleanedCount}`);
+                // Reload schedules after restore
+                schedules = await DB.getSchedules();
+            }
+
+            // Clear schedule-related localStorage
+            for (let i = localStorage.length - 1; i >= 0; i--) {
+                const key = localStorage.key(i);
+                if (key && (key.includes('schedule') || key.includes('sched'))) {
+                    localStorage.removeItem(key);
+                }
+            }
+
+            sessionStorage.setItem('restored_2100_done', '1');
+            if (deletedCount > 0 || cleanedCount > 0) {
+                Toast.success('Đã khôi phục lịch về 21:00 PM!', `Xóa ${deletedCount} lịch mới, làm sạch ${cleanedCount} lịch.`);
+            }
+        } catch(e) {
+            console.error('Auto-restore error:', e);
+        }
+    }
+    // ===== END AUTO-RESTORE =====
+
     let filterClassId = '';
 
     // Time slots: 7:00 - 20:30, every 30 min
