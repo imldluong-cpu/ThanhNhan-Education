@@ -400,6 +400,7 @@ Router.register('schedule', async (container) => {
         <div id="schedule-grid" class="schedule-wrapper"></div>
     `;
     render();
+    setTimeout(() => { if (window.SchedulePage) window.SchedulePage.autoFixAllClassSchedules(); }, 500);
 
     window.SchedulePage = {
         filterClass(id) { filterClassId = id; render(); },
@@ -1272,6 +1273,54 @@ Router.register('schedule', async (container) => {
             } catch(e) {
                 Toast.error('Lỗi tách lịch', e.message);
             }
+        },
+
+        async autoFixAllClassSchedules() {
+            try {
+                if (localStorage.getItem('sched_autofix_20260907_v3')) return;
+
+                const allDB = await DB.getSchedules();
+                let fixedAny = false;
+
+                const classSchedulesMap = {};
+                allDB.forEach(s => {
+                    if (s.specificDate) return;
+                    if (!classSchedulesMap[s.classId]) classSchedulesMap[s.classId] = [];
+                    classSchedulesMap[s.classId].push(s);
+                });
+
+                for (const classId in classSchedulesMap) {
+                    const schs = classSchedulesMap[classId];
+                    const hasSplit = schs.some(s => s.endDate === '2026-09-06' || s.startDate === '2026-09-07');
+                    
+                    if (!hasSplit && schs.length > 0) {
+                        for (const s of schs) {
+                            if (!s.endDate && !s.startDate) {
+                                // 1. Keep existing record for dates <= 2026-09-06
+                                await DB.updateSchedule(s.id, { endDate: '2026-09-06' });
+                                s.endDate = '2026-09-06';
+
+                                // 2. Create parallel new record for dates >= 2026-09-07
+                                await DB.addSchedule({
+                                    classId: s.classId,
+                                    dayOfWeek: s.dayOfWeek,
+                                    startTime: s.startTime,
+                                    endTime: s.endTime,
+                                    room: s.room || '',
+                                    startDate: '2026-09-07'
+                                });
+                                fixedAny = true;
+                            }
+                        }
+                    }
+                }
+
+                localStorage.setItem('sched_autofix_20260907_v3', 'true');
+                if (fixedAny) {
+                    schedules = await DB.getSchedules();
+                    render();
+                }
+            } catch(e) { console.warn('Auto fix schedules error:', e); }
         }
     };
 });
