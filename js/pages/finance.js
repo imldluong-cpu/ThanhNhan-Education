@@ -43,8 +43,9 @@ Router.register('finance', async (container) => {
             const taSnap = await window.db.collection('teacherAttendance').where('date', '>=', fromDate).where('date', '<=', toDate).get();
 
             const pnlMap = {};
-            if (window.classes) {
-                window.classes.forEach(c => {
+            const classes = await DB.getClasses();
+            if (classes) {
+                classes.forEach(c => {
                     pnlMap[c.id] = { id: c.id, name: c.name, rev: 0, sal: 0 };
                 });
             }
@@ -68,14 +69,14 @@ Router.register('finance', async (container) => {
                 pnlMap[cid].sal += Math.max(0, netSal);
             });
 
-            if (window.classes) {
+            if (classes) {
                 Object.values(pnlMap).forEach(item => {
-                    const c = window.classes.find(x => x.id === item.id);
+                    const c = classes.find(x => x.id === item.id);
                     if (c) item.name = c.name;
                 });
             }
 
-            actualClassPnL = Object.values(pnlMap).filter(item => item.rev > 0 || item.sal > 0 || (window.classes && window.classes.some(c=>c.id===item.id)));
+            actualClassPnL = Object.values(pnlMap).filter(item => item.rev > 0 || item.sal > 0 || (classes && classes.some(c=>c.id===item.id)));
             actualClassPnL.forEach(item => {
                 item.profit = item.rev - item.sal;
                 item.margin = item.rev > 0 ? (item.profit / item.rev) * 100 : 0;
