@@ -392,7 +392,7 @@ Router.register('schedule', async (container) => {
             ${canEdit ? `<p style="font-size:12px;color:var(--text-muted);margin-left:4px;">💡 Kéo thả để dời lịch • Click để sửa</p>` : ''}
             ${canEdit ? `
                 <div style="margin-left:auto;display:flex;gap:8px;">
-                    <button class="btn btn-warning btn-sm" onclick="SchedulePage.revertTo2154PM()"><i data-lucide="rotate-ccw"></i> Đưa lịch về thời điểm 21:54 PM</button>
+                    <button class="btn btn-warning btn-sm" onclick="SchedulePage.showRevertTo2100Modal()"><i data-lucide="rotate-ccw"></i> ⏪ Khôi phục toàn bộ Lịch về 21:00 PM</button>
                     <button class="btn btn-primary btn-sm" onclick="SchedulePage.showRestoreOldScheduleModal()"><i data-lucide="git-branch"></i> Tách lịch cũ & mới</button>
                 </div>
             ` : ''}
@@ -1341,7 +1341,94 @@ Router.register('schedule', async (container) => {
             }
         },
 
-        async revertTo2154PM() {
+        showRevertTo2100Modal() {
+            let classBlocksHtml = '';
+
+            classes.forEach(c => {
+                const classSchs = schedules.filter(s => s.classId === c.id && !s.specificDate);
+                let rowsHtml = '';
+
+                if (classSchs.length > 0) {
+                    classSchs.forEach((s, i) => {
+                        rowsHtml += this._buildClassScheduleRow(c.id, i, s);
+                    });
+                } else {
+                    rowsHtml += this._buildClassScheduleRow(c.id, 0, { dayOfWeek: 2, startTime: '17:30', endTime: '19:00', room: c.room || '' });
+                }
+
+                classBlocksHtml += `
+                    <div class="class-sched-block" data-class-id="${c.id}" style="margin-bottom:14px;padding:12px;background:var(--bg-card,#fff);border:1px solid var(--border-color,#e2e8f0);border-radius:10px;">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                            <strong style="font-size:14px;color:var(--primary,#4f46e5);">${c.name}</strong>
+                            <button type="button" class="btn btn-ghost btn-sm" style="font-size:11px;color:var(--primary,#4f46e5);" onclick="SchedulePage.addClassSchedRow('${c.id}')">
+                                <i data-lucide="plus" style="width:12px;height:12px;"></i> Thêm buổi
+                            </button>
+                        </div>
+                        <div class="class-sched-rows-${c.id}">${rowsHtml}</div>
+                    </div>
+                `;
+            });
+
+            const content = `
+                <p style="font-size:13px;color:var(--text-secondary);margin-bottom:14px;line-height:1.5;">
+                    Kiểm tra và điều chỉnh toàn bộ danh sách lịch học của tất cả các lớp về đúng khung giờ/thứ <strong>ban đầu lúc 21:00 PM</strong>. Sau khi bấm lưu, hệ thống sẽ làm sạch dữ liệu và đưa thời khóa biểu về lịch cố định 21:00 PM nguyên bản!
+                </p>
+                <div style="max-height:60vh;overflow-y:auto;padding-right:6px;">
+                    ${classBlocksHtml}
+                </div>
+            `;
+
+            Modal.show({
+                title: 'Khôi phục toàn bộ Lịch học về thời điểm 21:00 PM',
+                size: 'lg',
+                content: content,
+                footer: `
+                    <button class="btn btn-secondary" onclick="Modal.close()">Hủy</button>
+                    <button class="btn btn-primary" onclick="SchedulePage.saveRevertTo2100()">💾 Lưu & Khôi phục về 21:00 PM</button>
+                `
+            });
+
+            if (window.lucide) lucide.createIcons();
+        },
+
+        _buildClassScheduleRow(classId, index, data = {}) {
+            const dayOfWeek = data.dayOfWeek || 2;
+            const startTime = data.startTime || '17:30';
+            const endTime = data.endTime || '19:00';
+            const room = data.room || '';
+
+            return `
+                <div class="class-sched-row" style="display:flex;gap:8px;align-items:center;margin-bottom:6px;">
+                    <select class="select cs-day" style="flex:1.2;">
+                        ${dayNames.map((d, j) => `<option value="${j+2}" ${j+2 === dayOfWeek ? 'selected' : ''}>${d}</option>`).join('')}
+                    </select>
+                    <input type="time" class="input cs-start" style="flex:1;" value="${startTime}">
+                    <span style="color:var(--text-muted);">→</span>
+                    <input type="time" class="input cs-end" style="flex:1;" value="${endTime}">
+                    <select class="select cs-room" style="flex:1;">
+                        <option value="" ${!room ? 'selected' : ''}>Phòng</option>
+                        <option value="Trệt" ${room === 'Trệt' ? 'selected' : ''}>Trệt</option>
+                        <option value="P.T1" ${room === 'P.T1' ? 'selected' : ''}>P.T1</option>
+                        <option value="P.T2" ${room === 'P.T2' ? 'selected' : ''}>P.T2</option>
+                        <option value="P.ST" ${room === 'P.ST' ? 'selected' : ''}>P.ST</option>
+                    </select>
+                    <button type="button" class="btn-icon" style="color:var(--danger,#ef4444);padding:4px;" onclick="this.parentElement.remove()" title="Xóa buổi">
+                        <i data-lucide="x" style="width:14px;height:14px;"></i>
+                    </button>
+                </div>
+            `;
+        },
+
+        addClassSchedRow(classId) {
+            const container = document.querySelector(`.class-sched-rows-${classId}`);
+            if (!container) return;
+            const div = document.createElement('div');
+            div.innerHTML = this._buildClassScheduleRow(classId, container.children.length, {});
+            container.appendChild(div.firstElementChild);
+            if (window.lucide) lucide.createIcons();
+        },
+
+        async saveRevertTo2100() {
             try {
                 for (let i = localStorage.length - 1; i >= 0; i--) {
                     const key = localStorage.key(i);
@@ -1351,28 +1438,43 @@ Router.register('schedule', async (container) => {
                 }
 
                 const snap = await window.db.collection('schedules').get();
-                let deletedCount = 0;
-                let updatedCount = 0;
-
                 for (const doc of snap.docs) {
-                    const data = doc.data();
-                    
-                    if (data.endDate === '2026-09-06') {
+                    if (!doc.data().specificDate) {
                         await window.db.collection('schedules').doc(doc.id).delete();
-                        deletedCount++;
-                    } else if (data.startDate || data.endDate || data.effectiveFrom) {
-                        await window.db.collection('schedules').doc(doc.id).update({
-                            startDate: firebase.firestore.FieldValue.delete(),
-                            endDate: firebase.firestore.FieldValue.delete(),
-                            effectiveFrom: firebase.firestore.FieldValue.delete()
-                        });
-                        updatedCount++;
                     }
                 }
 
+                const blocks = document.querySelectorAll('.class-sched-block');
+                const toAdd = [];
+
+                blocks.forEach(block => {
+                    const classId = block.getAttribute('data-class-id');
+                    const rows = block.querySelectorAll('.class-sched-row');
+                    rows.forEach(row => {
+                        const day = parseInt(row.querySelector('.cs-day').value);
+                        const start = row.querySelector('.cs-start').value;
+                        const end = row.querySelector('.cs-end').value;
+                        const room = row.querySelector('.cs-room').value;
+                        if (start && end) {
+                            toAdd.push({
+                                classId,
+                                dayOfWeek: day,
+                                startTime: start,
+                                endTime: end,
+                                room: room || ''
+                            });
+                        }
+                    });
+                });
+
+                if (toAdd.length > 0) {
+                    await DB.addSchedulesBatch(toAdd);
+                }
+
+                Modal.close();
                 schedules = await DB.getSchedules();
                 render();
-                Toast.success('Đã đưa lịch về 21:54 PM!', `Đã khôi phục dữ liệu thời khóa biểu nguyên trạng ban đầu.`);
+                Toast.success('Đã khôi phục lịch học về 21:00 PM!', 'Toàn bộ thời khóa biểu đã được đưa về trạng thái 21:00 PM ban đầu.');
             } catch(e) {
                 Toast.error('Lỗi khôi phục', e.message);
             }
