@@ -392,15 +392,14 @@ Router.register('schedule', async (container) => {
             ${canEdit ? `<p style="font-size:12px;color:var(--text-muted);margin-left:4px;">💡 Kéo thả để dời lịch • Click để sửa</p>` : ''}
             ${canEdit ? `
                 <div style="margin-left:auto;display:flex;gap:8px;">
-                    <button class="btn btn-primary btn-sm" onclick="SchedulePage.showRestoreOldScheduleModal()"><i data-lucide="git-branch"></i> Tách lịch cũ & mới (Anh 8, Toán 8...)</button>
-                    <button class="btn btn-secondary btn-sm" onclick="SchedulePage.repairTodayEdits()"><i data-lucide="refresh-cw"></i> Hiện lại tất cả tuần</button>
+                    <button class="btn btn-warning btn-sm" onclick="SchedulePage.revertTo2154PM()"><i data-lucide="rotate-ccw"></i> Đưa lịch về thời điểm 21:54 PM</button>
+                    <button class="btn btn-primary btn-sm" onclick="SchedulePage.showRestoreOldScheduleModal()"><i data-lucide="git-branch"></i> Tách lịch cũ & mới</button>
                 </div>
             ` : ''}
         </div>
         <div id="schedule-grid" class="schedule-wrapper"></div>
     `;
     render();
-    setTimeout(() => { if (window.SchedulePage) window.SchedulePage.autoFixAllClassSchedules(); }, 500);
 
     window.SchedulePage = {
         filterClass(id) { filterClassId = id; render(); },
@@ -1342,52 +1341,41 @@ Router.register('schedule', async (container) => {
             }
         },
 
-        async autoFixAllClassSchedules() {
+        async revertTo2154PM() {
             try {
-                if (localStorage.getItem('sched_autofix_20260907_v4')) return;
-
-                await this.restoreSchedulesFromAttendance(true);
-
-                const allDB = await DB.getSchedules();
-                let fixedAny = false;
-
-                const classSchedulesMap = {};
-                allDB.forEach(s => {
-                    if (s.specificDate) return;
-                    if (!classSchedulesMap[s.classId]) classSchedulesMap[s.classId] = [];
-                    classSchedulesMap[s.classId].push(s);
-                });
-
-                for (const classId in classSchedulesMap) {
-                    const schs = classSchedulesMap[classId];
-                    const hasSplit = schs.some(s => s.endDate === '2026-09-06' || s.startDate === '2026-09-07');
-                    
-                    if (!hasSplit && schs.length > 0) {
-                        for (const s of schs) {
-                            if (!s.endDate && !s.startDate) {
-                                await DB.updateSchedule(s.id, { endDate: '2026-09-06' });
-                                s.endDate = '2026-09-06';
-
-                                await DB.addSchedule({
-                                    classId: s.classId,
-                                    dayOfWeek: s.dayOfWeek,
-                                    startTime: s.startTime,
-                                    endTime: s.endTime,
-                                    room: s.room || '',
-                                    startDate: '2026-09-07'
-                                });
-                                fixedAny = true;
-                            }
-                        }
+                for (let i = localStorage.length - 1; i >= 0; i--) {
+                    const key = localStorage.key(i);
+                    if (key && key.startsWith('sched_autofix')) {
+                        localStorage.removeItem(key);
                     }
                 }
 
-                localStorage.setItem('sched_autofix_20260907_v4', 'true');
-                if (fixedAny) {
-                    schedules = await DB.getSchedules();
-                    render();
+                const snap = await window.db.collection('schedules').get();
+                let deletedCount = 0;
+                let updatedCount = 0;
+
+                for (const doc of snap.docs) {
+                    const data = doc.data();
+                    
+                    if (data.endDate === '2026-09-06') {
+                        await window.db.collection('schedules').doc(doc.id).delete();
+                        deletedCount++;
+                    } else if (data.startDate || data.endDate || data.effectiveFrom) {
+                        await window.db.collection('schedules').doc(doc.id).update({
+                            startDate: firebase.firestore.FieldValue.delete(),
+                            endDate: firebase.firestore.FieldValue.delete(),
+                            effectiveFrom: firebase.firestore.FieldValue.delete()
+                        });
+                        updatedCount++;
+                    }
                 }
-            } catch(e) { console.warn('Auto fix schedules error:', e); }
+
+                schedules = await DB.getSchedules();
+                render();
+                Toast.success('Đã đưa lịch về 21:54 PM!', `Đã khôi phục dữ liệu thời khóa biểu nguyên trạng ban đầu.`);
+            } catch(e) {
+                Toast.error('Lỗi khôi phục', e.message);
+            }
         }
     };
 });
