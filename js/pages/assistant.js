@@ -819,6 +819,11 @@ Router.register('assistant', async (container) => {
             </div>
         `;
 
+        const totalRev = classPnL.reduce((sum, c) => sum + c.expectedRev, 0);
+        const totalSal = classPnL.reduce((sum, c) => sum + c.expectedSal, 0);
+        const totalProfit = classPnL.reduce((sum, c) => sum + c.expectedProfit, 0);
+        const totalMargin = totalRev > 0 ? (totalProfit / totalRev) * 100 : 0;
+
         html += `
             <div class="table-container">
                 <table>
@@ -861,6 +866,16 @@ Router.register('assistant', async (container) => {
                             `;
                         }).join('')}
                     </tbody>
+                    <tfoot>
+                        <tr style="background:var(--bg-alt);font-weight:700;">
+                            <td colspan="2" style="text-align:right;text-transform:uppercase;">Tổng cộng:</td>
+                            <td style="text-align:right;color:#3b82f6;">${DB.formatCurrency(totalRev)}</td>
+                            <td style="text-align:right;color:var(--danger-400);">${DB.formatCurrency(totalSal)}</td>
+                            <td style="text-align:right;color:${totalProfit >= 0 ? 'var(--success-500)' : 'var(--danger-500)'};">${DB.formatCurrency(totalProfit)}</td>
+                            <td style="text-align:center;color:${totalProfit >= 0 ? 'var(--success-500)' : 'var(--danger-500)'};">${totalMargin.toFixed(0)}%</td>
+                            <td></td>
+                        </tr>
+                    </tfoot>
                 </table>
             </div>
         `;
