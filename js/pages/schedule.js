@@ -1086,7 +1086,7 @@ Router.register('schedule', async (container) => {
         showRestoreOldScheduleModal(preselectClassId = '') {
             const content = `
                 <p style="font-size:13px;color:var(--text-secondary);margin-bottom:14px;line-height:1.5;">
-                    Chức năng này giúp bạn chọn và phân chia <strong>Lịch cũ (Áp dụng đến hết 06/09)</strong> và <strong>Lịch mới (Áp dụng từ 07/09 trở đi)</strong> cho các lớp như <em>Anh văn 8, Toán 8...</em> để tuần cũ và tuần mới hiển thị đúng lịch!
+                    Chức năng này giúp bạn thiết lập đầy đủ tất cả các buổi trong tuần cho <strong>Lịch cũ (Áp dụng đến hết 06/09)</strong> và <strong>Lịch mới (Áp dụng từ 07/09 trở đi)</strong> cho các lớp như <em>Anh văn 8, Toán 8...</em>
                 </p>
 
                 <div class="form-group">
@@ -1099,55 +1099,27 @@ Router.register('schedule', async (container) => {
 
                 <div id="split-form-body" style="display:none;margin-top:16px;">
                     <div style="padding:14px;background:rgba(239, 68, 68, 0.05);border:1px solid rgba(239, 68, 68, 0.2);border-radius:10px;margin-bottom:14px;">
-                        <h4 style="font-size:13px;color:#dc2626;margin-bottom:10px;display:flex;align-items:center;gap:6px;font-weight:700;">
-                            ⏮️ LỊCH CŨ (Áp dụng đến hết Chủ nhật 06/09/2026)
-                        </h4>
-                        <div class="form-row" style="gap:8px;">
-                            <div class="form-group" style="margin-bottom:0;flex:1;"><label class="form-label">Thứ</label>
-                                <select class="select" id="split-old-day">${dayNames.map((d, j) => `<option value="${j+2}">${d}</option>`).join('')}</select>
-                            </div>
-                            <div class="form-group" style="margin-bottom:0;flex:1;"><label class="form-label">Bắt đầu</label>
-                                <input type="time" class="input" id="split-old-start" value="17:30">
-                            </div>
-                            <div class="form-group" style="margin-bottom:0;flex:1;"><label class="form-label">Kết thúc</label>
-                                <input type="time" class="input" id="split-old-end" value="19:00">
-                            </div>
-                            <div class="form-group" style="margin-bottom:0;flex:1;"><label class="form-label">Phòng</label>
-                                <select class="select" id="split-old-room">
-                                    <option value="">Phòng</option>
-                                    <option value="Trệt">Trệt</option>
-                                    <option value="P.T1">P.T1</option>
-                                    <option value="P.T2">P.T2</option>
-                                    <option value="P.ST">P.ST</option>
-                                </select>
-                            </div>
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+                            <h4 style="font-size:13px;color:#dc2626;margin:0;display:flex;align-items:center;gap:6px;font-weight:700;">
+                                ⏮️ LỊCH CŨ (Áp dụng cho các tuần đến hết Chủ nhật 06/09/2026)
+                            </h4>
+                            <button type="button" class="btn btn-ghost btn-sm" onclick="SchedulePage.addSplitRow('old')" style="font-size:12px;color:#dc2626;">
+                                <i data-lucide="plus" style="width:14px;height:14px;"></i> Thêm buổi cũ
+                            </button>
                         </div>
+                        <div id="split-old-rows"></div>
                     </div>
 
                     <div style="padding:14px;background:rgba(16, 185, 129, 0.05);border:1px solid rgba(16, 185, 129, 0.2);border-radius:10px;">
-                        <h4 style="font-size:13px;color:#059669;margin-bottom:10px;display:flex;align-items:center;gap:6px;font-weight:700;">
-                            ⏭️ LỊCH MỚI (Áp dụng từ Thứ 2 07/09/2026 trở đi)
-                        </h4>
-                        <div class="form-row" style="gap:8px;">
-                            <div class="form-group" style="margin-bottom:0;flex:1;"><label class="form-label">Thứ</label>
-                                <select class="select" id="split-new-day">${dayNames.map((d, j) => `<option value="${j+2}">${d}</option>`).join('')}</select>
-                            </div>
-                            <div class="form-group" style="margin-bottom:0;flex:1;"><label class="form-label">Bắt đầu</label>
-                                <input type="time" class="input" id="split-new-start" value="17:30">
-                            </div>
-                            <div class="form-group" style="margin-bottom:0;flex:1;"><label class="form-label">Kết thúc</label>
-                                <input type="time" class="input" id="split-new-end" value="19:00">
-                            </div>
-                            <div class="form-group" style="margin-bottom:0;flex:1;"><label class="form-label">Phòng</label>
-                                <select class="select" id="split-new-room">
-                                    <option value="">Phòng</option>
-                                    <option value="Trệt">Trệt</option>
-                                    <option value="P.T1">P.T1</option>
-                                    <option value="P.T2">P.T2</option>
-                                    <option value="P.ST">P.ST</option>
-                                </select>
-                            </div>
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+                            <h4 style="font-size:13px;color:#059669;margin:0;display:flex;align-items:center;gap:6px;font-weight:700;">
+                                ⏭️ LỊCH MỚI (Áp dụng cho các tuần từ Thứ 2 07/09/2026 trở đi)
+                            </h4>
+                            <button type="button" class="btn btn-ghost btn-sm" onclick="SchedulePage.addSplitRow('new')" style="font-size:12px;color:#059669;">
+                                <i data-lucide="plus" style="width:14px;height:14px;"></i> Thêm buổi mới
+                            </button>
                         </div>
+                        <div id="split-new-rows"></div>
                     </div>
                 </div>
             `;
@@ -1167,27 +1139,73 @@ Router.register('schedule', async (container) => {
             }
         },
 
+        _buildSplitRow(type, data = {}) {
+            const dayOfWeek = data.dayOfWeek || 2;
+            const startTime = data.startTime || '17:30';
+            const endTime = data.endTime || '19:00';
+            const room = data.room || '';
+
+            return `
+                <div class="split-row-${type}" style="display:flex;gap:8px;align-items:center;margin-bottom:8px;padding:8px;background:var(--bg-card,#fff);border-radius:6px;border:1px solid var(--border-color,#e2e8f0);">
+                    <select class="select split-${type}-day" style="flex:1.2;">
+                        ${dayNames.map((d, j) => `<option value="${j+2}" ${j+2 === dayOfWeek ? 'selected' : ''}>${d}</option>`).join('')}
+                    </select>
+                    <input type="time" class="input split-${type}-start" style="flex:1;" value="${startTime}">
+                    <span style="color:var(--text-muted);">→</span>
+                    <input type="time" class="input split-${type}-end" style="flex:1;" value="${endTime}">
+                    <select class="select split-${type}-room" style="flex:1;">
+                        <option value="" ${!room ? 'selected' : ''}>Phòng</option>
+                        <option value="Trệt" ${room === 'Trệt' ? 'selected' : ''}>Trệt</option>
+                        <option value="P.T1" ${room === 'P.T1' ? 'selected' : ''}>P.T1</option>
+                        <option value="P.T2" ${room === 'P.T2' ? 'selected' : ''}>P.T2</option>
+                        <option value="P.ST" ${room === 'P.ST' ? 'selected' : ''}>P.ST</option>
+                    </select>
+                    <button type="button" class="btn-icon" style="color:var(--danger,#ef4444);padding:4px;" onclick="this.parentElement.remove()" title="Xóa buổi này">
+                        <i data-lucide="x" style="width:14px;height:14px;"></i>
+                    </button>
+                </div>
+            `;
+        },
+
+        addSplitRow(type, data = {}) {
+            const container = document.getElementById(`split-${type}-rows`);
+            if (!container) return;
+            const div = document.createElement('div');
+            div.innerHTML = this._buildSplitRow(type, data);
+            container.appendChild(div.firstElementChild);
+            if (window.lucide) lucide.createIcons();
+        },
+
         _onSplitClassChange(classId) {
             const body = document.getElementById('split-form-body');
             if (!body) return;
             if (!classId) { body.style.display = 'none'; return; }
             body.style.display = 'block';
 
-            const classSchs = schedules.filter(s => s.classId === classId && !s.specificDate);
-            const oldSch = classSchs.find(s => s.endDate === '2026-09-06') || classSchs[0];
-            const newSch = classSchs.find(s => s.startDate === '2026-09-07') || classSchs[classSchs.length - 1] || oldSch;
+            const oldContainer = document.getElementById('split-old-rows');
+            const newContainer = document.getElementById('split-new-rows');
+            oldContainer.innerHTML = '';
+            newContainer.innerHTML = '';
 
-            if (oldSch) {
-                document.getElementById('split-old-day').value = oldSch.dayOfWeek;
-                document.getElementById('split-old-start').value = oldSch.startTime;
-                document.getElementById('split-old-end').value = oldSch.endTime;
-                document.getElementById('split-old-room').value = oldSch.room || '';
+            // Find existing schedules for this class
+            const classSchs = schedules.filter(s => s.classId === classId && !s.specificDate);
+            const oldSchs = classSchs.filter(s => s.endDate === '2026-09-06');
+            const newSchs = classSchs.filter(s => s.startDate === '2026-09-07');
+
+            if (oldSchs.length > 0) {
+                oldSchs.forEach(s => this.addSplitRow('old', s));
+            } else if (classSchs.length > 0) {
+                classSchs.forEach(s => this.addSplitRow('old', s));
+            } else {
+                this.addSplitRow('old', { dayOfWeek: 2, startTime: '17:30', endTime: '19:00' });
             }
-            if (newSch) {
-                document.getElementById('split-new-day').value = newSch.dayOfWeek;
-                document.getElementById('split-new-start').value = newSch.startTime;
-                document.getElementById('split-new-end').value = newSch.endTime;
-                document.getElementById('split-new-room').value = newSch.room || '';
+
+            if (newSchs.length > 0) {
+                newSchs.forEach(s => this.addSplitRow('new', s));
+            } else if (classSchs.length > 0) {
+                classSchs.forEach(s => this.addSplitRow('new', s));
+            } else {
+                this.addSplitRow('new', { dayOfWeek: 2, startTime: '17:30', endTime: '19:00' });
             }
         },
 
@@ -1196,20 +1214,33 @@ Router.register('schedule', async (container) => {
                 const classId = document.getElementById('split-class').value;
                 if (!classId) { Toast.warning('Chọn lớp', 'Vui lòng chọn lớp học'); return; }
 
-                const oldDay = parseInt(document.getElementById('split-old-day').value);
-                const oldStart = document.getElementById('split-old-start').value;
-                const oldEnd = document.getElementById('split-old-end').value;
-                const oldRoom = document.getElementById('split-old-room').value;
+                const oldRows = document.querySelectorAll('.split-row-old');
+                const newRows = document.querySelectorAll('.split-row-new');
 
-                const newDay = parseInt(document.getElementById('split-new-day').value);
-                const newStart = document.getElementById('split-new-start').value;
-                const newEnd = document.getElementById('split-new-end').value;
-                const newRoom = document.getElementById('split-new-room').value;
+                if (oldRows.length === 0) { Toast.warning('Thiếu lịch cũ', 'Vui lòng thêm ít nhất 1 buổi cho Lịch cũ'); return; }
+                if (newRows.length === 0) { Toast.warning('Thiếu lịch mới', 'Vui lòng thêm ít nhất 1 buổi cho Lịch mới'); return; }
 
-                if (!oldStart || !oldEnd || !newStart || !newEnd) {
-                    Toast.warning('Nhập đủ giờ', 'Vui lòng nhập giờ bắt đầu và kết thúc');
-                    return;
-                }
+                const oldItems = [];
+                oldRows.forEach(row => {
+                    const day = parseInt(row.querySelector('.split-old-day').value);
+                    const start = row.querySelector('.split-old-start').value;
+                    const end = row.querySelector('.split-old-end').value;
+                    const room = row.querySelector('.split-old-room').value;
+                    if (start && end) {
+                        oldItems.push({ classId, dayOfWeek: day, startTime: start, endTime: end, room: room || '', endDate: '2026-09-06' });
+                    }
+                });
+
+                const newItems = [];
+                newRows.forEach(row => {
+                    const day = parseInt(row.querySelector('.split-new-day').value);
+                    const start = row.querySelector('.split-new-start').value;
+                    const end = row.querySelector('.split-new-end').value;
+                    const room = row.querySelector('.split-new-room').value;
+                    if (start && end) {
+                        newItems.push({ classId, dayOfWeek: day, startTime: start, endTime: end, room: room || '', startDate: '2026-09-07' });
+                    }
+                });
 
                 // Delete existing recurring schedules for this class
                 const existing = schedules.filter(s => s.classId === classId && !s.specificDate);
@@ -1217,36 +1248,27 @@ Router.register('schedule', async (container) => {
                     await DB.deleteSchedule(s.id);
                 }
 
-                // Add Old Schedule (<= 2026-09-06)
-                await DB.addSchedule({
-                    classId,
-                    dayOfWeek: oldDay,
-                    startTime: oldStart,
-                    endTime: oldEnd,
-                    room: oldRoom || '',
-                    endDate: '2026-09-06'
-                });
+                // Add Old Schedules (<= 2026-09-06)
+                for (const item of oldItems) {
+                    await DB.addSchedule(item);
+                }
 
-                // Add New Schedule (>= 2026-09-07)
-                await DB.addSchedule({
-                    classId,
-                    dayOfWeek: newDay,
-                    startTime: newStart,
-                    endTime: newEnd,
-                    room: newRoom || '',
-                    startDate: '2026-09-07'
-                });
+                // Add New Schedules (>= 2026-09-07)
+                for (const item of newItems) {
+                    await DB.addSchedule(item);
+                }
 
-                if (newRoom) {
-                    await DB.updateClass(classId, { room: newRoom });
+                const lastRoom = newItems.find(x => x.room)?.room || oldItems.find(x => x.room)?.room;
+                if (lastRoom) {
+                    await DB.updateClass(classId, { room: lastRoom });
                     const c = classes.find(x => x.id === classId);
-                    if (c) c.room = newRoom;
+                    if (c) c.room = lastRoom;
                 }
 
                 Modal.close();
                 schedules = await DB.getSchedules();
                 render();
-                Toast.success('Tách lịch thành công', `Đã tạo 2 lịch riêng cho lớp ${getClassName(classId)}: Lịch cũ đến hết 06/09 và Lịch mới từ 07/09 trở đi.`);
+                Toast.success('Tách lịch thành công', `Đã lưu ${oldItems.length} buổi lịch cũ (đến 06/09) và ${newItems.length} buổi lịch mới (từ 07/09) cho lớp ${getClassName(classId)}`);
             } catch(e) {
                 Toast.error('Lỗi tách lịch', e.message);
             }
