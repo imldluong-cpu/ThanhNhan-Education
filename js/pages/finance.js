@@ -14,7 +14,7 @@ Router.register('finance', async (container) => {
     let selectedYear = String(new Date().getFullYear());
     let customStart = DB.today();
     let customEnd = DB.today();
-    let records = [];
+    let actualClassPnL = [];
 
     async function loadData() {
         try {
@@ -25,6 +25,62 @@ Router.register('finance', async (container) => {
             } else if (filterMode === 'custom') {
                 records = await DB.getFinanceRecords({ from: customStart, to: customEnd });
             }
+
+            let fromDate, toDate;
+            if (filterMode === 'month') {
+                fromDate = `${selectedMonth}-01`;
+                const [y, m] = selectedMonth.split('-');
+                toDate = new Date(y, m, 0).toISOString().split('T')[0];
+            } else if (filterMode === 'year') {
+                fromDate = `${selectedYear}-01-01`;
+                toDate = `${selectedYear}-12-31`;
+            } else {
+                fromDate = customStart;
+                toDate = customEnd;
+            }
+
+            const tSnap = await window.db.collection('tuition').where('paymentDate', '>=', fromDate).where('paymentDate', '<=', toDate).get();
+            const taSnap = await window.db.collection('teacherAttendance').where('date', '>=', fromDate).where('date', '<=', toDate).get();
+
+            const pnlMap = {};
+            if (window.classes) {
+                window.classes.forEach(c => {
+                    pnlMap[c.id] = { id: c.id, name: c.name, rev: 0, sal: 0 };
+                });
+            }
+
+            tSnap.docs.forEach(d => {
+                const data = d.data();
+                if (data.status !== 'paid') return;
+                const cid = data.classId || 'Nhiều môn';
+                if (!pnlMap[cid]) pnlMap[cid] = { id: cid, name: cid === 'Nhiều môn' ? 'Nhiều môn' : cid, rev: 0, sal: 0 };
+                pnlMap[cid].rev += (data.amount || 0);
+            });
+
+            taSnap.docs.forEach(d => {
+                const data = d.data();
+                const cid = data.classId;
+                if (!cid) return;
+                if (!pnlMap[cid]) pnlMap[cid] = { id: cid, name: cid, rev: 0, sal: 0 };
+                let netSal = (data.salary || 0);
+                if (data.salaryMultiplier !== undefined) netSal *= data.salaryMultiplier;
+                if (data.penaltyAmount) netSal -= data.penaltyAmount;
+                pnlMap[cid].sal += Math.max(0, netSal);
+            });
+
+            if (window.classes) {
+                Object.values(pnlMap).forEach(item => {
+                    const c = window.classes.find(x => x.id === item.id);
+                    if (c) item.name = c.name;
+                });
+            }
+
+            actualClassPnL = Object.values(pnlMap).filter(item => item.rev > 0 || item.sal > 0 || (window.classes && window.classes.some(c=>c.id===item.id)));
+            actualClassPnL.forEach(item => {
+                item.profit = item.rev - item.sal;
+                item.margin = item.rev > 0 ? (item.profit / item.rev) * 100 : 0;
+            });
+            actualClassPnL.sort((a, b) => b.profit - a.profit);
         } catch(e) { console.warn(e); }
         renderContent();
     }
@@ -140,6 +196,61 @@ Router.register('finance', async (container) => {
                                 </td>
                             </tr>`).join('')}
                         </tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <div class="card">
+                <div class="card-header">
+                    <h3>Lãi / Lỗ Thực tế Theo Lớp (${periodLabel})</h3>
+                </div>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Lớp</th>
+                                <th style="text-align:right;">Doanh thu (Thực thu)</th>
+                                <th style="text-align:right;">Lương GV (Thực chi)</th>
+                                <th style="text-align:right;">Lợi nhuận</th>
+                                <th style="text-align:center;">Biên LN</th>
+                                <th style="text-align:center;">Trạng thái</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${actualClassPnL.length === 0 ? '<tr><td colspan="6"><div class="empty-state"><p>Chưa có dữ liệu</p></div></td></tr>' :
+                            actualClassPnL.map(c => {
+                                const isLoss = c.profit < 0;
+                                const profitColor = isLoss ? 'var(--danger-500)' : 'var(--success-500)';
+                                const statusBadge = isLoss
+                                    ? `<span class="badge badge-danger">📉 Lỗ</span>`
+                                    : c.profit === 0
+                                        ? `<span class="badge badge-warning">⚖️ Hoà vốn</span>`
+                                        : c.margin >= 50
+                                            ? `<span class="badge badge-success">🔥 Lãi tốt</span>`
+                                            : `<span class="badge badge-success">✓ Có lãi</span>`;
+
+                                return `
+                                    <tr style="background:${isLoss ? 'rgba(239,68,68,0.03)' : ''};">
+                                        <td style="font-weight:600;">${c.name}</td>
+                                        <td style="text-align:right;color:#3b82f6;">${DB.formatCurrency(c.rev)}</td>
+                                        <td style="text-align:right;color:var(--danger-400);">${DB.formatCurrency(c.sal)}</td>
+                                        <td style="text-align:right;font-weight:700;color:${profitColor};">${DB.formatCurrency(c.profit)}</td>
+                                        <td style="text-align:center;font-weight:600;color:${profitColor};">${c.margin.toFixed(0)}%</td>
+                                        <td style="text-align:center;">${statusBadge}</td>
+                                    </tr>
+                                `;
+                            }).join('')}
+                        </tbody>
+                        <tfoot>
+                            <tr style="background:var(--bg-alt);font-weight:700;">
+                                <td style="text-align:right;text-transform:uppercase;">Tổng cộng:</td>
+                                <td style="text-align:right;color:#3b82f6;">${DB.formatCurrency(actualClassPnL.reduce((sum, c) => sum + c.rev, 0))}</td>
+                                <td style="text-align:right;color:var(--danger-400);">${DB.formatCurrency(actualClassPnL.reduce((sum, c) => sum + c.sal, 0))}</td>
+                                <td style="text-align:right;color:${actualClassPnL.reduce((sum, c) => sum + c.profit, 0) >= 0 ? 'var(--success-500)' : 'var(--danger-500)'};">${DB.formatCurrency(actualClassPnL.reduce((sum, c) => sum + c.profit, 0))}</td>
+                                <td style="text-align:center;color:${actualClassPnL.reduce((sum, c) => sum + c.profit, 0) >= 0 ? 'var(--success-500)' : 'var(--danger-500)'};">${(actualClassPnL.reduce((sum, c) => sum + c.rev, 0) > 0 ? (actualClassPnL.reduce((sum, c) => sum + c.profit, 0) / actualClassPnL.reduce((sum, c) => sum + c.rev, 0)) * 100 : 0).toFixed(0)}%</td>
+                                <td></td>
+                            </tr>
+                        </tfoot>
                     </table>
                 </div>
             </div>
