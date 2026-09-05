@@ -764,11 +764,14 @@ Router.register('schedule', async (container) => {
                 const allDB = await DB.getSchedules();
                 for (const item of toAdd) {
                     if (!item.room) continue;
+                    const checkDate = startDate || new Date().toISOString().split('T')[0];
                     const conflict = allDB.find(s => 
                         !s.specificDate &&
                         s.dayOfWeek === item.dayOfWeek && 
                         s.room === item.room && 
-                        item.startTime < s.endTime && item.endTime > s.startTime
+                        item.startTime < s.endTime && item.endTime > s.startTime &&
+                        (!s.endDate || s.endDate >= checkDate) &&
+                        (!s.startDate || s.startDate <= checkDate)
                     );
                     if (conflict) { 
                         Toast.error('Trùng phòng học', `Phòng ${item.room} đã có lớp ${getClassName(conflict.classId)} từ ${conflict.startTime} đến ${conflict.endTime}`); 
