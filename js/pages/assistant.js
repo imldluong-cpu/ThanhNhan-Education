@@ -774,7 +774,13 @@ Router.register('assistant', async (container) => {
                 const t = teachers.find(x => x.id === tid);
                 if (t && t.salaryConfig && t.salaryConfig[cls.id]) {
                     const conf = t.salaryConfig[cls.id];
-                    const classSchedules = schedules.filter(s => s.classId === cls.id && !s.specificDate);
+                    const today = new Date().toISOString().split('T')[0];
+                    const classSchedules = schedules.filter(s => 
+                        s.classId === cls.id && 
+                        !s.specificDate &&
+                        (!s.endDate || s.endDate >= today) &&
+                        (!s.startDate || s.startDate <= today)
+                    );
                     const sessionsPerMonth = classSchedules.length * 4;
                     expectedSal += (conf.perShift || 0) * sessionsPerMonth;
                 }
