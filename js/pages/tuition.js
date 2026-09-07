@@ -107,18 +107,12 @@ Router.register('tuition', async (container) => {
         let maxEndDate = null;
 
         for (const cid of checkClassIds) {
-            // Prioritize recurring weekly schedules over one-off/makeup dates
             let classSchedules = schedules.filter(s => s.classId === cid && !s.specificDate && !s.isOneOff);
             if (classSchedules.length === 0) {
                 classSchedules = schedules.filter(s => s.classId === cid);
             }
             
-            const classDays = new Set();
-            classSchedules.forEach(s => {
-                if (s.dayOfWeek) classDays.add(parseInt(s.dayOfWeek));
-            });
-
-            if (classDays.size > 0) {
+            if (classSchedules.length > 0) {
                 let checkDate = parseLocalDate(refDateStr);
                 if (!isStartDate) {
                     checkDate.setDate(checkDate.getDate() + 1);
@@ -132,8 +126,18 @@ Router.register('tuition', async (container) => {
                 while (lessonsFound < lessonsCount && safetyLimit < 365) {
                     const jsDay = checkDate.getDay();
                     const ourDay = jsDay === 0 ? 8 : jsDay + 1; // 2=Mon, ..., 8=Sun
+                    
+                    const checkDateStr = formatLocalDate(checkDate);
+                    
+                    // Check if there is an active schedule on this day
+                    const hasClassToday = classSchedules.some(s => {
+                        if (parseInt(s.dayOfWeek) !== ourDay) return false;
+                        if (s.startDate && s.startDate > checkDateStr) return false;
+                        if (s.endDate && s.endDate < checkDateStr) return false;
+                        return true;
+                    });
 
-                    if (classDays.has(ourDay)) {
+                    if (hasClassToday) {
                         if (!classFirstLesson) {
                             classFirstLesson = new Date(checkDate.getTime());
                         }
