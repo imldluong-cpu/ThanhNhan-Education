@@ -75,7 +75,15 @@ Router.register('classes', async (container) => {
                         const t = teachers.find(x => x.id === tid);
                         if (t && t.salaryConfig && t.salaryConfig[c.id]) {
                             const conf = t.salaryConfig[c.id];
-                            expectedSal += (conf.perShift || 0) * (conf.perHour || 0);
+                            const today = new Date().toISOString().split('T')[0];
+                            const classSchedules = schedules.filter(s => 
+                                s.classId === c.id && 
+                                !s.specificDate &&
+                                (!s.endDate || s.endDate >= today) &&
+                                (!s.startDate || s.startDate <= today)
+                            );
+                            const sessionsPerMonth = classSchedules.length * 4;
+                            expectedSal += (conf.perShift || 0) * sessionsPerMonth;
                         }
                     });
                     const expectedProfit = expectedRev - expectedSal;
@@ -83,11 +91,13 @@ Router.register('classes', async (container) => {
                     const currentMonth = DB.currentMonth();
                     const paidTuitions = tuitions.filter(t => {
                         if (t.status !== 'paid') return false;
-                        if (!t.dueDate || !t.dueDate.startsWith(currentMonth)) return false;
+                        // Use paidDate strictly - the date when actually paid
+                        const pDate = t.paidDate || '';
+                        if (!pDate.startsWith(currentMonth)) return false;
                         if (t.classId === c.id) return true;
-                        // For multi-class students, check if the student belongs to this class
+                        // For multi-class students, only count if student is ACTIVE in this class
                         if (t.classId === 'Nhiều môn' && t.studentId) {
-                            const student = students.find(s => s.id === t.studentId);
+                            const student = activeStudents.find(s => s.id === t.studentId);
                             return student && (student.classIds || []).includes(c.id);
                         }
                         return false;
@@ -95,8 +105,8 @@ Router.register('classes', async (container) => {
                     // For multi-class tuitions, pro-rate the amount based on this class's fee vs total
                     const realtimeRev = paidTuitions.reduce((sum, t) => {
                         if (t.classId === c.id) return sum + Number(t.amount || 0);
-                        // Pro-rate for multi-class
-                        const student = students.find(s => s.id === t.studentId);
+                        // Pro-rate for multi-class: only count fees for classes the student is ACTIVE in
+                        const student = activeStudents.find(s => s.id === t.studentId);
                         if (student && student.classIds && student.classIds.length > 1) {
                             const thisFee = (student.customFees && student.customFees[c.id] !== undefined) ? student.customFees[c.id] : (c.fee || 0);
                             let totalFee = 0;
@@ -109,7 +119,7 @@ Router.register('classes', async (container) => {
                         return sum + Number(t.amount || 0);
                     }, 0);
 
-                    const classAtt = teacherAttendance.filter(r => r.classId === c.id);
+                    const classAtt = teacherAttendance.filter(r => r.classId === c.id && r.date && r.date.startsWith(currentMonth));
                     let realtimeSal = 0;
                     classAtt.forEach(r => {
                         let rSalary = r.salary || 0;
