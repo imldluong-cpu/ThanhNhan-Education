@@ -50,12 +50,50 @@ Router.register('finance', async (container) => {
                 });
             }
 
+            // Also load students to pro-rate multi-class tuitions
+            const students = await DB.getStudents();
+
             tSnap.docs.forEach(d => {
                 const data = d.data();
                 if (data.status !== 'paid') return;
                 const cid = data.classId || 'Nhiều môn';
-                if (!pnlMap[cid]) pnlMap[cid] = { id: cid, name: cid === 'Nhiều môn' ? 'Nhiều môn' : cid, rev: 0, sal: 0 };
-                pnlMap[cid].rev += (data.amount || 0);
+
+                if (cid !== 'Nhiều môn') {
+                    // Direct single-class tuition
+                    if (!pnlMap[cid]) pnlMap[cid] = { id: cid, name: cid, rev: 0, sal: 0 };
+                    pnlMap[cid].rev += (data.amount || 0);
+                } else {
+                    // Multi-class: pro-rate across the student's enrolled classes
+                    const student = data.studentId ? students.find(s => s.id === data.studentId) : null;
+                    const classIds = student && student.classIds && student.classIds.length > 0 ? student.classIds : null;
+
+                    if (classIds && classIds.length > 0) {
+                        // Calculate total fee for this student across all enrolled classes
+                        let totalFee = 0;
+                        classIds.forEach(classId => {
+                            const cls = classes ? classes.find(c => c.id === classId) : null;
+                            const fee = (student.customFees && student.customFees[classId] !== undefined)
+                                ? student.customFees[classId]
+                                : (cls ? (cls.fee || 0) : 0);
+                            totalFee += fee;
+                        });
+
+                        // Distribute amount proportionally to each class
+                        classIds.forEach(classId => {
+                            const cls = classes ? classes.find(c => c.id === classId) : null;
+                            const fee = (student.customFees && student.customFees[classId] !== undefined)
+                                ? student.customFees[classId]
+                                : (cls ? (cls.fee || 0) : 0);
+                            const share = totalFee > 0 ? Math.round((data.amount || 0) * fee / totalFee) : 0;
+                            if (!pnlMap[classId]) pnlMap[classId] = { id: classId, name: cls ? cls.name : classId, rev: 0, sal: 0 };
+                            pnlMap[classId].rev += share;
+                        });
+                    } else {
+                        // Fallback: no student info, lump into Nhiều môn
+                        if (!pnlMap['Nhiều môn']) pnlMap['Nhiều môn'] = { id: 'Nhiều môn', name: 'Nhiều môn', rev: 0, sal: 0 };
+                        pnlMap['Nhiều môn'].rev += (data.amount || 0);
+                    }
+                }
             });
 
             taSnap.docs.forEach(d => {
