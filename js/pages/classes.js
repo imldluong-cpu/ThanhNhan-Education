@@ -5,7 +5,7 @@
 Router.register('classes', async (container) => {
     const canEdit = Auth.hasAnyRole('owner', 'staff');
     const isTeacher = Auth.isTeacher();
-    let classes = [], teachers = [], students = [], tuitions = [], teacherAttendance = [];
+    let classes = [], teachers = [], students = [], tuitions = [], teacherAttendance = [], schedules = [];
     let searchText = '';
 
     try {
@@ -23,6 +23,7 @@ Router.register('classes', async (container) => {
         if (canEdit) {
             tuitions = await DB.getTuitions();
             teacherAttendance = await DB.getTeacherAttendance(DB.currentMonth());
+            schedules = await DB.getSchedules();
         }
     } catch(e) { console.warn(e); }
 
