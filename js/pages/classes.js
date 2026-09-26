@@ -257,10 +257,11 @@ Router.register('classes', async (container) => {
 
             let fee = 0;
             if (isOneOnOne) {
-                if (grade >= 1 && grade <= 5) fee = 1300000;
-                else if (grade >= 6 && grade <= 8) fee = 1400000;
-                else if (grade >= 9 && grade <= 11) fee = 1500000;
-                else if (grade === 12) fee = 1800000;
+                if (grade >= 1 && grade <= 5) fee = 1000000;
+                else if (grade >= 6 && grade <= 8) fee = 1100000;
+                else if (grade === 9) fee = 1200000;
+                else if (grade >= 10 && grade <= 11) fee = 1300000;
+                else if (grade === 12) fee = 1500000;
             } else {
                 if (grade >= 1 && grade <= 5) fee = 500000;
                 else if (grade === 6) fee = 525000;
