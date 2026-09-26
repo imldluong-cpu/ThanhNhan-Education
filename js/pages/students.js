@@ -1387,6 +1387,15 @@ Router.register('students', async (container) => {
                         }
                         continue;
                     }
+                    if (subjectObj.key === 'van') {
+                        if (cName.includes('anh văn') || cSubj.includes('anh văn')) {
+                            continue;
+                        }
+                        if (subjectObj.keywords.some(kw => cName.startsWith(kw) || cName.includes(kw) || cSubj.includes(kw))) {
+                            return cls;
+                        }
+                        continue;
+                    }
                     if (subjectObj.keywords.some(kw => cName.startsWith(kw) || cName.includes(kw) || cSubj.includes(kw))) {
                         return cls;
                     }
