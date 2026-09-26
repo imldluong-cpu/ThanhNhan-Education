@@ -146,6 +146,8 @@ Router.register('assistant', async (container) => {
         if (!cls) return;
         if (cls.status === 'inactive') return;
         if (cls.startDate && cls.startDate > todayStr) return;
+        if (sched.startDate && sched.startDate > todayStr) return;
+        if (sched.endDate && sched.endDate < todayStr) return;
 
         let isToday = false;
         let finalRoom = sched.room || cls.room || '';
