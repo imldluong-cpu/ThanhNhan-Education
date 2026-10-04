@@ -180,9 +180,11 @@ Router.register('classes', async (container) => {
                         </div>
                         ${profitHtml}
                     </div>
-                    <div class="card-footer">
+                    <div class="card-footer" style="flex-wrap:wrap;">
                         <button class="btn btn-ghost btn-sm" onclick="Router.navigate('attendance')"><i data-lucide="clipboard-check"></i> Điểm danh</button>
                         <button class="btn btn-ghost btn-sm" onclick="Router.navigate('schedule')"><i data-lucide="calendar-days"></i> Lịch học</button>
+                        <button class="btn btn-ghost btn-sm" onclick="ClassesPage.showRoadmapModal('${c.id}')"><i data-lucide="route"></i> Lộ trình</button>
+                        <button class="btn btn-ghost btn-sm" onclick="ClassesPage.showFeedbackModal('${c.id}')"><i data-lucide="message-square-text"></i> Nhận xét</button>
                         ${!isTeacher ? `<button class="btn btn-primary btn-sm" onclick="ClassesPage.showGenerateTuition('${c.id}')"><i data-lucide="coins"></i> Phát hành học phí</button>` : ''}
                     </div>
                 </div>
@@ -615,6 +617,122 @@ Router.register('classes', async (container) => {
                 classes = await DB.getClasses();
                 renderCards();
             });
+        },
+
+        showRoadmapModal(classId) {
+            const cls = classes.find(c => c.id === classId);
+            if (!cls) return;
+            const currentModule = cls.currentModule || '';
+            const upcomingRoadmap = cls.upcomingRoadmap || '';
+            const html = `
+                <div style="display:flex;flex-direction:column;gap:16px;">
+                    <div>
+                        <label class="label" style="font-weight:600;margin-bottom:6px;">Học phần hiện tại</label>
+                        <textarea class="input" id="roadmap-current" rows="3" placeholder="VD: Đại số: Hệ phương trình và bất phương trình..."
+                            style="width:100%;resize:vertical;font-size:14px;">${currentModule}</textarea>
+                    </div>
+                    <div>
+                        <label class="label" style="font-weight:600;margin-bottom:6px;">Lộ trình sắp tới</label>
+                        <textarea class="input" id="roadmap-upcoming" rows="3" placeholder="VD: Hoàn thành chuyên đề hệ thức lượng, mở đầu về đường tròn..."
+                            style="width:100%;resize:vertical;font-size:14px;">${upcomingRoadmap}</textarea>
+                    </div>
+                </div>
+            `;
+            Modal.show({
+                title: `Lộ trình & Học phần: ${cls.name}`,
+                size: 'lg',
+                content: html,
+                footer: `
+                    <button class="btn btn-secondary" onclick="Modal.close()">Đóng</button>
+                    <button class="btn btn-primary" onclick="ClassesPage.saveRoadmap('${classId}')"><i data-lucide="save"></i> Lưu lộ trình</button>
+                `
+            });
+            if (window.lucide) lucide.createIcons();
+        },
+
+        async saveRoadmap(classId) {
+            const currentModule = (document.getElementById('roadmap-current')?.value || '').trim();
+            const upcomingRoadmap = (document.getElementById('roadmap-upcoming')?.value || '').trim();
+            try {
+                await DB.updateClass(classId, { currentModule, upcomingRoadmap });
+                const idx = classes.findIndex(c => c.id === classId);
+                if (idx !== -1) {
+                    classes[idx].currentModule = currentModule;
+                    classes[idx].upcomingRoadmap = upcomingRoadmap;
+                }
+                Toast.success('Đã lưu', 'Lộ trình & Học phần đã được cập nhật');
+                Modal.close();
+            } catch(e) {
+                Toast.error('Lỗi', e.message);
+            }
+        },
+
+        showFeedbackModal(classId) {
+            const cls = classes.find(c => c.id === classId);
+            if (!cls) return;
+            const classStudents = students.filter(s => (s.classIds || []).includes(classId) && s.status === 'active');
+            classStudents.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+
+            let html = '<div style="display:flex;flex-direction:column;gap:16px;">';
+            if (classStudents.length === 0) {
+                html += '<div class="empty-state">Lớp chưa có học viên đang học</div>';
+            } else {
+                classStudents.forEach((s, idx) => {
+                    const feedback = (s.classFeedback && s.classFeedback[classId]) || '';
+                    html += `
+                        <div style="border:1px solid var(--neutral-200);border-radius:8px;padding:12px;">
+                            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                                <strong style="font-size:14px;">${idx + 1}. ${s.name}</strong>
+                                <button class="btn btn-primary btn-sm" onclick="ClassesPage.saveFeedback('${s.id}', '${classId}', ${idx})" id="fb-btn-${idx}">
+                                    <i data-lucide="save" style="width:14px;height:14px;"></i> Lưu
+                                </button>
+                            </div>
+                            <textarea class="input" id="fb-text-${idx}" rows="3" placeholder="Nhận xét học tập cho ${s.name}..."
+                                style="width:100%;resize:vertical;font-size:13px;line-height:1.5;">${feedback}</textarea>
+                        </div>
+                    `;
+                });
+            }
+            html += '</div>';
+
+            Modal.show({
+                title: `Nhận xét học viên: ${cls.name}`,
+                size: 'lg',
+                content: html,
+                footer: `<button class="btn btn-secondary" onclick="Modal.close()">Đóng</button>`
+            });
+            if (window.lucide) lucide.createIcons();
+        },
+
+        async saveFeedback(studentId, classId, idx) {
+            const textarea = document.getElementById(`fb-text-${idx}`);
+            const btn = document.getElementById(`fb-btn-${idx}`);
+            if (!textarea) return;
+            const feedback = textarea.value.trim();
+            try {
+                // Get current classFeedback object
+                const student = students.find(s => s.id === studentId);
+                const classFeedback = (student && student.classFeedback) ? { ...student.classFeedback } : {};
+                classFeedback[classId] = feedback;
+                await DB.updateStudent(studentId, { classFeedback });
+                // Update local cache
+                if (student) student.classFeedback = classFeedback;
+                // Visual feedback
+                if (btn) {
+                    btn.innerHTML = '<i data-lucide="check" style="width:14px;height:14px;"></i> Đã lưu';
+                    btn.classList.remove('btn-primary');
+                    btn.classList.add('btn-success');
+                    if (window.lucide) lucide.createIcons();
+                    setTimeout(() => {
+                        btn.innerHTML = '<i data-lucide="save" style="width:14px;height:14px;"></i> Lưu';
+                        btn.classList.remove('btn-success');
+                        btn.classList.add('btn-primary');
+                        if (window.lucide) lucide.createIcons();
+                    }, 2000);
+                }
+            } catch(e) {
+                Toast.error('Lỗi', e.message);
+            }
         }
     };
 });

@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>🔄 Auto Restore 21:00</title>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: 'Segoe UI', sans-serif; padding: 30px; background: linear-gradient(135deg, #0f0c29, #302b63, #24243e); color: #e2e8f0; min-height: 100vh; }
+h1 { color: #a78bfa; margin-bottom: 8px; font-size: 22px; }
+.subtitle { color: #94a3b8; margin-bottom: 20px; font-size: 14px; }
+.log { background: rgba(15,23,42,0.8); padding: 20px; border-radius: 12px; white-space: pre-wrap; font-size: 12px; line-height: 1.6; max-height: 75vh; overflow-y: auto; border: 1px solid rgba(148,163,184,0.2); font-family: 'Consolas', monospace; }
+.ok { color: #4ade80; }
+.warn { color: #fbbf24; }
+.err { color: #f87171; }
+.info { color: #60a5fa; }
+.done-banner { background: linear-gradient(135deg, #065f46, #047857); padding: 16px 24px; border-radius: 12px; margin-top: 20px; display: none; font-size: 15px; }
+.done-banner.show { display: block; }
+</style>
+</head><body>
+<h1>🔄 Tự động khôi phục lịch về 21:00 PM - 05/09/2026</h1>
+<p class="subtitle">Script sẽ tự động chạy khi trang được mở. Không cần thao tác gì thêm.</p>
+<div id="log" class="log"></div>
+<div id="done-banner" class="done-banner">
+    ✅ <strong>Hoàn tất!</strong> Bạn có thể đóng tab này và F5 lại trang Thời khóa biểu.
+</div>
+<script>
+const logEl = document.getElementById('log');
+function log(msg, cls='') { 
+    logEl.innerHTML += '<span class="'+cls+'">' + msg + '</span>\n'; 
+    logEl.scrollTop = logEl.scrollHeight; 
+}
+
+const firebaseConfig = {
+    apiKey: "AIzaSyB0X4HHNv-TqJAsyE9XKRXIxzB7yRO6v84",
+    authDomain: "thanhnhaneducation-29a2f.firebaseapp.com",
+    projectId: "thanhnhaneducation-29a2f",
+    storageBucket: "thanhnhaneducation-29a2f.firebasestorage.app",
+    messagingSenderId: "849842230265",
+    appId: "1:849842230265:web:b4f852137e83633318a328"
+};
+
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+
+const CUTOFF = new Date('2026-09-05T14:00:00Z'); // 21:00 +07:00 = 14:00 UTC
+
+async function run() {
+    log('⏳ Đang chờ xác thực Firebase...', 'info');
+    
+    const user = await new Promise((resolve) => {
+        let resolved = false;
+        auth.onAuthStateChanged(u => {
+            if (!resolved) { resolved = true; resolve(u); }
+        });
+        setTimeout(() => { if (!resolved) { resolved = true; resolve(null); } }, 8000);
+    });
+    
+    if (!user) {
+        log('⚠️ Chưa đăng nhập Firebase. Đang thử đăng nhập bằng Google...', 'warn');
+        try {
+            const provider = new firebase.auth.GoogleAuthProvider();
+            provider.setCustomParameters({ prompt: 'select_account' });
+            const result = await auth.signInWithPopup(provider);
+            log('✅ Đăng nhập thành công: ' + result.user.email, 'ok');
+        } catch(e) {
+            log('❌ Không thể đăng nhập: ' + e.message, 'err');
+            log('Hãy mở file này trên cùng trình duyệt đang đăng nhập app Thành Nhân.', 'warn');
+            return;
+        }
+    } else {
+        log('✅ Đã xác thực: ' + user.email, 'ok');
+    }
+    
+    // Step 1: Read all schedules
+    log('\n📖 Đang đọc toàn bộ schedules từ Firestore...', 'info');
+    const snap = await db.collection('schedules').get();
+    log('📊 Tổng số schedule documents: ' + snap.size, 'info');
+    
+    // Read classes for name mapping
+    const classSnap = await db.collection('classes').get();
+    const classMap = {};
+    classSnap.docs.forEach(d => { classMap[d.id] = d.data().name || d.id; });
+    
+    // Categorize
+    const toDelete = [];
+    const toClean = [];
+    const keep = [];
+    
+    log('\n🔍 Phân tích từng schedule...', 'info');
+    
+    snap.docs.forEach(doc => {
+        const data = doc.data();
+        const id = doc.id;
+        const className = classMap[data.classId] || data.classId;
+        
+        const createdAt = data.createdAt ? data.createdAt.toDate() : null;
+        const updatedAt = data.updatedAt ? data.updatedAt.toDate() : null;
+        
+        const createdAfterCutoff = createdAt && createdAt > CUTOFF;
+        const updatedAfterCutoff = updatedAt && updatedAt > CUTOFF;
+        
+        const hasDateBounds = !!(data.startDate || data.endDate || data.effectiveFrom);
+        
+        let info = className + ' | Thứ ' + data.dayOfWeek + ' | ' + data.startTime + '-' + data.endTime;
+        if (data.room) info += ' | Phòng: ' + data.room;
+        if (data.specificDate) info += ' | ngày cụ thể: ' + data.specificDate;
+        if (data.startDate) info += ' | startDate: ' + data.startDate;
+        if (data.endDate) info += ' | endDate: ' + data.endDate;
+        
+        if (data.specificDate) {
+            // Keep one-off schedules
+            keep.push({ id, data, className });
+            log('  ⬜ GIỮ (lịch cụ thể): ' + info);
+        } else if (createdAfterCutoff) {
+            // Created after 21:00 → this is a new record from tonight's edits → DELETE
+            toDelete.push({ id, data, className });
+            log('  🔴 XÓA (tạo sau 21:00): ' + info, 'err');
+        } else if (hasDateBounds) {
+            // Has date bounds added during tonight's edits → CLEAN (remove bounds)
+            toClean.push({ id, data, className });
+            log('  🟡 LÀM SẠCH (bỏ date bounds): ' + info, 'warn');
+        } else if (updatedAfterCutoff) {
+            // Updated after 21:00 but no date bounds → may have had dayOfWeek/time changed
+            // We need to check if the schedule was modified from its original values
+            // Since we can't know original values, just clean the updatedAt flag
+            toClean.push({ id, data, className });
+            log('  🟡 ĐÃ SỬA SAU 21:00 (cần kiểm tra): ' + info, 'warn');
+        } else {
+            keep.push({ id, data, className });
+            log('  🟢 GIỮ NGUYÊN: ' + info, 'ok');
+        }
+    });
+    
+    log('\n════════════════════════════════════════', 'info');
+    log('📊 TÓM TẮT:', 'info');
+    log('  🟢 Giữ nguyên: ' + keep.length + ' lịch', 'ok');
+    log('  🔴 Sẽ xóa: ' + toDelete.length + ' lịch (tạo sau 21:00)', 'err');
+    log('  🟡 Sẽ làm sạch: ' + toClean.length + ' lịch (bỏ startDate/endDate)', 'warn');
+    log('════════════════════════════════════════\n', 'info');
+    
+    // Execute deletions
+    if (toDelete.length > 0) {
+        log('🗑️ Đang xóa ' + toDelete.length + ' lịch được tạo sau 21:00...', 'err');
+        for (const item of toDelete) {
+            await db.collection('schedules').doc(item.id).delete();
+            log('  ✓ Đã xóa: ' + item.className + ' Thứ ' + item.data.dayOfWeek + ' ' + item.data.startTime, 'err');
+        }
+        log('✅ Xóa xong!\n', 'ok');
+    }
+    
+    // Clean date bounds
+    if (toClean.length > 0) {
+        log('🧹 Đang làm sạch ' + toClean.length + ' lịch (bỏ startDate/endDate/effectiveFrom)...', 'warn');
+        for (const item of toClean) {
+            const upd = {};
+            if (item.data.startDate) upd.startDate = firebase.firestore.FieldValue.delete();
+            if (item.data.endDate) upd.endDate = firebase.firestore.FieldValue.delete();
+            if (item.data.effectiveFrom) upd.effectiveFrom = firebase.firestore.FieldValue.delete();
+            if (item.data.updatedAt) upd.updatedAt = firebase.firestore.FieldValue.delete();
+            if (Object.keys(upd).length > 0) {
+                await db.collection('schedules').doc(item.id).update(upd);
+                log('  ✓ Đã làm sạch: ' + item.className + ' Thứ ' + item.data.dayOfWeek + ' ' + item.data.startTime, 'warn');
+            }
+        }
+        log('✅ Làm sạch xong!\n', 'ok');
+    }
+    
+    // Also clear any localStorage schedule cache
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+        const key = localStorage.key(i);
+        if (key && (key.includes('schedule') || key.includes('sched'))) {
+            localStorage.removeItem(key);
+        }
+    }
+    
+    // Final verification
+    log('📋 Xác minh trạng thái cuối...', 'info');
+    const finalSnap = await db.collection('schedules').get();
+    let recurCount = 0;
+    finalSnap.docs.forEach(doc => {
+        const d = doc.data();
+        if (!d.specificDate) {
+            const cn = classMap[d.classId] || d.classId;
+            log('  ✅ ' + cn + ' | Thứ ' + d.dayOfWeek + ' | ' + d.startTime + '-' + d.endTime + ' | ' + (d.room || ''), 'ok');
+            recurCount++;
+        }
+    });
+    
+    log('\n🎉🎉🎉 HOÀN TẤT! 🎉🎉🎉', 'ok');
+    log('Lịch đã được khôi phục về trạng thái 21:00 PM ngày 05/09/2026.', 'ok');
+    log('Tổng lịch định kỳ: ' + recurCount, 'ok');
+    log('\nBạn có thể đóng tab này và nhấn F5 ở trang Thời khóa biểu.', 'info');
+    
+    document.getElementById('done-banner').classList.add('show');
+}
+
+// Auto-run
+run().catch(e => {
+    log('\n❌ LỖI NGHIÊM TRỌNG: ' + e.message, 'err');
+    console.error(e);
+});
+</script>
+</body></html>

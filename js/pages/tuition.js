@@ -807,6 +807,38 @@ Router.register('tuition', async (container) => {
             const monthStr = String(periodDateObj.getMonth() + 1).padStart(2, '0');
             const yearStr = periodDateObj.getFullYear();
 
+            // Generate personalized learning info (Option A)
+            let learningInfoHtml = '';
+            const student = students.find(s => s.id === t.studentId);
+            if (student) {
+                let relevantClassIds = [];
+                if (t.classId === 'Nhiều môn' || !t.classId) {
+                    relevantClassIds = student.classIds || [];
+                } else {
+                    relevantClassIds = [t.classId];
+                }
+                
+                if (relevantClassIds.length > 0) {
+                    learningInfoHtml += `<div style="margin-top: 15px; text-align: left;">`;
+                    learningInfoHtml += `<strong style="color: #1e3a8a; font-size: 14px; text-transform: uppercase;">THÔNG TIN HỌC TẬP</strong>`;
+                    
+                    relevantClassIds.forEach(cid => {
+                        const cls = classes.find(c => c.id === cid);
+                        if (cls) {
+                            learningInfoHtml += `<div style="margin-top: 8px;">`;
+                            learningInfoHtml += `<strong style="font-size: 13px;">📚 Môn: ${cls.name}</strong>`;
+                            learningInfoHtml += `<ul style="margin: 4px 0 10px 20px; padding: 0;">`;
+                            learningInfoHtml += `<li><strong>Học phần hiện tại:</strong> ${cls.currentModule || 'Chưa cập nhật'}</li>`;
+                            learningInfoHtml += `<li><strong>Nhận xét học tập:</strong> ${(student.classFeedback && student.classFeedback[cid]) || 'Chưa có nhận xét'}</li>`;
+                            learningInfoHtml += `<li><strong>Lộ trình sắp tới:</strong> ${cls.upcomingRoadmap || 'Chưa cập nhật'}</li>`;
+                            learningInfoHtml += `</ul></div>`;
+                        }
+                    });
+                    
+                    learningInfoHtml += `</div>`;
+                }
+            }
+
             Modal.show({
                 title: 'Phiếu thu học phí',
                 content: `
@@ -888,24 +920,7 @@ Router.register('tuition', async (container) => {
                         </div>
                         
                         <div style="margin-bottom: 10px; font-size: 12px; line-height: 1.4;">
-                            <p style="margin: 0 0 5px 0; text-align: justify;">Chương trình giảng dạy bám sát chương trình phổ thông, tập trung củng cố kiến thức nền tảng và theo sát tiến độ học tập của từng học sinh, với các môn học:</p>
-                            <strong style="font-size: 13px; display: block; margin-bottom: 8px;">TOÁN - VĂN - ANH VĂN - LÝ - HÓA - TIẾNG ANH GIAO TIẾP.</strong>
-                            
-                            <p style="margin: 0 0 4px 0;">📌 <strong>Đối tượng:</strong> Học sinh Cấp 2; Cấp 3; Tiểu học (Tiếng Anh giao tiếp).</p>
-                            <p style="margin: 0 0 8px 0;">🆓 <strong>HỌC THỬ MIỄN PHÍ 01 BUỔI:</strong> Học trải nghiệm trước khi đăng ký.</p>
-                            
-                            <p style="margin: 0 0 4px 0;">🤝 <strong>Học cùng bạn - tăng động lực học tập:</strong> (Giảm trực tiếp học phí 3 tháng đầu cho cả nhóm)</p>
-                            <ul style="margin: 0 0 8px 20px; padding: 0;">
-                                <li>2 học sinh: giảm 5%</li>
-                                <li>3 học sinh: giảm 10%</li>
-                                <li>Từ 5 học sinh: giảm 20%</li>
-                            </ul>
-                            
-                            <p style="margin: 0 0 4px 0;">💡 <strong>Hỗ trợ học phí toàn khóa:</strong></p>
-                            <ul style="margin: 0 0 8px 20px; padding: 0;">
-                                <li>Đăng ký 2 môn: giảm 5%</li>
-                                <li>Từ 3 môn trở lên: giảm 10%</li>
-                            </ul>
+                            ${learningInfoHtml}
                         </div>
                         
                         <div style="border-top: 1px solid #000; padding-top: 8px; font-style: italic; font-weight: bold; font-size: 12px;">
