@@ -224,24 +224,44 @@ Router.register('classes', async (container) => {
             const cls = classes.find(c => c.id === classId);
             if (!cls) return;
             const classStudents = students.filter(s => (s.classIds || []).includes(classId) && s.status !== 'inactive');
-            let html = '<div class="table-container"><table><thead><tr><th>STT</th><th>Họ tên</th><th>Trạng thái</th><th>Trường</th><th>SĐT Phụ huynh</th></tr></thead><tbody>';
+            
+            let html = '<div style="display:flex;flex-direction:column;gap:16px;">';
             if (classStudents.length === 0) {
-                html += '<tr><td colspan="5"><div class="empty-state">Lớp chưa có học viên nào</div></td></tr>';
+                html += '<div class="empty-state">Lớp chưa có học viên nào</div>';
             } else {
                 classStudents.sort((a, b) => a.name.localeCompare(b.name));
                 classStudents.forEach((s, idx) => {
-                    const statusText = s.status === 'pending' ? '<span class="badge badge-warning">Chờ sắp lớp</span>' : '<span class="badge badge-success">Đang học</span>';
-                    html += `<tr><td>${idx+1}</td><td><strong>${s.name}</strong></td><td>${statusText}</td><td>${s.school || '—'}</td><td>${s.parentPhone || '—'}</td></tr>`;
+                    const statusText = s.status === 'pending' ? '<span class="badge badge-warning">Chờ xếp lớp</span>' : '<span class="badge badge-success">Đang học</span>';
+                    const feedback = (s.classFeedback && s.classFeedback[classId]) || '';
+                    html += `
+                        <div style="border:1px solid var(--neutral-200);border-radius:8px;padding:12px;">
+                            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                                <div>
+                                    <strong style="font-size:14px;">${idx + 1}. ${s.name}</strong>
+                                    <span style="margin-left:8px;">${statusText}</span>
+                                </div>
+                                <button class="btn btn-primary btn-sm" onclick="ClassesPage.saveFeedback('${s.id}', '${classId}', ${idx})" id="fb-btn-${idx}">
+                                    <i data-lucide="save" style="width:14px;height:14px;"></i> Lưu nhận xét
+                                </button>
+                            </div>
+                            <div style="font-size:13px; color:var(--text-secondary); margin-bottom:8px;">
+                                <span>SĐT Phụ huynh: ${s.parentPhone || '—'}</span> | <span>Trường: ${s.school || '—'}</span>
+                            </div>
+                            <textarea class="input" id="fb-text-${idx}" rows="2" placeholder="Nhận xét học tập cho ${s.name}..."
+                                style="width:100%;resize:vertical;font-size:13px;line-height:1.5;">${feedback}</textarea>
+                        </div>
+                    `;
                 });
             }
-            html += '</tbody></table></div>';
+            html += '</div>';
             
             Modal.show({
-                title: `Danh sách học viên: ${cls.name}`,
+                title: `Danh sách học viên & Nhận xét: ${cls.name}`,
                 size: 'lg',
                 content: html,
                 footer: `<button class="btn btn-secondary" onclick="Modal.close()">Đóng</button>`
             });
+            if (window.lucide) lucide.createIcons();
         },
 
         suggestFee(name) {
