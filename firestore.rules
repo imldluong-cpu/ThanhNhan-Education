@@ -54,7 +54,8 @@ service cloud.firestore {
     // 2. Core Administration (Students, Classes, Tuition, Finance, Salary, Schedules)
     match /students/{docId} { 
       allow read: if isOwnerOrStaff() || isTeacher(); 
-      allow write: if isOwnerOrStaff(); 
+      allow create, delete: if isOwnerOrStaff(); 
+      allow update: if isOwnerOrStaff() || (isTeacher() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['classFeedback']));
     }
     match /classes/{docId} { allow read, write: if isOwnerOrStaff() || isTeacher(); } // Teachers might need to see classes
     match /tuition/{docId} { allow read, write: if isOwnerOrStaff(); }
