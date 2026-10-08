@@ -828,9 +828,13 @@ Router.register('tuition', async (container) => {
                             learningInfoHtml += `<div style="margin-top: 8px;">`;
                             learningInfoHtml += `<strong style="font-size: 13px;">📚 Môn: ${cls.name}</strong>`;
                             learningInfoHtml += `<ul style="margin: 4px 0 10px 20px; padding: 0;">`;
-                            learningInfoHtml += `<li><strong>Học phần hiện tại:</strong> ${cls.currentModule || 'Chưa cập nhật'}</li>`;
-                            learningInfoHtml += `<li><strong>Nhận xét học tập:</strong> ${(student.classFeedback && student.classFeedback[cid]) || 'Chưa có nhận xét'}</li>`;
-                            learningInfoHtml += `<li><strong>Lộ trình sắp tới:</strong> ${cls.upcomingRoadmap || 'Chưa cập nhật'}</li>`;
+                            const currentModule = (cls.currentModule || 'Chưa cập nhật').replace(/\n/g, '<br>');
+                            const feedback = ((student.classFeedback && student.classFeedback[cid]) || 'Chưa có nhận xét').replace(/\n/g, '<br>');
+                            const upcomingRoadmap = (cls.upcomingRoadmap || 'Chưa cập nhật').replace(/\n/g, '<br>');
+                            
+                            learningInfoHtml += `<li><strong>Học phần hiện tại:</strong><br/> ${currentModule}</li>`;
+                            learningInfoHtml += `<li><strong>Nhận xét học tập:</strong><br/> ${feedback}</li>`;
+                            learningInfoHtml += `<li><strong>Lộ trình sắp tới:</strong><br/> ${upcomingRoadmap}</li>`;
                             learningInfoHtml += `</ul></div>`;
                         }
                     });
