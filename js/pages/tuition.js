@@ -832,9 +832,11 @@ Router.register('tuition', async (container) => {
                             const feedback = ((student.classFeedback && student.classFeedback[cid]) || 'Chưa có nhận xét').replace(/\n/g, '<br>');
                             const upcomingRoadmap = (cls.upcomingRoadmap || 'Chưa cập nhật').replace(/\n/g, '<br>');
                             
-                            learningInfoHtml += `<li><strong>Học phần hiện tại:</strong><br/> ${currentModule}</li>`;
-                            learningInfoHtml += `<li><strong>Nhận xét học tập:</strong><br/> ${feedback}</li>`;
-                            learningInfoHtml += `<li><strong>Lộ trình sắp tới:</strong><br/> ${upcomingRoadmap}</li>`;
+                            const editableAttr = (Auth.isOwner() || Auth.isStaff()) ? 'contenteditable="true" style="outline: none; border-bottom: 1px dotted #ccc; display: inline-block; min-width: 50px;"' : '';
+                            
+                            learningInfoHtml += `<li><strong>Học phần hiện tại:</strong><br/> <span ${editableAttr}>${currentModule}</span></li>`;
+                            learningInfoHtml += `<li><strong>Nhận xét học tập:</strong><br/> <span ${editableAttr}>${feedback}</span></li>`;
+                            learningInfoHtml += `<li><strong>Lộ trình sắp tới:</strong><br/> <span ${editableAttr}>${upcomingRoadmap}</span></li>`;
                             learningInfoHtml += `</ul></div>`;
                         }
                     });
