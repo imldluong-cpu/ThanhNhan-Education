@@ -984,26 +984,29 @@ Router.register('tuition', async (container) => {
                 t.dueDate = updates.dueDate;
                 
                 const student = students.find(s => s.id === t.studentId);
-                const editableSpans = document.querySelectorAll('.invoice-learning-editable');
-                if (editableSpans.length > 0 && student) {
+                const moduleSpans = document.querySelectorAll('[id^="inv-module-"]');
+                const roadmapSpans = document.querySelectorAll('[id^="inv-roadmap-"]');
+                const feedbackSpans = document.querySelectorAll('[id^="inv-feedback-"]');
+                
+                if ((moduleSpans.length > 0 || roadmapSpans.length > 0 || feedbackSpans.length > 0) && student) {
                     const classUpdates = {};
                     const feedbackUpdates = {};
                     
-                    document.querySelectorAll('[id^="inv-module-"]').forEach(el => {
+                    moduleSpans.forEach(el => {
                         const cid = el.getAttribute('data-cid');
                         if (!classUpdates[cid]) classUpdates[cid] = {};
-                        classUpdates[cid].currentModule = el.innerText;
+                        classUpdates[cid].currentModule = (el.innerText || '').trim();
                     });
                     
-                    document.querySelectorAll('[id^="inv-roadmap-"]').forEach(el => {
+                    roadmapSpans.forEach(el => {
                         const cid = el.getAttribute('data-cid');
                         if (!classUpdates[cid]) classUpdates[cid] = {};
-                        classUpdates[cid].upcomingRoadmap = el.innerText;
+                        classUpdates[cid].upcomingRoadmap = (el.innerText || '').trim();
                     });
                     
-                    document.querySelectorAll('[id^="inv-feedback-"]').forEach(el => {
+                    feedbackSpans.forEach(el => {
                         const cid = el.getAttribute('data-cid');
-                        feedbackUpdates[cid] = el.innerText;
+                        feedbackUpdates[cid] = (el.innerText || '').trim();
                     });
                     
                     for (const cid in classUpdates) {
