@@ -753,8 +753,8 @@ Router.register('tuition', async (container) => {
             const t = tuitions.find(x => x.id === id);
             if (!t) return;
             
-            const studentName = getStudentName(t.studentId);
-            const className = getClassName(t.classId, t);
+            const studentName = t.customStudentName !== undefined ? t.customStudentName : getStudentName(t.studentId);
+            const className = t.customClassName !== undefined ? t.customClassName : getClassName(t.classId, t);
             const amountFormatted = DB.formatCurrency(t.amount).replace(' ₫', '');
             
             const d = new Date();
@@ -882,11 +882,11 @@ Router.register('tuition', async (container) => {
                         <div style="margin-bottom: 5px;">
                             <div style="display: flex; margin-bottom: 8px;">
                                 <strong style="width: 120px;">Học viên:</strong>
-                                <span class="invoice-editable" contenteditable="true" style="flex: 1; border-bottom: 1px dotted #ccc; outline: none;">${studentName}</span>
+                                <span id="inv-student-name" class="invoice-editable" contenteditable="true" style="flex: 1; border-bottom: 1px dotted #ccc; outline: none;">${studentName}</span>
                             </div>
                             <div style="display: flex; margin-bottom: 8px;">
                                 <strong style="width: 120px;">Lớp - Môn:</strong>
-                                <span class="invoice-editable" contenteditable="true" style="flex: 1; border-bottom: 1px dotted #ccc; outline: none;">${className}</span>
+                                <span id="inv-class-name" class="invoice-editable" contenteditable="true" style="flex: 1; border-bottom: 1px dotted #ccc; outline: none;">${className}</span>
                             </div>
                             <div style="display: flex; margin-bottom: 8px;">
                                 <strong style="width: 120px;">Số tiền:</strong>
@@ -952,6 +952,8 @@ Router.register('tuition', async (container) => {
                 const amountText = document.getElementById('inv-amount').innerText;
                 const fromDateText = document.getElementById('inv-from-date').innerText;
                 const toDateText = document.getElementById('inv-to-date').innerText;
+                const studentNameText = document.getElementById('inv-student-name').innerText;
+                const classNameText = document.getElementById('inv-class-name').innerText;
                 
                 const amount = parseInt(amountText.replace(/[^\d]/g, '')) || 0;
                 
@@ -973,7 +975,9 @@ Router.register('tuition', async (container) => {
                     amount: amount, 
                     startDate: startDate || t.startDate || '', 
                     endDate: endDate || t.endDate || '',
-                    dueDate: newDueDate
+                    dueDate: newDueDate,
+                    customStudentName: studentNameText.trim(),
+                    customClassName: classNameText.trim()
                 };
                 
                 await DB.updateTuition(id, updates);
@@ -982,6 +986,8 @@ Router.register('tuition', async (container) => {
                 if (startDate) t.startDate = startDate;
                 if (endDate) t.endDate = endDate;
                 t.dueDate = updates.dueDate;
+                t.customStudentName = updates.customStudentName;
+                t.customClassName = updates.customClassName;
                 
                 const student = students.find(s => s.id === t.studentId);
                 const moduleSpans = document.querySelectorAll('[id^="inv-module-"]');
