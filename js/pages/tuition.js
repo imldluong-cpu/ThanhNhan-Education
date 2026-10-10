@@ -832,11 +832,11 @@ Router.register('tuition', async (container) => {
                             const feedback = ((student.classFeedback && student.classFeedback[cid]) || 'Chưa có nhận xét').replace(/\n/g, '<br>');
                             const upcomingRoadmap = (cls.upcomingRoadmap || 'Chưa cập nhật').replace(/\n/g, '<br>');
                             
-                            const editableAttr = (Auth.isOwner() || Auth.isStaff()) ? 'contenteditable="true" style="outline: none; border-bottom: 1px dotted #ccc; display: inline-block; min-width: 50px;"' : '';
+                            const editableAttr = (Auth.isOwner() || Auth.isStaff()) ? 'class="invoice-learning-editable" contenteditable="true" style="outline: none; border-bottom: 1px dotted #ccc; display: inline-block; min-width: 50px;"' : '';
                             
-                            learningInfoHtml += `<li><strong>Học phần hiện tại:</strong><br/> <span ${editableAttr}>${currentModule}</span></li>`;
-                            learningInfoHtml += `<li><strong>Nhận xét học tập:</strong><br/> <span ${editableAttr}>${feedback}</span></li>`;
-                            learningInfoHtml += `<li><strong>Lộ trình sắp tới:</strong><br/> <span ${editableAttr}>${upcomingRoadmap}</span></li>`;
+                            learningInfoHtml += `<li><strong>Học phần hiện tại:</strong><br/> <span id="inv-module-${cid}" data-cid="${cid}" ${editableAttr}>${currentModule}</span></li>`;
+                            learningInfoHtml += `<li><strong>Nhận xét học tập:</strong><br/> <span id="inv-feedback-${cid}" data-cid="${cid}" ${editableAttr}>${feedback}</span></li>`;
+                            learningInfoHtml += `<li><strong>Lộ trình sắp tới:</strong><br/> <span id="inv-roadmap-${cid}" data-cid="${cid}" ${editableAttr}>${upcomingRoadmap}</span></li>`;
                             learningInfoHtml += `</ul></div>`;
                         }
                     });
@@ -982,6 +982,47 @@ Router.register('tuition', async (container) => {
                 if (startDate) t.startDate = startDate;
                 if (endDate) t.endDate = endDate;
                 t.dueDate = updates.dueDate;
+                
+                const student = students.find(s => s.id === t.studentId);
+                const editableSpans = document.querySelectorAll('.invoice-learning-editable');
+                if (editableSpans.length > 0 && student) {
+                    const classUpdates = {};
+                    const feedbackUpdates = {};
+                    
+                    document.querySelectorAll('[id^="inv-module-"]').forEach(el => {
+                        const cid = el.getAttribute('data-cid');
+                        if (!classUpdates[cid]) classUpdates[cid] = {};
+                        classUpdates[cid].currentModule = el.innerText;
+                    });
+                    
+                    document.querySelectorAll('[id^="inv-roadmap-"]').forEach(el => {
+                        const cid = el.getAttribute('data-cid');
+                        if (!classUpdates[cid]) classUpdates[cid] = {};
+                        classUpdates[cid].upcomingRoadmap = el.innerText;
+                    });
+                    
+                    document.querySelectorAll('[id^="inv-feedback-"]').forEach(el => {
+                        const cid = el.getAttribute('data-cid');
+                        feedbackUpdates[cid] = el.innerText;
+                    });
+                    
+                    for (const cid in classUpdates) {
+                        await DB.updateClass(cid, classUpdates[cid]);
+                        const c = classes.find(x => x.id === cid);
+                        if (c) {
+                            if (classUpdates[cid].currentModule !== undefined) c.currentModule = classUpdates[cid].currentModule;
+                            if (classUpdates[cid].upcomingRoadmap !== undefined) c.upcomingRoadmap = classUpdates[cid].upcomingRoadmap;
+                        }
+                    }
+                    
+                    if (Object.keys(feedbackUpdates).length > 0) {
+                        if (!student.classFeedback) student.classFeedback = {};
+                        for (const cid in feedbackUpdates) {
+                            student.classFeedback[cid] = feedbackUpdates[cid];
+                        }
+                        await DB.updateStudent(student.id, { classFeedback: student.classFeedback });
+                    }
+                }
                 
                 render();
                 Toast.success('Đã lưu thay đổi vào hệ thống');
