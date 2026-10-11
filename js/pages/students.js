@@ -56,20 +56,41 @@ Router.register('students', async (container) => {
 
     function renderClassCheckboxes(selectedIds, customFees = {}) {
         const ids = selectedIds || [];
-        return `
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:4px;" id="s-classes">
-                ${classes.map(c => `
-                    <div style="display:flex;align-items:center;gap:8px;background:var(--bg-glass);padding:8px;border-radius:6px;border:1px solid var(--border-color);">
-                        <label class="checkbox-label" style="margin:0;min-width:100px;">
-                            <input type="checkbox" class="edit-class-cb" value="${c.id}" ${ids.includes(c.id) ? 'checked' : ''} onchange="document.getElementById('edit-fee-${c.id}').style.display = this.checked ? 'block' : 'none'; StudentsPage.calcTuition();"> ${c.name}
-                        </label>
-                        <input type="number" class="input edit-class-fee" id="edit-fee-${c.id}" value="${customFees[c.id] !== undefined ? customFees[c.id] : (c.fee || 0)}" style="display:${ids.includes(c.id) ? 'block' : 'none'};flex:1;padding:4px 8px;font-size:13px;" placeholder="Học phí gốc" oninput="StudentsPage.calcTuition()">
+        if (!classes || classes.length === 0) {
+            return `
+                <div style="padding:16px;text-align:center;color:var(--text-secondary);background:var(--bg-glass);border-radius:8px;border:1px dashed var(--border-color);">
+                    Chưa có lớp học nào trong hệ thống.
+                    <div style="margin-top:8px;">
+                        <button type="button" class="btn btn-primary btn-sm" onclick="StudentsPage.quickAddClass()">
+                            <i data-lucide="plus"></i> Tạo lớp mới
+                        </button>
                     </div>
-                `).join('')}
+                </div>
+            `;
+        }
+        return `
+            <div style="display:flex;gap:8px;margin-bottom:8px;align-items:center;">
+                <input type="text" class="input" id="class-filter-input" placeholder="Tìm tên lớp..." style="padding:6px 10px;font-size:13px;flex:1;" oninput="StudentsPage.filterClassList(this.value)">
+                <button type="button" class="btn btn-ghost btn-sm" onclick="StudentsPage.quickAddClass()" style="font-size:12px;white-space:nowrap;">
+                    <i data-lucide="plus"></i> Tạo lớp mới
+                </button>
             </div>
-            <button type="button" class="btn btn-ghost btn-sm mt-2" onclick="StudentsPage.quickAddClass()" style="font-size:12px;">
-                <i data-lucide="plus" style="width:14px;height:14px;"></i> Tạo lớp mới
-            </button>
+            <div id="s-classes-container" style="max-height:220px;overflow-y:auto;border:1px solid var(--border-color);border-radius:8px;padding:8px;background:var(--bg-glass);">
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;" id="s-classes">
+                    ${classes.map(c => {
+                        const isChecked = ids.includes(c.id);
+                        const feeVal = customFees[c.id] !== undefined ? customFees[c.id] : (c.fee || '');
+                        return `
+                        <div class="class-item" data-name="${(c.name || '').toLowerCase()}" style="display:flex;align-items:center;gap:8px;background:var(--bg-card, #fff);padding:8px 10px;border-radius:6px;border:1px solid var(--border-color);">
+                            <label class="checkbox-label" style="margin:0;min-width:90px;flex:1;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${c.name}">
+                                <input type="checkbox" class="edit-class-cb" value="${c.id}" data-name="${c.name}" ${isChecked ? 'checked' : ''} onchange="StudentsPage.toggleClass(this, '${c.id}')"> ${c.name}
+                            </label>
+                            <input type="number" class="input edit-class-fee" id="edit-fee-${c.id}" value="${feeVal}" style="display:${isChecked ? 'block' : 'none'};width:110px;padding:4px 8px;font-size:13px;" placeholder="Học phí gốc" oninput="StudentsPage.calcTuition()">
+                        </div>
+                        `;
+                    }).join('')}
+                </div>
+            </div>
         `;
     }
 
@@ -499,48 +520,64 @@ Router.register('students', async (container) => {
         quickAddClass() {
             const container = document.getElementById('s-classes');
             if (!container) return;
-            // Insert inline form
             const existing = document.getElementById('quick-class-form');
             if (existing) { existing.remove(); return; }
 
             const form = document.createElement('div');
             form.id = 'quick-class-form';
-            form.style.cssText = 'width:100%;display:flex;gap:8px;align-items:center;margin-top:8px;padding:8px;background:rgba(99,102,241,0.1);border-radius:8px;';
+            form.style.cssText = 'width:100%;display:flex;gap:8px;align-items:center;margin-bottom:8px;padding:8px;background:rgba(99,102,241,0.1);border-radius:8px;';
             form.innerHTML = `
-                <input type="text" class="input" id="quick-class-name" placeholder="Tên lớp" style="flex:1;padding:6px 10px;font-size:13px;">
-                <input type="text" class="input" id="quick-class-subject" placeholder="Môn" style="width:80px;padding:6px 10px;font-size:13px;">
-                <button class="btn btn-primary btn-sm" onclick="StudentsPage.saveQuickClass()">Tạo</button>
+                <input type="text" class="input" id="quick-class-name" placeholder="Tên lớp mới (VD: Toán 12A1)" style="flex:1;padding:6px 10px;font-size:13px;">
+                <input type="text" class="input" id="quick-class-subject" placeholder="Môn (VD: Toán)" style="width:110px;padding:6px 10px;font-size:13px;">
+                <button type="button" class="btn btn-primary btn-sm" onclick="StudentsPage.saveQuickClass()">Tạo</button>
+                <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('quick-class-form')?.remove()">Hủy</button>
             `;
-            container.parentElement.insertBefore(form, container.nextSibling.nextSibling);
+            const wrapper = document.getElementById('s-classes-container');
+            if (wrapper) {
+                wrapper.parentElement.insertBefore(form, wrapper);
+            } else {
+                container.parentElement.insertBefore(form, container);
+            }
         },
 
         async saveQuickClass() {
             const name = document.getElementById('quick-class-name').value.trim();
             if (!name) { Toast.warning('Nhập tên lớp'); return; }
             try {
+                const gradeText = (document.getElementById('s-grade')?.value || '').trim();
+                const defaultFee = StudentsPage.getDefaultFee(gradeText);
                 const result = await DB.addClass({
                     name,
-                    subject: document.getElementById('quick-class-subject').value.trim() || '',
-                    fee: 0, room: '', notes: ''
+                    subject: document.getElementById('quick-class-subject')?.value.trim() || '',
+                    fee: defaultFee || 0,
+                    room: '',
+                    notes: '',
+                    status: 'active'
                 });
                 classes = await DB.getClasses();
-                // Add checkbox for new class
+
                 const container = document.getElementById('s-classes');
                 if (container) {
-                    const label = document.createElement('label');
-                    label.className = 'checkbox-label';
-                    label.innerHTML = `<input type="checkbox" value="${result.id}" checked> ${name}`;
-                    container.appendChild(label);
+                    const div = document.createElement('div');
+                    div.className = 'class-item';
+                    div.setAttribute('data-name', name.toLowerCase());
+                    div.style.cssText = 'display:flex;align-items:center;gap:8px;background:var(--bg-card, #fff);padding:8px 10px;border-radius:6px;border:1px solid var(--border-color);';
+                    div.innerHTML = `
+                        <label class="checkbox-label" style="margin:0;min-width:90px;flex:1;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${name}">
+                            <input type="checkbox" class="edit-class-cb" value="${result.id}" data-name="${name}" checked onchange="StudentsPage.toggleClass(this, '${result.id}')"> ${name}
+                        </label>
+                        <input type="number" class="input edit-class-fee" id="edit-fee-${result.id}" value="${defaultFee || ''}" style="display:block;width:110px;padding:4px 8px;font-size:13px;" placeholder="Học phí gốc" oninput="StudentsPage.calcTuition()">
+                    `;
+                    container.prepend(div);
                 }
                 document.getElementById('quick-class-form')?.remove();
                 Toast.success('Đã tạo lớp ' + name);
+                StudentsPage.calcTuition();
             } catch(e) { Toast.error('Lỗi', e.message); }
         },
 
         // === ADD STUDENT ===
         showAdd() {
-            const predefSubjects = ['Toán', 'Văn', 'Anh Văn', 'Hóa', 'Lý', 'Sử', 'Địa', 'KHTN', 'KHXH', 'AV giao tiếp', 'IELTS'];
-            
             Modal.show({
                 title: 'Thêm học viên mới',
                 size: 'lg',
@@ -572,20 +609,10 @@ Router.register('students', async (container) => {
                     </div>
                     <hr style="margin:16px 0;border:none;border-top:1px solid var(--border-color);">
                     <div class="form-group">
-                        <label class="form-label" style="display:flex;justify-content:space-between;">
-                            <span>Môn học đăng ký</span>
-                            <button class="btn btn-ghost btn-sm" onclick="StudentsPage.addCustomSubject()"><i data-lucide="plus"></i> Thêm môn</button>
+                        <label class="form-label" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                            <span>Thêm vào lớp học <span style="font-weight:normal;color:var(--text-secondary);font-size:12px;">(Chọn lớp học viên sẽ tham gia)</span></span>
                         </label>
-                        <div id="s-subjects-container" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:8px;">
-                            ${predefSubjects.map((sub, i) => `
-                                <div style="display:flex;align-items:center;gap:8px;background:var(--bg-glass);padding:8px;border-radius:6px;border:1px solid var(--border-color);">
-                                    <label class="checkbox-label" style="margin:0;min-width:100px;">
-                                        <input type="checkbox" class="subj-cb" value="${sub}" onchange="StudentsPage.toggleSubject(this, 'fee-${i}')"> ${sub}
-                                    </label>
-                                    <input type="number" class="input subj-fee" id="fee-${i}" placeholder="Học phí gốc" style="display:none;flex:1;padding:4px 8px;font-size:13px;" oninput="StudentsPage.calcTuition()">
-                                </div>
-                            `).join('')}
-                        </div>
+                        ${renderClassCheckboxes([])}
                     </div>
                     <div class="form-row" style="margin-top:16px;background:var(--primary-50);padding:12px;border-radius:8px;">
                         <div class="form-group">
@@ -599,7 +626,7 @@ Router.register('students', async (container) => {
                         </div>
                         <div class="form-group">
                             <label class="form-label">Thành tiền cần thu (VNĐ)</label>
-                            <input type="text" class="input" id="s-total" readonly style="background:var(--bg-color);font-weight:bold;color:var(--primary-600);">
+                            <input type="text" class="input" id="s-total" readonly style="background:var(--bg-color);font-weight:bold;color:var(--primary-600);" value="0 đ">
                         </div>
                     </div>
                     <div class="form-group" style="margin-top:16px;"><label class="form-label">Ghi chú</label><textarea class="textarea" id="s-notes" rows="2"></textarea></div>
@@ -609,24 +636,21 @@ Router.register('students', async (container) => {
             if (window.lucide) lucide.createIcons();
         },
 
-        addCustomSubject() {
-            const container = document.getElementById('s-subjects-container');
-            const name = prompt('Nhập tên môn học mới:');
-            if (!name) return;
-            const idx = Date.now();
-            const div = document.createElement('div');
-            div.style.cssText = 'display:flex;align-items:center;gap:8px;background:var(--bg-glass);padding:8px;border-radius:6px;border:1px solid var(--border-color);';
-            div.innerHTML = `
-                <label class="checkbox-label" style="margin:0;min-width:100px;">
-                    <input type="checkbox" class="subj-cb" value="${name}" checked onchange="StudentsPage.toggleSubject(this, 'fee-${idx}')"> ${name}
-                </label>
-                <input type="number" class="input subj-fee" id="fee-${idx}" placeholder="Học phí gốc" style="flex:1;padding:4px 8px;font-size:13px;" oninput="StudentsPage.calcTuition()">
-            `;
-            container.appendChild(div);
+        filterClassList(query) {
+            const q = (query || '').toLowerCase().trim();
+            const items = document.querySelectorAll('#s-classes .class-item');
+            items.forEach(el => {
+                const name = el.getAttribute('data-name') || '';
+                if (!q || name.includes(q)) {
+                    el.style.display = 'flex';
+                } else {
+                    el.style.display = 'none';
+                }
+            });
         },
 
         getDefaultFee(gradeStr) {
-            const match = gradeStr.match(/\d+/);
+            const match = (gradeStr || '').match(/\d+/);
             if (!match) return 0;
             const g = parseInt(match[0]);
             if (g >= 1 && g <= 5) return 500000;
@@ -640,22 +664,20 @@ Router.register('students', async (container) => {
             return 0;
         },
 
-        toggleSubject(cb, feeId) {
-            const input = document.getElementById(feeId);
-            if (input) {
-                input.style.display = cb.checked ? 'block' : 'none';
-                if (!cb.checked) {
-                    input.value = '';
-                } else {
-                    const gradeText = (document.getElementById('s-grade')?.value || '').trim();
-                    const grade = gradeText.replace(/lớp/i, '').trim();
-                    const className = `${cb.value} ${grade}`.trim();
-                    const cls = classes.find(c => c.name.toLowerCase() === className.toLowerCase());
-                    if (cls && cls.fee) {
-                        input.value = cls.fee;
-                    } else {
+        toggleClass(cb, classId) {
+            const feeInput = document.getElementById('edit-fee-' + classId);
+            if (feeInput) {
+                feeInput.style.display = cb.checked ? 'block' : 'none';
+                if (cb.checked) {
+                    if (!feeInput.value || parseInt(feeInput.value, 10) === 0) {
+                        const gradeText = (document.getElementById('s-grade')?.value || '').trim();
                         const defaultFee = StudentsPage.getDefaultFee(gradeText);
-                        if (defaultFee > 0) input.value = defaultFee;
+                        const cls = classes.find(c => c.id === classId);
+                        if (cls && cls.fee > 0) {
+                            feeInput.value = cls.fee;
+                        } else if (defaultFee > 0) {
+                            feeInput.value = defaultFee;
+                        }
                     }
                 }
                 this.calcTuition();
@@ -663,19 +685,17 @@ Router.register('students', async (container) => {
         },
 
         autoFillFees() {
-            const gradeText = document.getElementById('s-grade').value.trim();
-            const grade = gradeText.replace(/lớp/i, '').trim();
-            if (!grade) return;
-            
-            document.querySelectorAll('.subj-cb:checked').forEach(cb => {
-                const feeInput = cb.parentElement.nextElementSibling;
-                const className = `${cb.value} ${grade}`.trim();
-                const cls = classes.find(c => c.name.toLowerCase() === className.toLowerCase());
-                if (cls && cls.fee) {
-                    feeInput.value = cls.fee;
-                } else {
-                    const defaultFee = StudentsPage.getDefaultFee(gradeText);
-                    if (defaultFee > 0) feeInput.value = defaultFee;
+            const gradeText = (document.getElementById('s-grade')?.value || '').trim();
+            const defaultFee = StudentsPage.getDefaultFee(gradeText);
+
+            document.querySelectorAll('.edit-class-cb:checked').forEach(cb => {
+                const feeInput = document.getElementById('edit-fee-' + cb.value);
+                if (!feeInput) return;
+                const cls = classes.find(c => c.id === cb.value);
+                if (cls && cls.fee > 0) {
+                    if (!feeInput.value || feeInput.value === '0') feeInput.value = cls.fee;
+                } else if (defaultFee > 0) {
+                    feeInput.value = defaultFee;
                 }
             });
             this.calcTuition();
@@ -702,42 +722,31 @@ Router.register('students', async (container) => {
         async saveNew() {
             const name = document.getElementById('s-name').value.trim();
             if (!name) { Toast.warning('Vui lòng nhập họ tên'); return; }
-            
+
             const gradeText = document.getElementById('s-grade').value.trim();
             if (!gradeText) { Toast.warning('Vui lòng nhập Khối/Lớp'); return; }
-            
-            const grade = gradeText.replace(/lớp/i, '').trim();
 
-            const selectedSubjects = [];
-            document.querySelectorAll('.subj-cb:checked').forEach(cb => {
-                const feeInput = cb.parentElement.nextElementSibling;
-                selectedSubjects.push({
-                    name: cb.value,
-                    fee: parseInt(feeInput.value) || 0
-                });
+            const status = document.getElementById('s-status').value;
+            const classIds = [];
+            const customFees = {};
+            const classNames = [];
+            document.querySelectorAll('.edit-class-cb:checked').forEach(cb => {
+                classIds.push(cb.value);
+                const feeInput = document.getElementById('edit-fee-' + cb.value);
+                if (feeInput && feeInput.value) {
+                    customFees[cb.value] = parseInt(feeInput.value, 10) || 0;
+                }
+                const cls = classes.find(c => c.id === cb.value);
+                classNames.push(cls ? cls.name : (cb.dataset.name || cb.value));
             });
 
-            if (selectedSubjects.length === 0) {
-                Toast.warning('Vui lòng chọn ít nhất 1 môn học'); return;
+            if (classIds.length === 0 && status !== 'pending') {
+                Toast.warning('Vui lòng chọn ít nhất 1 lớp học (hoặc chọn trạng thái Chờ sắp lớp)');
+                return;
             }
 
             try {
-                // Create classes if missing
-                const classIds = [];
-                const classNames = [];
-                for (const subj of selectedSubjects) {
-                    const className = `${subj.name} ${grade}`.trim();
-                    let cls = classes.find(c => c.name.toLowerCase() === className.toLowerCase());
-                    if (!cls) {
-                        const newCls = await DB.addClass({ name: className, subject: subj.name, fee: subj.fee, room: '', notes: '', status: 'active', teacherIds: [] });
-                        cls = { id: newCls.id, name: className, fee: subj.fee };
-                        classes.push(cls);
-                    }
-                    classIds.push(cls.id);
-                    classNames.push(className);
-                }
-
-                // Add student
+                // Add student directly with assigned classes
                 const student = await DB.addStudent({
                     name, 
                     school: document.getElementById('s-school').value.trim(),
@@ -746,9 +755,10 @@ Router.register('students', async (container) => {
                     parentPhone: document.getElementById('s-phone').value || '', 
                     enrollmentDate: document.getElementById('s-enrollment-date').value,
                     gender: document.getElementById('s-gender').value,
-                    status: document.getElementById('s-status').value, 
+                    status, 
                     discount: parseFloat(document.getElementById('s-discount').value) || 0,
                     classIds, 
+                    customFees,
                     notes: document.getElementById('s-notes').value || '' 
                 });
 
@@ -761,15 +771,16 @@ Router.register('students', async (container) => {
                 if (finalAmount > 0) {
                     const discountText = document.getElementById('s-discount').options[document.getElementById('s-discount').selectedIndex].text;
                     const discountNote = discountText !== 'Không có ưu đãi' ? ` (${discountText})` : '';
-                    StudentsPage.promptGenerateTuition(student.id, name, classNames, finalAmount, discountNote);
+                    StudentsPage.promptGenerateTuition(student.id, name, classNames, finalAmount, discountNote, classIds[0]);
                 } else {
                     Toast.success('Đã thêm học viên', name);
                 }
             } catch(e) { Toast.error('Lỗi', e.message); }
         },
 
-        promptGenerateTuition(studentId, studentName, classNames, amount, discountNote) {
+        promptGenerateTuition(studentId, studentName, classNames, amount, discountNote, primaryClassId) {
             const currentMonth = DB.currentMonth();
+            const classIdParam = (classNames.length === 1 && primaryClassId) ? primaryClassId : 'Nhiều môn';
             Modal.show({
                 title: 'Tạo học phí cho Học viên',
                 content: `
@@ -790,18 +801,18 @@ Router.register('students', async (container) => {
                     </div>
                     <div class="form-group">
                         <label class="form-label">Ghi chú</label>
-                        <input type="text" class="input" id="p-note" value="ĐK môn: ${classNames.join(', ')}${discountNote}">
+                        <input type="text" class="input" id="p-note" value="ĐK lớp: ${classNames.join(', ')}${discountNote}">
                     </div>
                 `,
                 footer: `
                     <button class="btn btn-secondary" onclick="Modal.close()">Không tạo</button>
-                    <button class="btn btn-primary" onclick="StudentsPage.confirmGenerateTuition('${studentId}', '${studentName.replace(/'/g, "\\'")}', ${amount})"><i data-lucide="coins"></i> Tạo phiếu thu</button>
+                    <button class="btn btn-primary" onclick="StudentsPage.confirmGenerateTuition('${studentId}', '${studentName.replace(/'/g, "\\'")}', ${amount}, '${classIdParam}')"><i data-lucide="coins"></i> Tạo phiếu thu</button>
                 `
             });
             if (window.lucide) lucide.createIcons();
         },
 
-        async confirmGenerateTuition(studentId, studentName, amount) {
+        async confirmGenerateTuition(studentId, studentName, amount, classId = 'Nhiều môn') {
             const dueDate = document.getElementById('p-due-date').value;
             const note = document.getElementById('p-note').value;
             if (!dueDate) return;
@@ -810,7 +821,7 @@ Router.register('students', async (container) => {
                 await DB.addTuition({
                     studentId: studentId,
                     studentName: studentName,
-                    classId: 'Nhiều môn',
+                    classId: classId || 'Nhiều môn',
                     amount: amount,
                     dueDate: dueDate,
                     status: new Date(dueDate) < new Date() ? 'overdue' : 'pending',
@@ -836,7 +847,7 @@ Router.register('students', async (container) => {
                         <div class="form-group"><label class="form-label">SĐT Phụ huynh</label><input type="tel" class="input" id="s-phone" value="${s.parentPhone || ''}"></div>
                     </div>
                     <div class="form-row">
-                        <div class="form-group"><label class="form-label">Khối / Lớp</label><input type="text" class="input" id="s-grade" value="${s.grade || ''}" placeholder="VD: Lớp 12, Tiền tiểu học"></div>
+                        <div class="form-group"><label class="form-label">Khối / Lớp</label><input type="text" class="input" id="s-grade" value="${s.grade || ''}" placeholder="VD: Lớp 12, Tiền tiểu học" oninput="StudentsPage.autoFillFees()"></div>
                         <div class="form-group"><label class="form-label">Trường</label><input type="text" class="input" id="s-school" value="${s.school || ''}"></div>
                     </div>
                     <div class="form-row">
