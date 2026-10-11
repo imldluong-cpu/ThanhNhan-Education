@@ -52,12 +52,30 @@ Router.register('schedule', async (container) => {
         return Math.max(1, endIdx - startIdx);
     }
 
-    // Colors for classes
-    const classColors = ['#6366f1', '#ec4899', '#14b8a6', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#84cc16'];
-    function getClassColor(classId) {
-        const idx = classes.findIndex(c => c.id === classId);
-        if (idx === -1) return '#999999'; // Default gray for deleted classes
-        return classColors[idx % classColors.length];
+    // Room-based unified colors:
+    // - Phòng trệt: Đỏ (#ef4444)
+    // - P.T1: Vàng (#f59e0b)
+    // - P.T2: Xanh lá (#10b981)
+    // - P.ST: Cyan như hình 2 (#06b6d4)
+    // - Online: Xanh dương (#2563eb)
+    function getRoomColor(room, classId) {
+        let r = room;
+        if (!r && classId) {
+            const c = classes.find(x => x.id === classId);
+            if (c && c.room) r = c.room;
+        }
+        if (!r) return '#64748b'; // Mặc định nếu chưa gán phòng
+        const norm = r.trim().toLowerCase();
+        if (norm.includes('trệt')) return '#ef4444'; // Đỏ (Phòng trệt)
+        if (norm.includes('t1')) return '#f59e0b';   // Vàng (P.T1)
+        if (norm.includes('t2')) return '#10b981';   // Xanh lá (P.T2)
+        if (norm.includes('st') || norm.includes('sân thượng')) return '#06b6d4'; // Cyan (P.ST như hình 2)
+        if (norm.includes('online') || norm.includes('trực tuyến')) return '#2563eb'; // Xanh dương (Online)
+        return '#64748b';
+    }
+
+    function getClassColor(classId, room = null) {
+        return getRoomColor(room, classId);
     }
 
     // Anchor week: 2024-01-01 (Monday) to 2024-01-07 (Sunday)
@@ -175,7 +193,7 @@ Router.register('schedule', async (container) => {
                         const exception = scheduleExceptions.find(ex => ex.scheduleId === s.id && ex.originalDate === dateStr);
                         if (exception) return; // Skip if exception exists
                         
-                        const color = getClassColor(s.classId);
+                        const color = getClassColor(s.classId, s.room);
                         expandedEvents.push({
                             id: s.id + '_' + dateStr,
                             groupId: s.id,
@@ -193,7 +211,7 @@ Router.register('schedule', async (container) => {
                 const oneOffEvents = filtered.filter(s => s.specificDate);
                 oneOffEvents.forEach(s => {
                     if (s.specificDate >= startStr && s.specificDate <= endStr) {
-                        const color = getClassColor(s.classId);
+                        const color = getClassColor(s.classId, s.room);
                         const tag = s.note ? `[${s.note}] ` : '[Buổi lẻ] ';
                         expandedEvents.push({
                             id: s.id + '_' + s.specificDate,
@@ -215,7 +233,8 @@ Router.register('schedule', async (container) => {
                         if (d >= start && d < end) {
                             const originalSch = schedules.find(s => s.id === ex.scheduleId);
                             if (originalSch && (!filterClassId || originalSch.classId === filterClassId)) {
-                                const color = getClassColor(originalSch.classId);
+                                const exRoom = ex.newRoom || (originalSch ? originalSch.room : '');
+                                const color = getClassColor(originalSch.classId, exRoom);
                                 expandedEvents.push({
                                     id: 'ex_' + ex.id,
                                     groupId: originalSch.id,
@@ -386,12 +405,38 @@ Router.register('schedule', async (container) => {
                 ${canEdit ? `<button class="btn btn-primary" onclick="SchedulePage.showAddSchedule()"><i data-lucide="plus"></i> Thêm lịch học</button>` : ''}
             </div>
         </div>
-        <div class="filter-bar" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-            <select class="select" style="max-width:220px;" onchange="SchedulePage.filterClass(this.value)">
-                <option value="">Tất cả lớp</option>
-                ${classes.map(c => `<option value="${c.id}">${c.name}</option>`).join('')}
-            </select>
-            ${canEdit ? `<p style="font-size:12px;color:var(--text-muted);margin-left:4px;">💡 Kéo thả để dời lịch • Click để sửa</p>` : ''}
+        <div class="filter-bar" style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:12px;">
+            <div style="display:flex;align-items:center;gap:8px;">
+                <select class="select" style="max-width:220px;" onchange="SchedulePage.filterClass(this.value)">
+                    <option value="">Tất cả lớp</option>
+                    ${classes.map(c => `<option value="${c.id}">${c.name}</option>`).join('')}
+                </select>
+            </div>
+            <div class="schedule-legend" style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;background:var(--bg-glass, rgba(255,255,255,0.7));border:1px solid var(--border-color);border-radius:8px;padding:6px 14px;font-size:12px;">
+                <span style="font-weight:600;color:var(--text-secondary);display:flex;align-items:center;gap:4px;">
+                    Chú thích phòng:
+                </span>
+                <div style="display:flex;align-items:center;gap:6px;">
+                    <span style="display:inline-block;width:20px;height:12px;background:#ef4444;border-radius:2px;box-shadow:0 1px 2px rgba(0,0,0,0.15);"></span>
+                    <span style="color:var(--text-primary);font-weight:500;">Phòng trệt</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:6px;">
+                    <span style="display:inline-block;width:20px;height:12px;background:#f59e0b;border-radius:2px;box-shadow:0 1px 2px rgba(0,0,0,0.15);"></span>
+                    <span style="color:var(--text-primary);font-weight:500;">P.T1</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:6px;">
+                    <span style="display:inline-block;width:20px;height:12px;background:#10b981;border-radius:2px;box-shadow:0 1px 2px rgba(0,0,0,0.15);"></span>
+                    <span style="color:var(--text-primary);font-weight:500;">P.T2</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:6px;">
+                    <span style="display:inline-block;width:20px;height:12px;background:#06b6d4;border-radius:2px;box-shadow:0 1px 2px rgba(0,0,0,0.15);"></span>
+                    <span style="color:var(--text-primary);font-weight:500;">P.ST</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:6px;">
+                    <span style="display:inline-block;width:20px;height:12px;background:#2563eb;border-radius:2px;box-shadow:0 1px 2px rgba(0,0,0,0.15);"></span>
+                    <span style="color:var(--text-primary);font-weight:500;">Online</span>
+                </div>
+            </div>
         </div>
         <div id="schedule-grid" class="schedule-wrapper"></div>
     `;
@@ -514,6 +559,7 @@ Router.register('schedule', async (container) => {
                             <option value="P.T1">P.T1</option>
                             <option value="P.T2">P.T2</option>
                             <option value="P.ST">P.ST</option>
+                            <option value="Online">Online</option>
                         </select>
                     </div>
                 </div>
@@ -585,7 +631,7 @@ Router.register('schedule', async (container) => {
             };
 
             try {
-                if (room) {
+                if (room && room !== 'Online') {
                     const allDB = await DB.getSchedules();
                     const currentClasses = await DB.getClasses();
                     const currentExceptions = await DB.getScheduleExceptions();
@@ -677,6 +723,7 @@ Router.register('schedule', async (container) => {
                             <option value="P.T1">P.T1</option>
                             <option value="P.T2">P.T2</option>
                             <option value="P.ST">P.ST</option>
+                            <option value="Online">Online</option>
                         </select>
                         ${i > 0 ? `<button class="btn-icon" onclick="this.parentElement.remove()" title="Xóa"><i data-lucide="x" style="width:14px;"></i></button>` : ''}
                     </div>`;
@@ -722,6 +769,7 @@ Router.register('schedule', async (container) => {
                     <option value="P.T1">P.T1</option>
                     <option value="P.T2">P.T2</option>
                     <option value="P.ST">P.ST</option>
+                    <option value="Online">Online</option>
                 </select>
                 <button class="btn-icon" onclick="this.parentElement.remove()" title="Xóa"><i data-lucide="x" style="width:14px;"></i></button>
             `;
@@ -757,7 +805,7 @@ Router.register('schedule', async (container) => {
             try {
                 const allDB = await DB.getSchedules();
                 for (const item of toAdd) {
-                    if (!item.room) continue;
+                    if (!item.room || item.room === 'Online') continue;
                     const checkDate = startDate || new Date().toISOString().split('T')[0];
                     const conflict = allDB.find(s => 
                         !s.specificDate &&
@@ -815,6 +863,7 @@ Router.register('schedule', async (container) => {
                                     <option value="P.T1" ${sch.room === 'P.T1' ? 'selected' : ''}>P.T1</option>
                                     <option value="P.T2" ${sch.room === 'P.T2' ? 'selected' : ''}>P.T2</option>
                                     <option value="P.ST" ${sch.room === 'P.ST' ? 'selected' : ''}>P.ST</option>
+                                    <option value="Online" ${sch.room === 'Online' ? 'selected' : ''}>Online</option>
                                 </select>
                             </div>
                         </div>
@@ -853,6 +902,7 @@ Router.register('schedule', async (container) => {
                                 <option value="P.T1" ${sch.room === 'P.T1' ? 'selected' : ''}>P.T1</option>
                                 <option value="P.T2" ${sch.room === 'P.T2' ? 'selected' : ''}>P.T2</option>
                                 <option value="P.ST" ${sch.room === 'P.ST' ? 'selected' : ''}>P.ST</option>
+                                <option value="Online" ${sch.room === 'Online' ? 'selected' : ''}>Online</option>
                             </select>
                         </div>
                     </div>
@@ -949,7 +999,7 @@ Router.register('schedule', async (container) => {
                 if (!startTime || !endTime) { Toast.warning('Nhập giờ', 'Vui lòng chọn đầy đủ giờ học'); return; }
                 if (startTime >= endTime) { Toast.warning('Giờ không hợp lệ', 'Giờ bắt đầu phải trước giờ kết thúc'); return; }
 
-                if (room) {
+                if (room && room !== 'Online') {
                     const allDB = await DB.getSchedules();
                     const conflict = allDB.find(s => 
                         s.id !== id &&
@@ -1190,6 +1240,7 @@ Router.register('schedule', async (container) => {
                         <option value="P.T1" ${room === 'P.T1' ? 'selected' : ''}>P.T1</option>
                         <option value="P.T2" ${room === 'P.T2' ? 'selected' : ''}>P.T2</option>
                         <option value="P.ST" ${room === 'P.ST' ? 'selected' : ''}>P.ST</option>
+                        <option value="Online" ${room === 'Online' ? 'selected' : ''}>Online</option>
                     </select>
                     <button type="button" class="btn-icon" style="color:var(--danger,#ef4444);padding:4px;" onclick="this.parentElement.remove()" title="Xóa buổi này">
                         <i data-lucide="x" style="width:14px;height:14px;"></i>
@@ -1442,6 +1493,7 @@ Router.register('schedule', async (container) => {
                         <option value="P.T1" ${room === 'P.T1' ? 'selected' : ''}>P.T1</option>
                         <option value="P.T2" ${room === 'P.T2' ? 'selected' : ''}>P.T2</option>
                         <option value="P.ST" ${room === 'P.ST' ? 'selected' : ''}>P.ST</option>
+                        <option value="Online" ${room === 'Online' ? 'selected' : ''}>Online</option>
                     </select>
                     <button type="button" class="btn-icon" style="color:var(--danger,#ef4444);padding:4px;" onclick="this.parentElement.remove()" title="Xóa buổi">
                         <i data-lucide="x" style="width:14px;height:14px;"></i>
