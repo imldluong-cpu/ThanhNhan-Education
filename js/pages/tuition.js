@@ -3,6 +3,29 @@
 // ============================================
 
 Router.register('tuition', async (container) => {
+    function parseLocalDate(dateStr) {
+        if (!dateStr) return new Date();
+        const parts = dateStr.split('-').map(Number);
+        if (parts.length === 3) {
+            return new Date(parts[0], parts[1] - 1, parts[2]);
+        }
+        return new Date(dateStr);
+    }
+
+    function formatLocalDate(d) {
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    }
+
+    function calculateDueDateFromStart(startDateStr) {
+        if (!startDateStr) return '';
+        const d = parseLocalDate(startDateStr);
+        d.setDate(d.getDate() + 4);
+        return formatLocalDate(d);
+    }
+
     let tuitions = [], students = [], classes = [];
     try {
         tuitions = await DB.getTuitions();
@@ -21,6 +44,46 @@ Router.register('tuition', async (container) => {
             } else if (!t.academicYear && t.dueDate && t.dueDate > '2026-06-15') {
                 t.academicYear = '2026 - 2027';
                 DB.updateTuition(t.id, { academicYear: '2026 - 2027' }).catch(()=>{});
+            }
+        });
+
+        // Auto-sync tuition due dates: startDate + 4 days (within 5 days = pending, after 4 days = overdue)
+        const todayStr = DB.today();
+        tuitions.forEach(t => {
+            let startDate = t.startDate;
+            let endDate = t.endDate;
+            
+            // Extract from note if missing
+            if ((!startDate || !endDate) && t.note) {
+                const match = t.note.match(/(\d{1,2}\/\d{1,2}\/\d{4})\s*-\s*(\d{1,2}\/\d{1,2}\/\d{4})/);
+                if (match) {
+                    if (!startDate && match[1]) {
+                        const parts = match[1].split('/');
+                        if (parts.length === 3) startDate = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+                    }
+                    if (!endDate && match[2]) {
+                        const parts = match[2].split('/');
+                        if (parts.length === 3) endDate = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+                    }
+                }
+            }
+            
+            if (startDate) {
+                const targetDue = calculateDueDateFromStart(startDate);
+                if (targetDue && (t.dueDate !== targetDue || !t.startDate || (endDate && !t.endDate))) {
+                    t.dueDate = targetDue;
+                    if (!t.startDate) t.startDate = startDate;
+                    if (endDate && !t.endDate) t.endDate = endDate;
+                    
+                    const updates = { dueDate: targetDue, startDate: t.startDate };
+                    if (t.endDate) updates.endDate = t.endDate;
+                    
+                    if (t.status !== 'paid') {
+                        t.status = targetDue < todayStr ? 'overdue' : 'pending';
+                        updates.status = t.status;
+                    }
+                    DB.updateTuition(t.id, updates).catch(()=>{});
+                }
             }
         });
     } catch(e) { console.warn(e); }
@@ -66,22 +129,6 @@ Router.register('tuition', async (container) => {
             name = (classes.find(c => c.id === id) || {}).name || '—';
         }
         return name.replace(/\s*\(Từ .*? đến .*?\)/gi, '').trim();
-    }
-
-    function parseLocalDate(dateStr) {
-        if (!dateStr) return new Date();
-        const parts = dateStr.split('-').map(Number);
-        if (parts.length === 3) {
-            return new Date(parts[0], parts[1] - 1, parts[2]);
-        }
-        return new Date(dateStr);
-    }
-
-    function formatLocalDate(d) {
-        const year = d.getFullYear();
-        const month = String(d.getMonth() + 1).padStart(2, '0');
-        const day = String(d.getDate()).padStart(2, '0');
-        return `${year}-${month}-${day}`;
     }
 
     async function calculateNextTuitionPeriod(studentId, targetClassId, refDateStr, lessonsCount = 8, isStartDate = false) {
@@ -187,15 +234,22 @@ Router.register('tuition', async (container) => {
             list = list.filter(t => getTuitionMonth(t) === activeMonth);
         }
         
-        const todayDate = new Date(DB.today());
+        const todayStr = DB.today();
+        const todayDate = parseLocalDate(todayStr);
         list.forEach(t => {
-            if (t.status === 'pending' && t.dueDate) {
-                const due = new Date(t.dueDate);
-                if (due < todayDate) {
-                    t.status = 'overdue';
-                    DB.updateTuition(t.id, { status: 'overdue' }).catch(()=>{});
+            if (t.status !== 'paid' && t.dueDate) {
+                if (t.dueDate < todayStr) {
+                    if (t.status !== 'overdue') {
+                        t.status = 'overdue';
+                        DB.updateTuition(t.id, { status: 'overdue' }).catch(()=>{});
+                    }
                     t._displayStatus = 'overdue';
                 } else {
+                    if (t.status === 'overdue') {
+                        t.status = 'pending';
+                        DB.updateTuition(t.id, { status: 'pending' }).catch(()=>{});
+                    }
+                    const due = parseLocalDate(t.dueDate);
                     const diffTime = due.getTime() - todayDate.getTime();
                     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
                     if (diffDays > 7) {
@@ -209,7 +263,7 @@ Router.register('tuition', async (container) => {
             }
         });
 
-        if (activeTab === 'pending') list = list.filter(t => t._displayStatus === 'pending');
+        if (activeTab === 'pending') list = list.filter(t => t._displayStatus === 'pending' || t._displayStatus === 'upcoming');
         else if (activeTab === 'upcoming') list = list.filter(t => t._displayStatus === 'upcoming');
         else if (activeTab === 'overdue') list = list.filter(t => t._displayStatus === 'overdue');
         else if (activeTab === 'paid') list = list.filter(t => t._displayStatus === 'paid');
@@ -347,7 +401,7 @@ Router.register('tuition', async (container) => {
                         <td><strong>${DB.formatCurrency(t.amount)}</strong></td>
                         <td>${DB.formatDate(t.dueDate)}</td>
                         <td>${t.paidDate ? DB.formatDate(t.paidDate) : '—'}</td>
-                        <td><span class="badge badge-${t._displayStatus === 'paid' ? 'success' : t._displayStatus === 'overdue' ? 'danger' : t._displayStatus === 'upcoming' ? 'info' : 'warning'}">${t._displayStatus === 'paid' ? 'Đã đóng' : t._displayStatus === 'overdue' ? 'Quá hạn' : t._displayStatus === 'upcoming' ? 'Chưa đến hạn' : 'Chưa đóng'}</span></td>
+                        <td><span class="badge badge-${t._displayStatus === 'paid' ? 'success' : t._displayStatus === 'overdue' ? 'danger' : t._displayStatus === 'upcoming' ? 'info' : 'warning'}">${t._displayStatus === 'paid' ? 'Đã đóng' : t._displayStatus === 'overdue' ? 'Quá hạn' : 'Chưa đến hạn'}</span></td>
                         <td><div class="table-actions">
                             ${t.status !== 'paid' ? `<button class="btn btn-success btn-sm" onclick="TuitionPage.markPaid('${t.id}')">Đã đóng</button>` : ''}
                             <button class="btn-icon" title="In phiếu thu" onclick="TuitionPage.showInvoice('${t.id}')"><i data-lucide="printer"></i></button>
@@ -368,6 +422,7 @@ Router.register('tuition', async (container) => {
         <div class="page-header">
             <div><h1 class="page-title"><i data-lucide="wallet"></i> Quản lý Học phí</h1></div>
             <div class="page-actions" style="display:flex;gap:8px;flex-wrap:wrap;">
+                <button class="btn btn-secondary" onclick="TuitionPage.syncAllDueDates()"><i data-lucide="refresh-cw"></i> Đồng bộ hạn đóng</button>
                 <button class="btn btn-secondary" onclick="window.StudentsPage?.showExportModal ? window.StudentsPage.showExportModal() : App.navigate('students')"><i data-lucide="file-spreadsheet"></i> Xuất Excel</button>
                 <button class="btn btn-primary" onclick="TuitionPage.showAdd()"><i data-lucide="plus"></i> Thêm khoản thu</button>
             </div>
@@ -447,7 +502,7 @@ Router.register('tuition', async (container) => {
                     
                     let nextStartStr = nextPeriod ? nextPeriod.startDate : '';
                     let nextEndStr = nextPeriod ? nextPeriod.endDate : '';
-                    let nextDueStr = nextEndStr || nextStartStr;
+                    let nextDueStr = nextStartStr ? calculateDueDateFromStart(nextStartStr) : (nextEndStr || nextStartStr);
                     
                     if (!nextDueStr && t.dueDate) {
                         const nextDue = parseLocalDate(t.dueDate);
@@ -499,7 +554,7 @@ Router.register('tuition', async (container) => {
                         <select class="select" id="t-class"><option value="">-- Chọn lớp --</option>${classes.map(c => `<option value="${c.id}">${c.name} ${c.fee ? '(' + DB.formatCurrency(c.fee) + ')' : ''}</option>`).join('')}</select></div>
                     <div class="form-row">
                         <div class="form-group"><label class="form-label">Số tiền *</label><input type="number" class="input" id="t-amount" placeholder="0"></div>
-                        <div class="form-group"><label class="form-label">Hạn đóng *</label><input type="date" class="input" id="t-due"></div>
+                        <div class="form-group"><label class="form-label">Hạn đóng * <small style="color:var(--text-muted);font-weight:normal;">(Chuẩn: Ngày đầu + 4 ngày)</small></label><input type="date" class="input" id="t-due"></div>
                     </div>
                     <div class="form-group" style="padding: 12px; background: var(--bg-card); border-radius: 8px; border: 1px solid var(--border-color); margin-bottom: 12px;">
                         <label class="form-label" style="margin-bottom: 8px; font-weight: 600;">📅 Tự động tính kỳ học (Theo thời khóa biểu)</label>
@@ -525,6 +580,16 @@ Router.register('tuition', async (container) => {
                 footer: `<button class="btn btn-secondary" onclick="Modal.close()">Hủy</button><button class="btn btn-primary" onclick="TuitionPage.saveNew()">Lưu</button>`
             });
             
+            // Auto sync due date when start date is changed manually
+            document.getElementById('t-start-date')?.addEventListener('change', function() {
+                if (this.value) {
+                    const dueEl = document.getElementById('t-due');
+                    if (dueEl) dueEl.value = calculateDueDateFromStart(this.value);
+                    const hiddenStart = document.getElementById('t-hidden-start');
+                    if (hiddenStart) hiddenStart.value = this.value;
+                }
+            });
+
             document.getElementById('t-class')?.addEventListener('change', async function() {
                 const studentId = document.getElementById('t-student')?.value;
                 const clsId = this.value;
@@ -600,21 +665,26 @@ Router.register('tuition', async (container) => {
                         document.getElementById('t-lessons-count').value = period.lessonsCount;
                         document.getElementById('t-hidden-start').value = period.startDate;
                         document.getElementById('t-hidden-end').value = period.endDate;
-                        document.getElementById('t-due').value = period.endDate;
+                        document.getElementById('t-due').value = calculateDueDateFromStart(period.startDate);
                         
                         const startFmt = DB.formatDate(period.startDate);
                         const endFmt = DB.formatDate(period.endDate);
+                        const dueFmt = DB.formatDate(calculateDueDateFromStart(period.startDate));
                         document.getElementById('t-note').value = `Học phí (${startFmt} - ${endFmt}: 8 buổi) - ${classNames.join(', ')}`;
                         
                         const infoEl = document.getElementById('t-auto-calc-info');
                         if (infoEl) {
                             infoEl.innerHTML = lastEnd
-                                ? `✨ Kế thừa từ phiếu trước (đến ${DB.formatDate(lastEnd)}): Bắt đầu ${startFmt} → ${endFmt} (8 buổi)`
-                                : `✨ Tự động tính theo TKB: Bắt đầu ${startFmt} → ${endFmt} (8 buổi)`;
+                                ? `✨ Kế thừa từ phiếu trước (đến ${DB.formatDate(lastEnd)}): Bắt đầu ${startFmt} → ${endFmt} (8 buổi, hạn đóng ${dueFmt})`
+                                : `✨ Tự động tính theo TKB: Bắt đầu ${startFmt} → ${endFmt} (8 buổi, hạn đóng ${dueFmt})`;
                         }
                     } else {
                         const month = new Date().getMonth() + 1;
                         document.getElementById('t-note').value = 'Học phí T' + month + ' - ' + classNames.join(', ');
+                        const curStart = document.getElementById('t-start-date')?.value;
+                        if (curStart) {
+                            document.getElementById('t-due').value = calculateDueDateFromStart(curStart);
+                        }
                     }
                 }
             });
@@ -623,20 +693,26 @@ Router.register('tuition', async (container) => {
         async saveNew() {
             const studentId = document.getElementById('t-student').value;
             const amount = parseInt(document.getElementById('t-amount').value);
-            const dueDate = document.getElementById('t-due').value;
+            let dueDate = document.getElementById('t-due').value;
+            const startDate = document.getElementById('t-hidden-start')?.value || document.getElementById('t-start-date')?.value || '';
+            const endDate = document.getElementById('t-hidden-end')?.value || '';
+            
+            if (!dueDate && startDate) {
+                dueDate = calculateDueDateFromStart(startDate);
+                if (document.getElementById('t-due')) document.getElementById('t-due').value = dueDate;
+            }
             if (!studentId || !amount || !dueDate) { Toast.warning('Điền đầy đủ thông tin'); return; }
             
-            const startDate = document.getElementById('t-hidden-start')?.value;
-            const endDate = document.getElementById('t-hidden-end')?.value;
-            
             try {
+                const todayStr = DB.today();
+                const isOverdue = dueDate < todayStr;
                 const dataToSave = { 
                     studentId, 
                     studentName: getStudentName(studentId), 
                     classId: document.getElementById('t-class').value, 
                     amount, 
                     dueDate, 
-                    status: new Date(dueDate) < new Date() ? 'overdue' : 'pending', 
+                    status: isOverdue ? 'overdue' : 'pending', 
                     reminderSent: false, 
                     note: document.getElementById('t-note').value 
                 };
@@ -699,33 +775,53 @@ Router.register('tuition', async (container) => {
                 `,
                 footer: `<button class="btn btn-secondary" onclick="Modal.close()">Hủy</button><button class="btn btn-primary" onclick="TuitionPage.saveEdit('${id}')">Cập nhật</button>`
             });
+
+            // Auto sync due date when start date is changed manually in edit modal
+            document.getElementById('t-start-date')?.addEventListener('change', function() {
+                if (this.value) {
+                    const dueEl = document.getElementById('t-due');
+                    if (dueEl) dueEl.value = calculateDueDateFromStart(this.value);
+                    const hiddenStart = document.getElementById('t-hidden-start');
+                    if (hiddenStart) hiddenStart.value = this.value;
+                }
+            });
         },
 
         async saveEdit(id) {
             try {
-                const status = document.getElementById('t-status').value;
+                let status = document.getElementById('t-status').value;
                 let paidDate = '';
                 if (status === 'paid') {
                     const inputPaidDate = document.getElementById('t-paid-date');
                     paidDate = (inputPaidDate && inputPaidDate.value) ? inputPaidDate.value : DB.today();
                 }
                 const oldT = tuitions.find(x => x.id === id);
+                let dueDate = document.getElementById('t-due').value;
+                const hiddenStart = document.getElementById('t-hidden-start');
+                const hiddenEnd = document.getElementById('t-hidden-end');
+                const startDateVal = (hiddenStart && hiddenStart.value) || document.getElementById('t-start-date')?.value || '';
+                const endDateVal = (hiddenEnd && hiddenEnd.value) || '';
+
+                if (!dueDate && startDateVal) {
+                    dueDate = calculateDueDateFromStart(startDateVal);
+                }
+                if (status !== 'paid' && dueDate) {
+                    status = dueDate < DB.today() ? 'overdue' : 'pending';
+                }
                 
                 const updates = { 
                     studentId: document.getElementById('t-student').value, 
                     studentName: getStudentName(document.getElementById('t-student').value), 
                     classId: document.getElementById('t-edit-class')?.value || oldT?.classId || 'Nhiều môn',
                     amount: parseInt(document.getElementById('t-amount').value) || 0, 
-                    dueDate: document.getElementById('t-due').value, 
+                    dueDate: dueDate, 
                     status, 
                     paidDate,
                     note: document.getElementById('t-note') ? document.getElementById('t-note').value : ''
                 };
                 
-                const hiddenStart = document.getElementById('t-hidden-start');
-                const hiddenEnd = document.getElementById('t-hidden-end');
-                if (hiddenStart && hiddenStart.value) updates.startDate = hiddenStart.value;
-                if (hiddenEnd && hiddenEnd.value) updates.endDate = hiddenEnd.value;
+                if (startDateVal) updates.startDate = startDateVal;
+                if (endDateVal) updates.endDate = endDateVal;
                 
                 await DB.updateTuition(id, updates);
                 
@@ -969,7 +1065,7 @@ Router.register('tuition', async (container) => {
                 const t = tuitions.find(x => x.id === id);
                 if (!t) return;
                 
-                const newDueDate = endDate || t.dueDate || startDate;
+                const newDueDate = startDate ? calculateDueDateFromStart(startDate) : (endDate || t.dueDate);
                 
                 const updates = { 
                     amount: amount, 
@@ -979,6 +1075,9 @@ Router.register('tuition', async (container) => {
                     customStudentName: studentNameText.trim(),
                     customClassName: classNameText.trim()
                 };
+                if (t.status !== 'paid') {
+                    updates.status = newDueDate < DB.today() ? 'overdue' : 'pending';
+                }
                 
                 await DB.updateTuition(id, updates);
                 
@@ -1100,10 +1199,11 @@ Router.register('tuition', async (container) => {
                     const dueInput = document.getElementById('t-due');
                     if (hiddenStart) hiddenStart.value = period.startDate;
                     if (hiddenEnd) hiddenEnd.value = period.endDate;
-                    if (dueInput) dueInput.value = period.endDate;
+                    if (dueInput) dueInput.value = calculateDueDateFromStart(period.startDate);
                     
                     const startFmt = DB.formatDate(period.startDate);
                     const endFmt = DB.formatDate(period.endDate);
+                    const dueFmt = DB.formatDate(calculateDueDateFromStart(period.startDate));
                     
                     const noteInput = document.getElementById('t-note');
                     if (noteInput) {
@@ -1113,10 +1213,10 @@ Router.register('tuition', async (container) => {
                     
                     const infoEl = document.getElementById('t-auto-calc-info');
                     if (infoEl) {
-                        infoEl.innerHTML = `✨ Đã tính: Từ ngày ${startFmt} đến ngày ${endFmt} (${lessonsCount} buổi)`;
+                        infoEl.innerHTML = `✨ Đã tính: Từ ngày ${startFmt} đến ngày ${endFmt} (${lessonsCount} buổi, hạn đóng ${dueFmt})`;
                     }
                     
-                    Toast.success(`Đã tính: Đến ngày ${endFmt} (${lessonsCount} buổi)`);
+                    Toast.success(`Đã tính: Đến ngày ${endFmt} (${lessonsCount} buổi, hạn đóng ${dueFmt})`);
                 } else {
                     Toast.warning('Không tìm thấy lịch học phù hợp để tính toán.');
                 }
@@ -1284,11 +1384,12 @@ Router.register('tuition', async (container) => {
                     // 2. Sync August Record
                     if (item.augPeriod) {
                         const noteStr = `Học phí (${DB.formatDate(item.augPeriod.startDate)} - ${DB.formatDate(item.augPeriod.endDate)}: 8 buổi) - ${classNames.join(', ')}`;
+                        const augDue = calculateDueDateFromStart(item.augPeriod.startDate);
                         if (item.augRecord) {
                             promises.push(DB.updateTuition(item.augRecord.id, {
                                 startDate: item.augPeriod.startDate,
                                 endDate: item.augPeriod.endDate,
-                                dueDate: item.augPeriod.endDate,
+                                dueDate: augDue,
                                 note: noteStr
                             }));
                         } else {
@@ -1299,7 +1400,7 @@ Router.register('tuition', async (container) => {
                                 amount: finalAmount,
                                 startDate: item.augPeriod.startDate,
                                 endDate: item.augPeriod.endDate,
-                                dueDate: item.augPeriod.endDate,
+                                dueDate: augDue,
                                 status: 'pending',
                                 reminderSent: false,
                                 note: noteStr
@@ -1310,11 +1411,12 @@ Router.register('tuition', async (container) => {
                     // 3. Sync September Record
                     if (item.sepPeriod) {
                         const noteStr = `Học phí (${DB.formatDate(item.sepPeriod.startDate)} - ${DB.formatDate(item.sepPeriod.endDate)}: 8 buổi) - ${classNames.join(', ')}`;
+                        const sepDue = calculateDueDateFromStart(item.sepPeriod.startDate);
                         if (item.sepRecord) {
                             promises.push(DB.updateTuition(item.sepRecord.id, {
                                 startDate: item.sepPeriod.startDate,
                                 endDate: item.sepPeriod.endDate,
-                                dueDate: item.sepPeriod.endDate,
+                                dueDate: sepDue,
                                 note: noteStr
                             }));
                         } else {
@@ -1325,7 +1427,7 @@ Router.register('tuition', async (container) => {
                                 amount: finalAmount,
                                 startDate: item.sepPeriod.startDate,
                                 endDate: item.sepPeriod.endDate,
-                                dueDate: item.sepPeriod.endDate,
+                                dueDate: sepDue,
                                 status: 'pending',
                                 reminderSent: false,
                                 note: noteStr
@@ -1341,6 +1443,61 @@ Router.register('tuition', async (container) => {
             } catch(e) {
                 console.error(e);
                 Toast.error('Lỗi khi đồng bộ', e.message);
+            }
+        },
+
+        async syncAllDueDates() {
+            try {
+                Toast.info('Đang đồng bộ hạn đóng...');
+                const todayStr = DB.today();
+                let updatedCount = 0;
+                const promises = [];
+                
+                tuitions.forEach(t => {
+                    let startDate = t.startDate;
+                    let endDate = t.endDate;
+                    
+                    if ((!startDate || !endDate) && t.note) {
+                        const match = t.note.match(/(\d{1,2}\/\d{1,2}\/\d{4})\s*-\s*(\d{1,2}\/\d{1,2}\/\d{4})/);
+                        if (match) {
+                            if (!startDate && match[1]) {
+                                const parts = match[1].split('/');
+                                if (parts.length === 3) startDate = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+                            }
+                            if (!endDate && match[2]) {
+                                const parts = match[2].split('/');
+                                if (parts.length === 3) endDate = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+                            }
+                        }
+                    }
+                    
+                    if (startDate) {
+                        const targetDue = calculateDueDateFromStart(startDate);
+                        if (targetDue && (t.dueDate !== targetDue || !t.startDate || (endDate && !t.endDate))) {
+                            t.dueDate = targetDue;
+                            if (!t.startDate) t.startDate = startDate;
+                            if (endDate && !t.endDate) t.endDate = endDate;
+                            
+                            const updates = { dueDate: targetDue, startDate: t.startDate };
+                            if (t.endDate) updates.endDate = t.endDate;
+                            
+                            if (t.status !== 'paid') {
+                                t.status = targetDue < todayStr ? 'overdue' : 'pending';
+                                updates.status = t.status;
+                            }
+                            updatedCount++;
+                            promises.push(DB.updateTuition(t.id, updates));
+                        }
+                    }
+                });
+                
+                await Promise.all(promises);
+                tuitions = await DB.getTuitions();
+                render();
+                Toast.success(`Đã đồng bộ hạn đóng thành công cho ${updatedCount} phiếu học phí!`);
+            } catch(e) {
+                console.error(e);
+                Toast.error('Lỗi khi đồng bộ hạn đóng', e.message);
             }
         },
 
