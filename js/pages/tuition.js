@@ -49,22 +49,21 @@ Router.register('tuition', async (container) => {
 
         // Auto-sync tuition due dates: startDate + 4 days (within 5 days = pending, after 4 days = overdue)
         const todayStr = DB.today();
+        const syncPromises = [];
         tuitions.forEach(t => {
             let startDate = t.startDate;
             let endDate = t.endDate;
             
             // Extract from note if missing
             if ((!startDate || !endDate) && t.note) {
-                const match = t.note.match(/(\d{1,2}\/\d{1,2}\/\d{4})\s*-\s*(\d{1,2}\/\d{1,2}\/\d{4})/);
-                if (match) {
-                    if (!startDate && match[1]) {
-                        const parts = match[1].split('/');
-                        if (parts.length === 3) startDate = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
-                    }
-                    if (!endDate && match[2]) {
-                        const parts = match[2].split('/');
-                        if (parts.length === 3) endDate = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
-                    }
+                const dates = t.note.match(/(\d{1,2}\/\d{1,2}\/\d{4})/g);
+                if (dates && dates[0]) {
+                    const parts = dates[0].split('/');
+                    if (parts.length === 3) startDate = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+                }
+                if (!endDate && dates && dates[1]) {
+                    const parts = dates[1].split('/');
+                    if (parts.length === 3) endDate = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
                 }
             }
             
@@ -82,10 +81,13 @@ Router.register('tuition', async (container) => {
                         t.status = targetDue < todayStr ? 'overdue' : 'pending';
                         updates.status = t.status;
                     }
-                    DB.updateTuition(t.id, updates).catch(()=>{});
+                    syncPromises.push(DB.updateTuition(t.id, updates).catch(err => console.warn('Update tuition sync err:', err)));
                 }
             }
         });
+        if (syncPromises.length > 0) {
+            await Promise.all(syncPromises);
+        }
     } catch(e) { console.warn(e); }
 
     let activeTab = 'all';
@@ -111,20 +113,19 @@ Router.register('tuition', async (container) => {
     function getClassName(id, t) {
         let name = '—';
         if (id === 'Nhiều môn') {
-            if (t && t.note && t.note.includes(' - ') && t.note.startsWith('Học phí')) {
-                const parts = t.note.split(' - ');
-                if (parts.length > 1) {
-                    name = parts.slice(1).join(' - ');
-                }
+            if (t && t.note) {
+                let cleanNote = t.note.replace(/\(.*?\)/g, '').trim();
+                if (cleanNote.startsWith('Học phí')) cleanNote = cleanNote.replace(/^Học phí\s*-?\s*/i, '').trim();
+                if (cleanNote) name = cleanNote;
             }
-            if (name === '—' && t && t.studentId) {
+            if ((name === '—' || !name) && t && t.studentId) {
                 const student = students.find(s => s.id === t.studentId);
                 if (student && student.classIds && student.classIds.length > 0) {
                     const names = student.classIds.map(cid => (classes.find(c => c.id === cid) || {}).name).filter(Boolean);
                     if (names.length > 0) name = names.join(', ');
                 }
             }
-            if (name === '—') name = 'Nhiều môn';
+            if (name === '—' || !name) name = 'Nhiều môn';
         } else {
             name = (classes.find(c => c.id === id) || {}).name || '—';
         }
@@ -237,6 +238,12 @@ Router.register('tuition', async (container) => {
         const todayStr = DB.today();
         const todayDate = parseLocalDate(todayStr);
         list.forEach(t => {
+            if (t.startDate) {
+                const targetDue = calculateDueDateFromStart(t.startDate);
+                if (targetDue && t.dueDate !== targetDue) {
+                    t.dueDate = targetDue;
+                }
+            }
             if (t.status !== 'paid' && t.dueDate) {
                 if (t.dueDate < todayStr) {
                     if (t.status !== 'overdue') {
@@ -422,7 +429,6 @@ Router.register('tuition', async (container) => {
         <div class="page-header">
             <div><h1 class="page-title"><i data-lucide="wallet"></i> Quản lý Học phí</h1></div>
             <div class="page-actions" style="display:flex;gap:8px;flex-wrap:wrap;">
-                <button class="btn btn-secondary" onclick="TuitionPage.syncAllDueDates()"><i data-lucide="refresh-cw"></i> Đồng bộ hạn đóng</button>
                 <button class="btn btn-secondary" onclick="window.StudentsPage?.showExportModal ? window.StudentsPage.showExportModal() : App.navigate('students')"><i data-lucide="file-spreadsheet"></i> Xuất Excel</button>
                 <button class="btn btn-primary" onclick="TuitionPage.showAdd()"><i data-lucide="plus"></i> Thêm khoản thu</button>
             </div>
