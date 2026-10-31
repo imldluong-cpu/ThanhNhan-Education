@@ -352,6 +352,72 @@
     opacity: 0.9;
 }
 
+/* Fixed 5-room horizontal lanes in Weekly TimeGrid (Trệt -> P.T1 -> P.T2 -> P.ST -> Online) */
+.fc-timegrid-col-frame {
+    background-image: linear-gradient(
+        to right,
+        transparent 19.8%, rgba(148, 163, 184, 0.14) 20%, transparent 20.2%,
+        transparent 39.8%, rgba(148, 163, 184, 0.14) 40%, transparent 40.2%,
+        transparent 59.8%, rgba(148, 163, 184, 0.14) 60%, transparent 60.2%,
+        transparent 79.8%, rgba(148, 163, 184, 0.14) 80%, transparent 80.2%
+    );
+}
+
+.fc-timegrid-col-events .fc-timegrid-event-harness.room-lane-harness-0,
+.fc-timegrid-col-events .fc-timegrid-event-harness:has(.room-lane-0) {
+    left: 0% !important;
+    right: 80% !important;
+}
+.fc-timegrid-col-events .fc-timegrid-event-harness.room-lane-harness-1,
+.fc-timegrid-col-events .fc-timegrid-event-harness:has(.room-lane-1) {
+    left: 20% !important;
+    right: 60% !important;
+}
+.fc-timegrid-col-events .fc-timegrid-event-harness.room-lane-harness-2,
+.fc-timegrid-col-events .fc-timegrid-event-harness:has(.room-lane-2) {
+    left: 40% !important;
+    right: 40% !important;
+}
+.fc-timegrid-col-events .fc-timegrid-event-harness.room-lane-harness-3,
+.fc-timegrid-col-events .fc-timegrid-event-harness:has(.room-lane-3) {
+    left: 60% !important;
+    right: 20% !important;
+}
+.fc-timegrid-col-events .fc-timegrid-event-harness.room-lane-harness-4,
+.fc-timegrid-col-events .fc-timegrid-event-harness:has(.room-lane-4) {
+    left: 80% !important;
+    right: 0% !important;
+}
+
+.fc-timegrid-col-events .fc-timegrid-event {
+    padding: 1px 2px !important;
+    font-size: 10.5px !important;
+    line-height: 1.15 !important;
+    border-radius: 4px !important;
+    overflow: hidden !important;
+}
+.fc-timegrid-col-events .fc-timegrid-event .fc-event-time {
+    font-size: 9.5px !important;
+    font-weight: 600 !important;
+    margin-bottom: 1px !important;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.fc-timegrid-col-events .fc-timegrid-event .fc-event-title {
+    font-size: 10.5px !important;
+    font-weight: 600 !important;
+    line-height: 1.15 !important;
+    word-break: break-word;
+}
+.fc-timegrid-col-events .fc-timegrid-event .event-delete-btn {
+    opacity: 0;
+    transition: opacity 0.15s ease, background 0.2s ease;
+}
+.fc-timegrid-col-events .fc-timegrid-event:hover .event-delete-btn {
+    opacity: 1;
+}
+
 /* === Misc Helpers === */
 .mb-4 { margin-bottom: var(--space-4); }
 .mb-6 { margin-bottom: var(--space-6); }

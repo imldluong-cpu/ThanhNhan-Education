@@ -52,17 +52,41 @@ Router.register('schedule', async (container) => {
         return Math.max(1, endIdx - startIdx);
     }
 
-    // Room-based unified colors:
-    // - Phòng trệt: Đỏ (#ef4444)
-    // - P.T1: Vàng (#f59e0b)
-    // - P.T2: Xanh lá (#10b981)
-    // - P.ST: Cyan như hình 2 (#06b6d4)
-    // - Online: Xanh dương (#2563eb)
+    // Room-based unified colors & fixed horizontal order (left -> right):
+    // 0: Phòng trệt - Đỏ (#ef4444)
+    // 1: P.T1       - Vàng (#f59e0b)
+    // 2: P.T2       - Xanh lá (#10b981)
+    // 3: P.ST       - Cyan như hình 2 (#06b6d4)
+    // 4: Online     - Xanh dương (#2563eb)
+    function getRoomIndex(room, classId) {
+        let r = room;
+        if (!r && classId) {
+            const c = classes.find(x => x.id === classId);
+            if (c && c.room) r = c.room;
+        }
+        if (!r && classId) {
+            const cName = getClassName(classId).toLowerCase();
+            if (cName.includes('online') || cName.includes('trực tuyến')) return 4;
+        }
+        if (!r) return 0;
+        const norm = r.trim().toLowerCase();
+        if (norm.includes('trệt')) return 0;
+        if (norm.includes('t1')) return 1;
+        if (norm.includes('t2')) return 2;
+        if (norm.includes('st') || norm.includes('sân thượng')) return 3;
+        if (norm.includes('online') || norm.includes('trực tuyến')) return 4;
+        return 0;
+    }
+
     function getRoomColor(room, classId) {
         let r = room;
         if (!r && classId) {
             const c = classes.find(x => x.id === classId);
             if (c && c.room) r = c.room;
+        }
+        if (!r && classId) {
+            const cName = getClassName(classId).toLowerCase();
+            if (cName.includes('online') || cName.includes('trực tuyến')) return '#2563eb';
         }
         if (!r) return '#64748b'; // Mặc định nếu chưa gán phòng
         const norm = r.trim().toLowerCase();
@@ -132,6 +156,28 @@ Router.register('schedule', async (container) => {
             editable: canEdit,
             eventOverlap: true,
             slotEventOverlap: false,
+            eventOrder: 'roomOrder,start,title',
+            eventDidMount: function(info) {
+                const laneIdx = info.event.extendedProps?.roomOrder;
+                if (typeof laneIdx === 'number' && laneIdx >= 0 && laneIdx <= 4) {
+                    const harness = info.el.closest('.fc-timegrid-event-harness');
+                    if (harness) {
+                        harness.classList.remove(
+                            'room-lane-harness-0',
+                            'room-lane-harness-1',
+                            'room-lane-harness-2',
+                            'room-lane-harness-3',
+                            'room-lane-harness-4'
+                        );
+                        harness.classList.add(`room-lane-harness-${laneIdx}`);
+                        harness.style.setProperty('left', `${laneIdx * 20}%`, 'important');
+                        harness.style.setProperty('right', `${(4 - laneIdx) * 20}%`, 'important');
+                    }
+                }
+                if (info.event.title) {
+                    info.el.setAttribute('title', `${info.timeText ? info.timeText + ' - ' : ''}${info.event.title}`);
+                }
+            },
             eventContent: function(arg) {
                 const title = arg.event.title;
                 const timeText = arg.timeText;
@@ -194,6 +240,7 @@ Router.register('schedule', async (container) => {
                         if (exception) return; // Skip if exception exists
                         
                         const color = getClassColor(s.classId, s.room);
+                        const roomOrder = getRoomIndex(s.room, s.classId);
                         expandedEvents.push({
                             id: s.id + '_' + dateStr,
                             groupId: s.id,
@@ -202,7 +249,9 @@ Router.register('schedule', async (container) => {
                             end: `${dateStr}T${s.endTime}:00`,
                             backgroundColor: color,
                             borderColor: color,
-                            extendedProps: { ...s, occurrenceDate: dateStr, isException: false, isOneOff: false }
+                            roomOrder: roomOrder,
+                            classNames: [`room-lane-${roomOrder}`],
+                            extendedProps: { ...s, roomOrder, occurrenceDate: dateStr, isException: false, isOneOff: false }
                         });
                     });
                 }
@@ -212,6 +261,7 @@ Router.register('schedule', async (container) => {
                 oneOffEvents.forEach(s => {
                     if (s.specificDate >= startStr && s.specificDate <= endStr) {
                         const color = getClassColor(s.classId, s.room);
+                        const roomOrder = getRoomIndex(s.room, s.classId);
                         const tag = s.note ? `[${s.note}] ` : '[Buổi lẻ] ';
                         expandedEvents.push({
                             id: s.id + '_' + s.specificDate,
@@ -221,7 +271,9 @@ Router.register('schedule', async (container) => {
                             end: `${s.specificDate}T${s.endTime}:00`,
                             backgroundColor: color,
                             borderColor: color,
-                            extendedProps: { ...s, occurrenceDate: s.specificDate, isException: false, isOneOff: true }
+                            roomOrder: roomOrder,
+                            classNames: [`room-lane-${roomOrder}`],
+                            extendedProps: { ...s, roomOrder, occurrenceDate: s.specificDate, isException: false, isOneOff: true }
                         });
                     }
                 });
@@ -235,6 +287,7 @@ Router.register('schedule', async (container) => {
                             if (originalSch && (!filterClassId || originalSch.classId === filterClassId)) {
                                 const exRoom = ex.newRoom || (originalSch ? originalSch.room : '');
                                 const color = getClassColor(originalSch.classId, exRoom);
+                                const roomOrder = getRoomIndex(exRoom, originalSch.classId);
                                 expandedEvents.push({
                                     id: 'ex_' + ex.id,
                                     groupId: originalSch.id,
@@ -244,8 +297,9 @@ Router.register('schedule', async (container) => {
                                     backgroundColor: 'transparent',
                                     borderColor: color,
                                     textColor: color,
-                                    classNames: ['dashed-border'],
-                                    extendedProps: { ...originalSch, exceptionId: ex.id, isException: true }
+                                    roomOrder: roomOrder,
+                                    classNames: ['dashed-border', `room-lane-${roomOrder}`],
+                                    extendedProps: { ...originalSch, roomOrder, exceptionId: ex.id, isException: true }
                                 });
                             }
                         }

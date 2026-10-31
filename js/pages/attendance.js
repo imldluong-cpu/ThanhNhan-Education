@@ -5,7 +5,7 @@
 Router.register('attendance', async (container) => {
     const isManager = Auth.hasAnyRole('owner', 'admin', 'staff');
     const canEdit = Auth.hasAnyRole('owner', 'admin', 'staff', 'teacher');
-    let classes = [], schedules = [];
+    let classes = [], schedules = [], scheduleExceptions = [];
     let selectedClassId = '', selectedDate = DB.today();
     let students = [], attendance = [], allStudents = [], dailyAttendance = [];
     let viewMode = 'day';
@@ -15,13 +15,14 @@ Router.register('attendance', async (container) => {
     try {
         const pClasses = Auth.isTeacher() ? DB.getClassesByTeacher(window.currentUser.id) : DB.getClasses();
         const pSchedules = DB.getSchedules();
+        const pExceptions = DB.getScheduleExceptions ? DB.getScheduleExceptions() : Promise.resolve([]);
         const pStudents = DB.getStudents();
         const pDaily = (async () => {
             if (!selectedDate) return;
             const snap = await window.db.collection('attendance').where('date', '==', selectedDate).get();
             dailyAttendance = snap.docs.map(d => d.data());
         })();
-        [classes, schedules, allStudents] = await Promise.all([pClasses, pSchedules, pStudents, pDaily]);
+        [classes, schedules, scheduleExceptions, allStudents] = await Promise.all([pClasses, pSchedules, pExceptions, pStudents, pDaily]);
     } catch(e) { console.warn(e); }
     
     // Global state for Monthly Grid
@@ -36,18 +37,54 @@ Router.register('attendance', async (container) => {
         } catch(e) { console.warn('Load summary error:', e); }
     }
 
-    function getValidClassesForDate(dateStr) {
-        if (!dateStr) return [];
-        const [y, m, d] = dateStr.split('-');
+    function isClassScheduledOnDate(cls, dateStr) {
+        if (!cls || cls.status === 'inactive' || !dateStr) return false;
+        const [y, m, d] = dateStr.split('-').map(Number);
         const dateObj = new Date(y, m - 1, d);
         const day = dateObj.getDay();
         const firestoreDay = day === 0 ? 8 : day + 1; // 2=Mon, 8=Sun
-        
-        const scheduledClassIds = new Set(schedules.filter(s => {
-            if (s.specificDate) return s.specificDate === dateStr;
-            return Number(s.dayOfWeek) === firestoreDay;
-        }).map(s => s.classId));
-        return classes.filter(c => scheduledClassIds.has(c.id));
+
+        // 1. Check one-off schedules (buổi lẻ / dạy bù) on this exact date
+        const hasOneOff = schedules.some(s => s.classId === cls.id && s.specificDate && s.specificDate === dateStr);
+        if (hasOneOff) return true;
+
+        // 2. Check schedule exceptions moved TO this exact date (dời lịch bù)
+        const hasMovedException = (scheduleExceptions || []).some(ex => {
+            if (!ex.newDate || ex.newDate !== dateStr) return false;
+            const origSch = schedules.find(s => s.id === ex.scheduleId);
+            return origSch && origSch.classId === cls.id;
+        });
+        if (hasMovedException) return true;
+
+        // 3. Check recurring schedules (lịch cố định hàng tuần)
+        if (cls.startDate && dateStr < cls.startDate) return false;
+        if (cls.endDate && dateStr > cls.endDate) return false;
+
+        const recurringEvents = schedules.filter(s =>
+            s.classId === cls.id &&
+            !s.specificDate &&
+            !s.isOneOff &&
+            Number(s.dayOfWeek) === firestoreDay
+        );
+
+        return recurringEvents.some(s => {
+            const sStart = s.startDate || s.effectiveFrom;
+            if (sStart && dateStr < sStart) {
+                const hasOlderRecord = schedules.some(other => other.id !== s.id && other.classId === s.classId && (!other.endDate || other.endDate >= dateStr));
+                if (hasOlderRecord) return false;
+            }
+            if (s.endDate && dateStr > s.endDate) return false;
+
+            const isCancelledOrMoved = (scheduleExceptions || []).some(ex => ex.scheduleId === s.id && ex.originalDate === dateStr);
+            if (isCancelledOrMoved) return false;
+
+            return true;
+        });
+    }
+
+    function getValidClassesForDate(dateStr) {
+        if (!dateStr) return [];
+        return classes.filter(c => isClassScheduledOnDate(c, dateStr));
     }
 
     async function loadData() {
@@ -124,15 +161,7 @@ Router.register('attendance', async (container) => {
         const allRangeAttendance = await DB.getAttendanceByMonth(minDateStr, maxDateStr);
 
         for (const cls of allActiveClasses) {
-            const classDays = schedules.filter(s => s.classId === cls.id).map(s => Number(s.dayOfWeek));
-            if (classDays.length === 0) continue; 
-            
-            const classDates = allDates.filter(dateStr => {
-                const dateObj = new Date(dateStr.split('-')[0], dateStr.split('-')[1]-1, dateStr.split('-')[2]);
-                const day = dateObj.getDay();
-                const firestoreDay = day === 0 ? 8 : day + 1;
-                return classDays.includes(firestoreDay);
-            });
+            const classDates = allDates.filter(dateStr => isClassScheduledOnDate(cls, dateStr));
             if (classDates.length === 0) continue;
             window.globalGridClassDates[cls.id] = classDates;
 
