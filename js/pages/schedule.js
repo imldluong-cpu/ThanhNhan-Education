@@ -159,7 +159,11 @@ Router.register('schedule', async (container) => {
             eventOrder: 'roomOrder,start,title',
             eventDidMount: function(info) {
                 const laneIdx = info.event.extendedProps?.roomOrder;
-                if (typeof laneIdx === 'number' && laneIdx >= 0 && laneIdx <= 4) {
+                const totalLanes = info.event.extendedProps?.totalLanes || 4;
+                if (typeof laneIdx === 'number' && laneIdx >= 0 && laneIdx < totalLanes) {
+                    const laneWidth = 100 / totalLanes;
+                    const leftPct = laneIdx * laneWidth;
+                    const rightPct = (totalLanes - 1 - laneIdx) * laneWidth;
                     const harness = info.el.closest('.fc-timegrid-event-harness');
                     if (harness) {
                         harness.classList.remove(
@@ -167,11 +171,17 @@ Router.register('schedule', async (container) => {
                             'room-lane-harness-1',
                             'room-lane-harness-2',
                             'room-lane-harness-3',
-                            'room-lane-harness-4'
+                            'room-lane-harness-4',
+                            'harness-lanes-4',
+                            'harness-lanes-5'
                         );
-                        harness.classList.add(`room-lane-harness-${laneIdx}`);
-                        harness.style.setProperty('left', `${laneIdx * 20}%`, 'important');
-                        harness.style.setProperty('right', `${(4 - laneIdx) * 20}%`, 'important');
+                        harness.classList.add(`room-lane-harness-${laneIdx}`, `harness-lanes-${totalLanes}`);
+                        harness.style.setProperty('left', `${leftPct}%`, 'important');
+                        harness.style.setProperty('right', `${rightPct}%`, 'important');
+                    }
+                    const col = info.el.closest('.fc-timegrid-col');
+                    if (col && totalLanes === 5) {
+                        col.classList.add('has-online-lane');
                     }
                 }
                 if (info.event.title) {
@@ -306,6 +316,33 @@ Router.register('schedule', async (container) => {
                     }
                 });
                 
+                // Determine which dates have at least one Online class (roomOrder === 4)
+                // Days without Online classes use 4 lanes (25% each: Trệt, P.T1, P.T2, P.ST)
+                // Days with Online classes use 5 lanes (20% each: Trệt, P.T1, P.T2, P.ST, Online)
+                const datesWithOnline = new Set(
+                    expandedEvents
+                        .filter(ev => ev.roomOrder === 4)
+                        .map(ev => ev.start.substring(0, 10))
+                );
+
+                expandedEvents.forEach(ev => {
+                    const dateKey = ev.start.substring(0, 10);
+                    const totalLanes = datesWithOnline.has(dateKey) ? 5 : 4;
+                    ev.extendedProps.totalLanes = totalLanes;
+                    ev.classNames = [...(ev.classNames || []), `lanes-${totalLanes}`];
+                });
+
+                requestAnimationFrame(() => {
+                    document.querySelectorAll('.fc-timegrid-col[data-date]').forEach(col => {
+                        const dKey = col.getAttribute('data-date');
+                        if (dKey && datesWithOnline.has(dKey)) {
+                            col.classList.add('has-online-lane');
+                        } else {
+                            col.classList.remove('has-online-lane');
+                        }
+                    });
+                });
+
                 successCallback(expandedEvents);
             },
             eventDrop: async function(info) {
