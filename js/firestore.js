@@ -362,10 +362,13 @@ const DB = {
             const data = doc.data();
             const classConf = salaryConfig[data.classId] || {};
             let salary = 0;
-            if (data.shift === 'custom') {
-                salary = (classConf.perHour || 0) * (data.hours || 0);
+            if (data.shift === 'custom' && classConf.perHour) {
+                salary = classConf.perHour * (data.hours || 0);
             } else {
                 salary = classConf.perShift || 0;
+            }
+            if (data.isFirstSession) {
+                salary = salary * 0.5;
             }
             
             batch.update(doc.ref, { salary });

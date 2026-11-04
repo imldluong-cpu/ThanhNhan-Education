@@ -106,6 +106,75 @@ Router.register('users', async (container) => {
             });
         },
 
+        // Tự động nhận diện bậc lương theo khối/lớp (từ tháng 11/2026):
+        // - Lớp 1-5:   Lương CS 90.000đ  + 6.000đ / HS thêm (từ HS thứ 4)
+        // - Lớp 6-7:   Lương CS 100.000đ + 7.000đ / HS thêm (từ HS thứ 4)
+        // - Lớp 8-9:   Lương CS 115.000đ + 8.000đ / HS thêm (từ HS thứ 4)
+        // - Lớp 10-11: Lương CS 125.000đ + 9.000đ / HS thêm (từ HS thứ 4)
+        // - Lớp 12:    Lương CS 140.000đ + 10.000đ / HS thêm (từ HS thứ 4)
+        getSalaryTierForClass(cls) {
+            const rawText = `${cls?.name || ''} ${cls?.subject || ''}`.toLowerCase();
+            const cleaned = rawText
+                .replace(/1\s*:\s*1/g, ' ')
+                .replace(/1\s*kèm\s*1/g, ' ')
+                .replace(/1\s*-\s*1/g, ' ');
+
+            let match = cleaned.match(/(?:lớp|khối|toán|lý|lí|hóa|hoá|anh|văn|khtn|sinh|sử|địa|tin|việt|bài)\s*(1[0-2]|[1-9])(?![0-9])/i);
+            if (!match) {
+                match = cleaned.match(/(?:[^0-9]|^)(1[0-2]|[1-9])(?![0-9])/);
+            }
+            if (!match) return null;
+
+            const grade = parseInt(match[1], 10);
+            if (grade >= 1 && grade <= 5) {
+                return { grade, tierLabel: 'Lớp 1–5', baseSalary: 90000, bonusPerStudent: 6000 };
+            }
+            if (grade >= 6 && grade <= 7) {
+                return { grade, tierLabel: 'Lớp 6–7', baseSalary: 100000, bonusPerStudent: 7000 };
+            }
+            if (grade >= 8 && grade <= 9) {
+                return { grade, tierLabel: 'Lớp 8–9', baseSalary: 115000, bonusPerStudent: 8000 };
+            }
+            if (grade >= 10 && grade <= 11) {
+                return { grade, tierLabel: 'Lớp 10–11', baseSalary: 125000, bonusPerStudent: 9000 };
+            }
+            if (grade === 12) {
+                return { grade, tierLabel: 'Lớp 12', baseSalary: 140000, bonusPerStudent: 10000 };
+            }
+            return null;
+        },
+
+        recalcClassSalary(cid) {
+            const baseInput = document.querySelector(`.sal-base[data-cid="${cid}"]`);
+            const stuInput = document.querySelector(`.sal-students[data-cid="${cid}"]`);
+            const shiftInput = document.querySelector(`.sal-shift[data-cid="${cid}"]`);
+            const bonusDisplay = document.getElementById(`sal-bonus-display-${cid}`);
+            const summaryEl = document.getElementById(`sal-summary-${cid}`);
+
+            if (!baseInput || !stuInput || !shiftInput) return;
+
+            const baseSalary = parseInt(baseInput.value, 10) || 0;
+            const bonusRate = parseInt(stuInput.dataset.bonus, 10) || 0;
+            const rawStudents = stuInput.value.trim();
+            const studentCount = rawStudents === '' ? 0 : Math.max(0, parseInt(rawStudents, 10) || 0);
+            const extraStudents = Math.max(0, studentCount - 3);
+            const bonusAmount = extraStudents * bonusRate;
+            const officialSalary = baseSalary + bonusAmount;
+
+            shiftInput.value = officialSalary;
+
+            if (bonusDisplay) {
+                bonusDisplay.value = bonusAmount > 0 ? `+${DB.formatCurrency(bonusAmount)} (${extraStudents} HS × ${DB.formatCurrency(bonusRate)})` : '0 ₫ (1–3 HS)';
+            }
+            if (summaryEl) {
+                if (extraStudents > 0) {
+                    summaryEl.innerHTML = `➝ Lương chính thức: <strong>${DB.formatCurrency(baseSalary)}</strong> (CS) + <strong style="color:var(--primary-500);">${DB.formatCurrency(bonusAmount)}</strong> (${extraStudents} HS thêm × ${DB.formatCurrency(bonusRate)}) = <strong style="color:var(--success-600);font-size:14px;">${DB.formatCurrency(officialSalary)}/buổi</strong>`;
+                } else {
+                    summaryEl.innerHTML = `➝ Lương chính thức: <strong>${DB.formatCurrency(baseSalary)}</strong> (Lương cơ sở 1–3 HS) = <strong style="color:var(--success-600);font-size:14px;">${DB.formatCurrency(officialSalary)}/buổi</strong>`;
+                }
+            }
+        },
+
         async editSalary(id) {
             const u = users.find(x => x.id === id);
             if (!u) return;
@@ -123,12 +192,58 @@ Router.register('users', async (container) => {
 
             let classesHtml = teacherClasses.map(c => {
                 const classConf = s[c.id] || {};
+                const tier = this.getSalaryTierForClass(c);
+                const defaultBase = tier ? tier.baseSalary : (classConf.baseSalary || classConf.perShift || 0);
+                const baseSalary = classConf.baseSalary !== undefined ? classConf.baseSalary : defaultBase;
+                const bonusRate = classConf.bonusPerStudent !== undefined ? classConf.bonusPerStudent : (tier ? tier.bonusPerStudent : 0);
+                const hasSavedStudentCount = classConf.studentCount !== undefined && classConf.studentCount !== null && classConf.studentCount !== '';
+                const studentCountVal = hasSavedStudentCount ? classConf.studentCount : '';
+                const studentCountNum = hasSavedStudentCount ? Math.max(0, parseInt(classConf.studentCount, 10) || 0) : 0;
+                const extraStudents = Math.max(0, studentCountNum - 3);
+                const bonusAmount = extraStudents * bonusRate;
+                const officialSalary = hasSavedStudentCount
+                    ? (baseSalary + bonusAmount)
+                    : (classConf.perShift && !tier ? classConf.perShift : (baseSalary + bonusAmount));
+
+                const tierBadge = tier
+                    ? `<span class="badge badge-info" style="font-size:11px;">${tier.tierLabel}: CS ${DB.formatCurrency(tier.baseSalary)} + ${DB.formatCurrency(tier.bonusPerStudent)}/HS (từ HS thứ 4)</span>`
+                    : `<span class="badge badge-neutral" style="font-size:11px;">Tùy chỉnh</span>`;
+
+                const bonusText = bonusAmount > 0
+                    ? `+${DB.formatCurrency(bonusAmount)} (${extraStudents} HS × ${DB.formatCurrency(bonusRate)})`
+                    : '0 ₫ (1–3 HS)';
+
+                const summaryHtml = extraStudents > 0
+                    ? `➝ Lương chính thức: <strong>${DB.formatCurrency(baseSalary)}</strong> (CS) + <strong style="color:var(--primary-500);">${DB.formatCurrency(bonusAmount)}</strong> (${extraStudents} HS thêm × ${DB.formatCurrency(bonusRate)}) = <strong style="color:var(--success-600);font-size:14px;">${DB.formatCurrency(officialSalary)}/buổi</strong>`
+                    : `➝ Lương chính thức: <strong>${DB.formatCurrency(baseSalary)}</strong> (Lương cơ sở 1–3 HS) = <strong style="color:var(--success-600);font-size:14px;">${DB.formatCurrency(officialSalary)}/buổi</strong>`;
+
                 return `
-                    <div style="margin-bottom:16px;padding:12px;background:var(--bg-glass);border:1px solid var(--border-color);border-radius:8px;">
-                        <h4 style="margin-bottom:8px;color:var(--primary-500);font-size:14px;">${c.name}</h4>
-                        <div class="form-row">
-                            <div class="form-group"><label class="form-label">Lương theo ca (VNĐ/ca)</label><input type="number" class="input sal-shift" data-cid="${c.id}" value="${classConf.perShift || 0}"></div>
-                            <div class="form-group"><label class="form-label">Số buổi tiêu chuẩn</label><input type="number" class="input sal-hourly" data-cid="${c.id}" value="${classConf.perHour || 0}"></div>
+                    <div style="margin-bottom:16px;padding:14px;background:var(--bg-glass);border:1px solid var(--border-color);border-radius:10px;">
+                        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
+                            <h4 style="margin:0;color:var(--primary-500);font-size:15px;">📚 ${c.name}</h4>
+                            ${tierBadge}
+                        </div>
+                        <div class="form-row" style="grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap:10px;">
+                            <div class="form-group" style="margin-bottom:0;">
+                                <label class="form-label" style="font-size:12px;">Lương cơ sở (1–3 HS)</label>
+                                <input type="number" class="input sal-base" data-cid="${c.id}" value="${baseSalary}" oninput="UsersPage.recalcClassSalary('${c.id}')">
+                            </div>
+                            <div class="form-group" style="margin-bottom:0;">
+                                <label class="form-label" style="font-size:12px;">Số học sinh *</label>
+                                <input type="number" min="0" class="input sal-students" data-cid="${c.id}" data-bonus="${bonusRate}" value="${studentCountVal}" placeholder="VD: 5" oninput="UsersPage.recalcClassSalary('${c.id}')">
+                            </div>
+                            <div class="form-group" style="margin-bottom:0;">
+                                <label class="form-label" style="font-size:12px;">Phụ cấp (từ HS thứ 4)</label>
+                                <input type="text" class="input" id="sal-bonus-display-${c.id}" value="${bonusText}" readonly style="background:var(--bg-elevated);color:var(--primary-600);font-weight:600;">
+                            </div>
+                            <div class="form-group" style="margin-bottom:0;">
+                                <label class="form-label" style="font-size:12px;">Lương chính thức (VNĐ/buổi)</label>
+                                <input type="number" class="input sal-shift" data-cid="${c.id}" value="${officialSalary}" style="font-weight:700;color:var(--success-600);">
+                            </div>
+                        </div>
+                        <input type="hidden" class="sal-hourly" data-cid="${c.id}" value="${classConf.perHour || 0}">
+                        <div id="sal-summary-${c.id}" style="margin-top:10px;padding-top:8px;border-top:1px dashed var(--border-color);font-size:12.5px;color:var(--text-secondary);">
+                            ${summaryHtml}
                         </div>
                     </div>
                 `;
@@ -138,8 +253,18 @@ Router.register('users', async (container) => {
                 title: 'Cài đặt mức lương: ' + (u.displayName || u.email),
                 size: 'lg',
                 content: `
-                    <div style="max-height:60vh;overflow-y:auto;padding-right:8px;">
-                        <p style="font-size:13px;color:var(--text-secondary);margin-bottom:16px;">Cài đặt mức lương cho từng lớp mà giáo viên này phụ trách.</p>
+                    <div style="max-height:68vh;overflow-y:auto;padding-right:8px;">
+                        <div style="margin-bottom:14px;padding:10px 12px;background:rgba(37,99,235,0.06);border:1px solid rgba(37,99,235,0.2);border-radius:8px;font-size:12px;line-height:1.5;color:var(--text-secondary);">
+                            <div style="font-weight:700;color:var(--primary-600);margin-bottom:4px;">📌 Công thức lương áp dụng từ tháng 11/2026:</div>
+                            <div><strong>Lương = Lương cơ sở (1–3 HS) + Phụ cấp theo đầu HS (tính từ HS thứ 4 trở đi)</strong></div>
+                            <div style="display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:4px;">
+                                <span>• Lớp 1–5: <strong>90k</strong> + 6k/HS</span>
+                                <span>• Lớp 6–7: <strong>100k</strong> + 7k/HS</span>
+                                <span>• Lớp 8–9: <strong>115k</strong> + 8k/HS</span>
+                                <span>• Lớp 10–11: <strong>125k</strong> + 9k/HS</span>
+                                <span>• Lớp 12: <strong>140k</strong> + 10k/HS</span>
+                            </div>
+                        </div>
                         ${classesHtml}
                         <div class="form-group" style="margin-top:16px;">
                             <label class="checkbox-label" style="background:var(--warning-100);border-color:var(--warning-200);color:var(--warning-800);">
@@ -157,17 +282,31 @@ Router.register('users', async (container) => {
         async saveSalary(id) {
             const salaryConfig = {};
             const shiftInputs = document.querySelectorAll('.sal-shift');
+            const baseInputs = document.querySelectorAll('.sal-base');
+            const stuInputs = document.querySelectorAll('.sal-students');
             const hourlyInputs = document.querySelectorAll('.sal-hourly');
 
             shiftInputs.forEach(inp => {
                 const cid = inp.dataset.cid;
                 if (!salaryConfig[cid]) salaryConfig[cid] = {};
-                salaryConfig[cid].perShift = parseInt(inp.value) || 0;
+                salaryConfig[cid].perShift = parseInt(inp.value, 10) || 0;
+            });
+            baseInputs.forEach(inp => {
+                const cid = inp.dataset.cid;
+                if (!salaryConfig[cid]) salaryConfig[cid] = {};
+                salaryConfig[cid].baseSalary = parseInt(inp.value, 10) || 0;
+            });
+            stuInputs.forEach(inp => {
+                const cid = inp.dataset.cid;
+                if (!salaryConfig[cid]) salaryConfig[cid] = {};
+                const rawVal = inp.value.trim();
+                salaryConfig[cid].studentCount = rawVal === '' ? null : Math.max(0, parseInt(rawVal, 10) || 0);
+                salaryConfig[cid].bonusPerStudent = parseInt(inp.dataset.bonus, 10) || 0;
             });
             hourlyInputs.forEach(inp => {
                 const cid = inp.dataset.cid;
                 if (!salaryConfig[cid]) salaryConfig[cid] = {};
-                salaryConfig[cid].perHour = parseInt(inp.value) || 0;
+                salaryConfig[cid].perHour = parseInt(inp.value, 10) || 0;
             });
 
             const applyPast = document.getElementById('sal-apply-past').checked;
