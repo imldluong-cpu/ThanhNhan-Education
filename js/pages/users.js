@@ -181,8 +181,12 @@ Router.register('users', async (container) => {
             const s = u.salaryConfig || {};
 
             let teacherClasses = [];
+            let allStudents = [];
             try {
-                teacherClasses = await DB.getClassesByTeacher(id);
+                [teacherClasses, allStudents] = await Promise.all([
+                    DB.getClassesByTeacher(id),
+                    DB.getStudents().catch(() => [])
+                ]);
             } catch(e) { console.warn(e); }
 
             if (teacherClasses.length === 0) {
@@ -192,6 +196,7 @@ Router.register('users', async (container) => {
 
             let classesHtml = teacherClasses.map(c => {
                 const classConf = s[c.id] || {};
+                const activeStudentCount = allStudents.filter(st => st.status === 'active' && (st.classIds || []).includes(c.id)).length;
                 const tier = this.getSalaryTierForClass(c);
                 const defaultBase = tier ? tier.baseSalary : (classConf.baseSalary || classConf.perShift || 0);
                 const baseSalary = classConf.baseSalary !== undefined ? classConf.baseSalary : defaultBase;
@@ -220,7 +225,7 @@ Router.register('users', async (container) => {
                 return `
                     <div style="margin-bottom:16px;padding:14px;background:var(--bg-glass);border:1px solid var(--border-color);border-radius:10px;">
                         <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
-                            <h4 style="margin:0;color:var(--primary-500);font-size:15px;">📚 ${c.name}</h4>
+                            <h4 style="margin:0;color:var(--primary-500);font-size:15px;">📚 ${c.name} <span style="color:var(--text-secondary);font-weight:600;">(${activeStudentCount} HS)</span></h4>
                             ${tierBadge}
                         </div>
                         <div class="form-row" style="grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap:10px;">
